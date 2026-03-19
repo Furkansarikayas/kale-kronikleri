@@ -179,8 +179,8 @@ class _AppShellState extends State<AppShell> {
     return Stack(
       children: [
         GameWidget(game: game),
-        // HUD overlay
-        GameHud(
+        // HUD overlay (only after game is loaded)
+        if (game.isReady) GameHud(
           castleHp: game.castle.hp,
           maxCastleHp: game.castle.maxHp,
           gold: game.economy.gold,
@@ -203,7 +203,7 @@ class _AppShellState extends State<AppShell> {
           },
         ),
         // Wave break overlay
-        if (game.phase == GamePhase.waveBreak)
+        if (game.isReady && game.phase == GamePhase.waveBreak)
           WaveBreak(
             nextWave: game.waveSystem.currentWave + 1,
             totalWaves: game.difficulty.totalWaves,
@@ -212,7 +212,7 @@ class _AppShellState extends State<AppShell> {
             onStartNow: () => game.startNextWave(),
           ),
         // Pause overlay
-        if (game.phase == GamePhase.paused)
+        if (game.isReady && game.phase == GamePhase.paused)
           PauseOverlay(
             onResume: () {
               game.togglePause();

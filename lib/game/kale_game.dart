@@ -30,6 +30,9 @@ class KaleGame extends FlameGame with TapCallbacks {
   final int mapSeed;
   final DifficultyTier difficulty;
 
+  bool _isReady = false;
+  bool get isReady => _isReady;
+
   GamePhase _phase = GamePhase.prep;
   GamePhase get phase => _phase;
 
@@ -75,7 +78,7 @@ class KaleGame extends FlameGame with TapCallbacks {
 
     final screenW = size.x;
     final screenH = size.y * 0.75;
-    cellSize = (screenW / GameConfig.gridColumns).clamp(0, screenH / GameConfig.gridRows);
+    cellSize = (screenW / GameConfig.gridColumns).clamp(1, screenH / GameConfig.gridRows).toDouble();
 
     gameMap = GameMap(cellSize: cellSize);
     gameMap.generate(seed: mapSeed);
@@ -90,6 +93,7 @@ class KaleGame extends FlameGame with TapCallbacks {
     synergySystem = SynergySystem();
 
     _phase = GamePhase.prep;
+    _isReady = true;
   }
 
   // --- Tower Placement ---
@@ -105,12 +109,12 @@ class KaleGame extends FlameGame with TapCallbacks {
 
   bool placeTower(int col, int row, TowerType type) {
     final stats = TowerData.getStats(type);
-    if (!economy.trySpend(stats.cost)) return false;
     if (_towers.length >= _towerSlots) return false;
+    if (_towerPositions.containsKey((col: col, row: row))) return false;
 
     final isSpikeWall = type == TowerType.spikeWall;
     if (!gameMap.canPlaceTower(col, row, isSpikeWall: isSpikeWall)) return false;
-    if (_towerPositions.containsKey((col: col, row: row))) return false;
+    if (!economy.trySpend(stats.cost)) return false; // deduct AFTER validation
 
     final tower = TowerFactory.create(
       type: type, col: col, row: row, cellSize: cellSize,
@@ -164,6 +168,7 @@ class KaleGame extends FlameGame with TapCallbacks {
   }
 
   void _spawnEnemy(EnemyType type) {
+    if (gameMap.enemyPath.isEmpty) return; // safety
     final enemy = EnemyFactory.create(
       type: type,
       path: gameMap.enemyPath,
@@ -180,14 +185,18 @@ class KaleGame extends FlameGame with TapCallbacks {
   void update(double dt) {
     super.update(dt);
 
+    if (!_isReady) return;
     if (_phase == GamePhase.paused || _phase == GamePhase.gameOver) return;
 
     if (_phase == GamePhase.waveBreak) {
+      final oldSec = _breakTimer.ceil();
       _breakTimer -= dt;
       if (_breakTimer <= 0) {
         startNextWave();
+      } else if (_breakTimer.ceil() != oldSec) {
+        // Only notify once per second change to avoid excessive rebuilds
+        onStateChanged?.call();
       }
-      onStateChanged?.call();
       return;
     }
 
@@ -355,6 +364,7 @@ class KaleGame extends FlameGame with TapCallbacks {
 
   @override
   void onTapDown(TapDownEvent event) {
+    if (!_isReady) return;
     if (_phase == GamePhase.paused || _phase == GamePhase.gameOver) return;
 
     final pos = event.localPosition;
