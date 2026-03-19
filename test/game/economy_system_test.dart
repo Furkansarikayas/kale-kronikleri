@@ -1,0 +1,17 @@
+import 'package:flutter_test/flutter_test.dart';
+import 'package:kale_kronikleri/game/systems/economy_system.dart';
+import 'package:kale_kronikleri/game/data/game_config.dart';
+
+void main() {
+  late EconomySystem eco;
+  setUp(() { eco = EconomySystem(); });
+
+  test('starts with correct gold', () { expect(eco.gold, GameConfig.startingGold); });
+  test('can spend gold', () { expect(eco.trySpend(50), true); expect(eco.gold, 100); });
+  test('cannot overspend', () { expect(eco.trySpend(200), false); expect(eco.gold, GameConfig.startingGold); });
+  test('earn gold', () { eco.earnGold(30); expect(eco.gold, 180); });
+  test('sell value 60%', () { expect(eco.sellValue(100), 60); });
+  test('stone spirit', () { eco.earnStoneSpirit(25); expect(eco.stoneSpirit, 25); });
+  test('wave completion bonus', () { eco.onWaveComplete(5); expect(eco.stoneSpirit, 10); });
+  test('difficulty multiplier', () { eco.difficultyMultiplier = 2.5; eco.earnStoneSpirit(10); expect(eco.stoneSpirit, 25); });
+}

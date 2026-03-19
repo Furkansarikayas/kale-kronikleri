@@ -1,122 +1,235 @@
+import 'dart:math';
+import 'package:flame/game.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'game/kale_game.dart';
+import 'game/data/game_config.dart';
+import 'game/data/tower_data.dart';
+import 'meta/artifact_system.dart';
+import 'meta/meta_tree.dart';
+import 'meta/save_manager.dart';
+import 'screens/main_menu.dart';
+import 'screens/run_setup.dart';
+import 'screens/death_screen.dart';
+import 'screens/meta_screen.dart';
+import 'screens/game_hud.dart';
+import 'screens/wave_break.dart';
+import 'screens/pause_overlay.dart';
 
 void main() {
-  runApp(const MyApp());
+  WidgetsFlutterBinding.ensureInitialized();
+  SystemChrome.setPreferredOrientations([
+    DeviceOrientation.landscapeLeft,
+    DeviceOrientation.landscapeRight,
+  ]);
+  runApp(const KaleKronikleriApp());
 }
 
-class MyApp extends StatelessWidget {
-  const MyApp({super.key});
+class KaleKronikleriApp extends StatelessWidget {
+  const KaleKronikleriApp({super.key});
 
-  // This widget is the root of your application.
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Flutter Demo',
-      theme: ThemeData(
-        // This is the theme of your application.
-        //
-        // TRY THIS: Try running your application with "flutter run". You'll see
-        // the application has a purple toolbar. Then, without quitting the app,
-        // try changing the seedColor in the colorScheme below to Colors.green
-        // and then invoke "hot reload" (save your changes or press the "hot
-        // reload" button in a Flutter-supported IDE, or press "r" if you used
-        // the command line to start the app).
-        //
-        // Notice that the counter didn't reset back to zero; the application
-        // state is not lost during the reload. To reset the state, use hot
-        // restart instead.
-        //
-        // This works for code too, not just values: Most code changes can be
-        // tested with just a hot reload.
-        colorScheme: .fromSeed(seedColor: Colors.deepPurple),
+      debugShowCheckedModeBanner: false,
+      theme: ThemeData.dark().copyWith(
+        scaffoldBackgroundColor: const Color(0xFF1A150E),
       ),
-      home: const MyHomePage(title: 'Flutter Demo Home Page'),
+      home: const AppShell(),
     );
   }
 }
 
-class MyHomePage extends StatefulWidget {
-  const MyHomePage({super.key, required this.title});
+enum AppScreen { mainMenu, runSetup, game, meta, death }
 
-  // This widget is the home page of your application. It is stateful, meaning
-  // that it has a State object (defined below) that contains fields that affect
-  // how it looks.
-
-  // This class is the configuration for the state. It holds the values (in this
-  // case the title) provided by the parent (in this case the App widget) and
-  // used by the build method of the State. Fields in a Widget subclass are
-  // always marked "final".
-
-  final String title;
-
+class AppShell extends StatefulWidget {
+  const AppShell({super.key});
   @override
-  State<MyHomePage> createState() => _MyHomePageState();
+  State<AppShell> createState() => _AppShellState();
 }
 
-class _MyHomePageState extends State<MyHomePage> {
-  int _counter = 0;
+class _AppShellState extends State<AppShell> {
+  AppScreen _screen = AppScreen.mainMenu;
+  KaleGame? _game;
+  SaveManager? _saveManager;
+  bool _saveLoaded = false;
 
-  void _incrementCounter() {
+  // Run results for death screen
+  bool _lastVictory = false;
+  int _lastWaves = 0;
+  int _lastSpiritEarned = 0;
+  int _lastEnemiesKilled = 0;
+  int _lastTowersPlaced = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadSave();
+  }
+
+  Future<void> _loadSave() async {
+    _saveManager = await SaveManager.create();
+    setState(() => _saveLoaded = true);
+  }
+
+  void _goToMainMenu() => setState(() => _screen = AppScreen.mainMenu);
+
+  void _goToRunSetup() => setState(() => _screen = AppScreen.runSetup);
+
+  void _goToMeta() => setState(() => _screen = AppScreen.meta);
+
+  void _startGame(DifficultyTier difficulty, List<ArtifactDef> artifacts) {
+    final seed = Random().nextInt(999999);
+    final game = KaleGame(mapSeed: seed, difficulty: difficulty);
+
+    game.onStateChanged = () {
+      if (mounted) setState(() {});
+    };
+    game.onGameOver = (isVictory) {
+      _lastVictory = isVictory;
+      _lastWaves = game.waveSystem.currentWave;
+      _lastSpiritEarned = game.economy.stoneSpirit;
+      _lastEnemiesKilled = game.enemiesKilled;
+      _lastTowersPlaced = game.towersPlaced;
+
+      // Persist
+      _saveManager!.addStoneSpirit(_lastSpiritEarned);
+      _saveManager!.incrementRuns();
+      _saveManager!.addKills(_lastEnemiesKilled);
+
+      if (mounted) setState(() => _screen = AppScreen.death);
+    };
+
     setState(() {
-      // This call to setState tells the Flutter framework that something has
-      // changed in this State, which causes it to rerun the build method below
-      // so that the display can reflect the updated values. If we changed
-      // _counter without calling setState(), then the build method would not be
-      // called again, and so nothing would appear to happen.
-      _counter++;
+      _game = game;
+      _screen = AppScreen.game;
     });
   }
 
   @override
   Widget build(BuildContext context) {
-    // This method is rerun every time setState is called, for instance as done
-    // by the _incrementCounter method above.
-    //
-    // The Flutter framework has been optimized to make rerunning build methods
-    // fast, so that you can just rebuild anything that needs updating rather
-    // than having to individually change instances of widgets.
-    return Scaffold(
-      appBar: AppBar(
-        // TRY THIS: Try changing the color here to a specific color (to
-        // Colors.amber, perhaps?) and trigger a hot reload to see the AppBar
-        // change color while the other colors stay the same.
-        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
-        // Here we take the value from the MyHomePage object that was created by
-        // the App.build method, and use it to set our appbar title.
-        title: Text(widget.title),
-      ),
-      body: Center(
-        // Center is a layout widget. It takes a single child and positions it
-        // in the middle of the parent.
-        child: Column(
-          // Column is also a layout widget. It takes a list of children and
-          // arranges them vertically. By default, it sizes itself to fit its
-          // children horizontally, and tries to be as tall as its parent.
-          //
-          // Column has various properties to control how it sizes itself and
-          // how it positions its children. Here we use mainAxisAlignment to
-          // center the children vertically; the main axis here is the vertical
-          // axis because Columns are vertical (the cross axis would be
-          // horizontal).
-          //
-          // TRY THIS: Invoke "debug painting" (choose the "Toggle Debug Paint"
-          // action in the IDE, or press "p" in the console), to see the
-          // wireframe for each widget.
-          mainAxisAlignment: .center,
-          children: [
-            const Text('You have pushed the button this many times:'),
-            Text(
-              '$_counter',
-              style: Theme.of(context).textTheme.headlineMedium,
-            ),
-          ],
+    if (!_saveLoaded) {
+      return const Scaffold(
+        backgroundColor: Color(0xFF1A150E),
+        body: Center(child: CircularProgressIndicator(color: Color(0xFFBA7517))),
+      );
+    }
+
+    switch (_screen) {
+      case AppScreen.mainMenu:
+        return MainMenu(
+          onPlay: _goToRunSetup,
+          onMeta: _goToMeta,
+          stoneSpirit: _saveManager!.stoneSpirit,
+          totalRuns: _saveManager!.totalRuns,
+        );
+
+      case AppScreen.runSetup:
+        final choices = ArtifactData.rollChoices(seed: DateTime.now().millisecondsSinceEpoch);
+        return RunSetup(
+          artifactChoices: choices,
+          maxArtifacts: 3,
+          selectedDifficulty: DifficultyTier.apprentice,
+          unlockedDifficulties: _unlockedDifficulties(),
+          onStart: _startGame,
+          onBack: _goToMainMenu,
+        );
+
+      case AppScreen.game:
+        return _buildGameScreen();
+
+      case AppScreen.meta:
+        return MetaScreen(
+          stoneSpirit: _saveManager!.stoneSpirit,
+          totalRuns: _saveManager!.totalRuns,
+          unlockedLevels: {
+            'savas': _saveManager!.metaSavas,
+            'kesif': _saveManager!.metaKesif,
+            'kale': _saveManager!.metaKale,
+            'efsane': _saveManager!.metaEfsane,
+          },
+          onUnlock: (treeId, index) async {
+            final tree = MetaTree.trees.firstWhere((t) => t.id == treeId);
+            final node = tree.nodes[index];
+            await _saveManager!.unlockMetaNode(treeId, cost: node.cost);
+            setState(() {});
+          },
+          onBack: _goToMainMenu,
+        );
+
+      case AppScreen.death:
+        return DeathScreen(
+          isVictory: _lastVictory,
+          wavesCompleted: _lastWaves,
+          totalWaves: _game?.difficulty.totalWaves ?? 20,
+          spiritEarned: _lastSpiritEarned,
+          totalSpirit: _saveManager!.stoneSpirit,
+          towersPlaced: _lastTowersPlaced,
+          enemiesKilled: _lastEnemiesKilled,
+          onContinue: _goToRunSetup,
+          onMainMenu: _goToMainMenu,
+        );
+    }
+  }
+
+  Widget _buildGameScreen() {
+    final game = _game;
+    if (game == null) return const SizedBox.shrink();
+
+    return Stack(
+      children: [
+        GameWidget(game: game),
+        // HUD overlay
+        GameHud(
+          castleHp: game.castle.hp,
+          maxCastleHp: game.castle.maxHp,
+          gold: game.economy.gold,
+          currentWave: game.waveSystem.currentWave,
+          totalWaves: game.difficulty.totalWaves,
+          availableTowers: game.availableTowers,
+          selectedTower: game.selectedTowerType,
+          isWaveActive: game.phase == GamePhase.waveActive,
+          towerSlots: game.towerSlots,
+          towersPlaced: game.towersPlaced,
+          activeSynergies: game.activeSynergyNames,
+          onStartWave: () => game.startNextWave(),
+          onPause: () {
+            game.togglePause();
+            setState(() {});
+          },
+          onTowerSelected: (type) {
+            game.selectedTowerType = type;
+            setState(() {});
+          },
         ),
-      ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _incrementCounter,
-        tooltip: 'Increment',
-        child: const Icon(Icons.add),
-      ),
+        // Wave break overlay
+        if (game.phase == GamePhase.waveBreak)
+          WaveBreak(
+            nextWave: game.waveSystem.currentWave + 1,
+            totalWaves: game.difficulty.totalWaves,
+            gold: game.economy.gold,
+            timeRemaining: game.breakTimeRemaining,
+            onStartNow: () => game.startNextWave(),
+          ),
+        // Pause overlay
+        if (game.phase == GamePhase.paused)
+          PauseOverlay(
+            onResume: () {
+              game.togglePause();
+              setState(() {});
+            },
+            onMainMenu: () {
+              _game = null;
+              _goToMainMenu();
+            },
+          ),
+      ],
     );
+  }
+
+  List<DifficultyTier> _unlockedDifficulties() {
+    return DifficultyTier.values
+        .where((d) => d.runsToUnlock <= _saveManager!.totalRuns)
+        .toList();
   }
 }

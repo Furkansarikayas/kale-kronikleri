@@ -1,30 +1,93 @@
-// This is a basic Flutter widget test.
-//
-// To perform an interaction with a widget in your test, use the WidgetTester
-// utility in the flutter_test package. For example, you can send tap and scroll
-// gestures. You can also use WidgetTester to find child widgets in the widget
-// tree, read text, and verify that the values of widget properties are correct.
-
-import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-
-import 'package:kale_kronikleri/main.dart';
+import 'package:kale_kronikleri/game/components/castle.dart';
+import 'package:kale_kronikleri/game/components/map/game_map.dart';
+import 'package:kale_kronikleri/game/data/game_config.dart';
 
 void main() {
-  testWidgets('Counter increments smoke test', (WidgetTester tester) async {
-    // Build our app and trigger a frame.
-    await tester.pumpWidget(const MyApp());
+  group('Castle', () {
+    test('takes damage correctly', () {
+      final castle = Castle(cellSize: 40.0);
+      expect(castle.hp, 20);
+      castle.takeDamage(5);
+      expect(castle.hp, 15);
+      expect(castle.isDestroyed, false);
+    });
 
-    // Verify that our counter starts at 0.
-    expect(find.text('0'), findsOneWidget);
-    expect(find.text('1'), findsNothing);
+    test('damage reduction works', () {
+      final castle = Castle(cellSize: 40.0);
+      castle.takeDamage(10, damageReduction: 0.5);
+      expect(castle.hp, 15);
+    });
 
-    // Tap the '+' icon and trigger a frame.
-    await tester.tap(find.byIcon(Icons.add));
-    await tester.pump();
+    test('cannot go below 0', () {
+      final castle = Castle(cellSize: 40.0);
+      castle.takeDamage(100);
+      expect(castle.hp, 0);
+      expect(castle.isDestroyed, true);
+    });
 
-    // Verify that our counter has incremented.
-    expect(find.text('0'), findsNothing);
-    expect(find.text('1'), findsOneWidget);
+    test('heal works', () {
+      final castle = Castle(cellSize: 40.0);
+      castle.takeDamage(10);
+      castle.heal(5);
+      expect(castle.hp, 15);
+    });
+
+    test('heal cannot exceed max', () {
+      final castle = Castle(cellSize: 40.0);
+      castle.heal(100);
+      expect(castle.hp, 20);
+    });
+  });
+
+  group('GameMap', () {
+    test('canPlaceTower returns true for buildable', () {
+      final map = GameMap(cellSize: 40.0);
+      map.generate(seed: 42);
+      // Find a buildable cell
+      bool foundBuildable = false;
+      for (int r = 0; r < GameConfig.gridRows; r++) {
+        for (int c = 0; c < GameConfig.gridColumns; c++) {
+          if (map.grid[r][c] == CellType.buildable) {
+            expect(map.canPlaceTower(c, r), true);
+            foundBuildable = true;
+            break;
+          }
+        }
+        if (foundBuildable) break;
+      }
+      expect(foundBuildable, true);
+    });
+
+    test('canPlaceTower returns false for path', () {
+      final map = GameMap(cellSize: 40.0);
+      map.generate(seed: 42);
+      bool foundPath = false;
+      for (int r = 0; r < GameConfig.gridRows; r++) {
+        for (int c = 0; c < GameConfig.gridColumns; c++) {
+          if (map.grid[r][c] == CellType.path) {
+            expect(map.canPlaceTower(c, r), false);
+            foundPath = true;
+            break;
+          }
+        }
+        if (foundPath) break;
+      }
+      expect(foundPath, true);
+    });
+
+    test('out of bounds returns blocked', () {
+      final map = GameMap(cellSize: 40.0);
+      map.generate(seed: 42);
+      expect(map.cellAt(-1, 0), CellType.blocked);
+      expect(map.cellAt(0, -1), CellType.blocked);
+      expect(map.cellAt(100, 0), CellType.blocked);
+    });
+
+    test('enemyPath is not empty', () {
+      final map = GameMap(cellSize: 40.0);
+      map.generate(seed: 42);
+      expect(map.enemyPath.isNotEmpty, true);
+    });
   });
 }
