@@ -22,60 +22,72 @@ class MainMenu extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: _darkBg,
-      body: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Text(
-              'KALE KRONiKLERi',
-              style: TextStyle(
-                color: _gold,
-                fontSize: 36,
-                fontWeight: FontWeight.bold,
-                letterSpacing: 4,
+      body: SafeArea(
+        child: Center(
+          child: SingleChildScrollView(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 16),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Text(
+                    'KALE KRONiKLERi',
+                    style: TextStyle(
+                      color: _gold,
+                      fontSize: 32,
+                      fontWeight: FontWeight.bold,
+                      letterSpacing: 4,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Castle Chronicles',
+                    style: TextStyle(
+                      color: _cream.withAlpha(150),
+                      fontSize: 13,
+                      fontStyle: FontStyle.italic,
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      _MenuButton(
+                        label: 'OYNA',
+                        icon: Icons.play_arrow,
+                        onPressed: onPlay,
+                      ),
+                      const SizedBox(width: 16),
+                      _MenuButton(
+                        label: 'META AGACI',
+                        icon: Icons.account_tree,
+                        onPressed: onMeta,
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Icon(Icons.diamond, color: _gold, size: 14),
+                      const SizedBox(width: 4),
+                      Text(
+                        'Tas Ruhu: $stoneSpirit',
+                        style: const TextStyle(color: _cream, fontSize: 12),
+                      ),
+                      const SizedBox(width: 20),
+                      const Icon(Icons.loop, color: _gold, size: 14),
+                      const SizedBox(width: 4),
+                      Text(
+                        'Toplam Kosu: $totalRuns',
+                        style: const TextStyle(color: _cream, fontSize: 12),
+                      ),
+                    ],
+                  ),
+                ],
               ),
             ),
-            const SizedBox(height: 8),
-            Text(
-              'Castle Chronicles',
-              style: TextStyle(
-                color: _cream.withAlpha(150),
-                fontSize: 14,
-                fontStyle: FontStyle.italic,
-              ),
-            ),
-            const SizedBox(height: 48),
-            _MenuButton(
-              label: 'OYNA',
-              icon: Icons.play_arrow,
-              onPressed: onPlay,
-            ),
-            const SizedBox(height: 16),
-            _MenuButton(
-              label: 'META AGACI',
-              icon: Icons.account_tree,
-              onPressed: onMeta,
-            ),
-            const SizedBox(height: 32),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                const Icon(Icons.diamond, color: _gold, size: 16),
-                const SizedBox(width: 4),
-                Text(
-                  'Tas Ruhu: $stoneSpirit',
-                  style: const TextStyle(color: _cream, fontSize: 13),
-                ),
-                const SizedBox(width: 24),
-                const Icon(Icons.loop, color: _gold, size: 16),
-                const SizedBox(width: 4),
-                Text(
-                  'Toplam Kosu: $totalRuns',
-                  style: const TextStyle(color: _cream, fontSize: 13),
-                ),
-              ],
-            ),
-          ],
+          ),
         ),
       ),
     );
@@ -96,12 +108,12 @@ class _MenuButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      width: 220,
-      height: 48,
+      width: 180,
+      height: 44,
       child: ElevatedButton.icon(
         onPressed: onPressed,
-        icon: Icon(icon, size: 22),
-        label: Text(label, style: const TextStyle(fontSize: 16, letterSpacing: 2)),
+        icon: Icon(icon, size: 20),
+        label: Text(label, style: const TextStyle(fontSize: 14, letterSpacing: 2)),
         style: ElevatedButton.styleFrom(
           backgroundColor: const Color(0xFFBA7517),
           foregroundColor: const Color(0xFF1A150E),

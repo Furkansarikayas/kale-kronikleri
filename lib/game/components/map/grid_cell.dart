@@ -13,7 +13,8 @@ class GridCell extends RectangleComponent {
     required this.cellType,
     required double cellSize,
   }) : super(
-    position: Vector2(col * cellSize, row * cellSize),
+    // Rows along x-axis (short), cols along y-axis (long) for landscape
+    position: Vector2(row * cellSize, col * cellSize),
     size: Vector2.all(cellSize),
     paint: Paint()..color = _colorFor(cellType),
   );

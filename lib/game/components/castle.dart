@@ -10,7 +10,8 @@ class Castle extends RectangleComponent {
       : _hp = maxHp ?? GameConfig.baseCastleHp,
         maxHp = maxHp ?? GameConfig.baseCastleHp,
         super(
-          position: Vector2((GameConfig.gridColumns - 2) * cellSize, (GameConfig.gridRows ~/ 2 - 1) * cellSize),
+          // Rows along x, cols along y for landscape
+          position: Vector2((GameConfig.gridRows ~/ 2 - 1) * cellSize, (GameConfig.gridColumns - 2) * cellSize),
           size: Vector2(cellSize * 2, cellSize * 2),
           paint: Paint()..color = const Color(0xFFBA7517),
         );

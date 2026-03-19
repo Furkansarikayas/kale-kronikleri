@@ -4,7 +4,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'game/kale_game.dart';
 import 'game/data/game_config.dart';
-import 'game/data/tower_data.dart';
 import 'meta/artifact_system.dart';
 import 'meta/meta_tree.dart';
 import 'meta/save_manager.dart';

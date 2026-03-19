@@ -76,9 +76,11 @@ class KaleGame extends FlameGame with TapCallbacks {
   Future<void> onLoad() async {
     await super.onLoad();
 
-    final screenW = size.x;
-    final screenH = size.y * 0.75;
-    cellSize = (screenW / GameConfig.gridColumns).clamp(1, screenH / GameConfig.gridRows).toDouble();
+    // Flame canvas: size.x=short side, size.y=long side in landscape
+    // Map grid: rows along x (short=10 rows), columns along y (long=16 cols)
+    final cellByRow = size.x / GameConfig.gridRows;
+    final cellByCol = size.y / GameConfig.gridColumns;
+    cellSize = (cellByRow < cellByCol ? cellByRow : cellByCol).clamp(1.0, double.infinity);
 
     gameMap = GameMap(cellSize: cellSize);
     gameMap.generate(seed: mapSeed);
@@ -94,6 +96,7 @@ class KaleGame extends FlameGame with TapCallbacks {
 
     _phase = GamePhase.prep;
     _isReady = true;
+    onStateChanged?.call(); // notify Flutter to show HUD
   }
 
   // --- Tower Placement ---
@@ -368,8 +371,9 @@ class KaleGame extends FlameGame with TapCallbacks {
     if (_phase == GamePhase.paused || _phase == GamePhase.gameOver) return;
 
     final pos = event.localPosition;
-    final col = (pos.x / cellSize).floor();
-    final row = (pos.y / cellSize).floor();
+    // Screen x = row, screen y = col (swapped for landscape)
+    final col = (pos.y / cellSize).floor();
+    final row = (pos.x / cellSize).floor();
 
     if (selectedTowerType != null) {
       placeTower(col, row, selectedTowerType!);
