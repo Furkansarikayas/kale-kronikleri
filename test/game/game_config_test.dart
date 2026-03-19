@@ -2,8 +2,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:kale_kronikleri/game/data/game_config.dart';
 
 void main() {
-  test('grid dimensions are 16x10', () {
-    expect(GameConfig.gridColumns, 16);
+  test('grid dimensions are 22x10', () {
+    expect(GameConfig.gridColumns, 22);
     expect(GameConfig.gridRows, 10);
   });
   test('base castle HP is 20', () {

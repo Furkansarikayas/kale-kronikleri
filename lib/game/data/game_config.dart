@@ -24,7 +24,7 @@ enum DifficultyTier {
 
 class GameConfig {
   GameConfig._();
-  static const int gridColumns = 16;
+  static const int gridColumns = 22;
   static const int gridRows = 10;
   static const int baseCastleHp = 20;
   static const int startingGold = 150;
