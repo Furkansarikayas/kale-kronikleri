@@ -22,8 +22,8 @@ class Tower extends RectangleComponent {
     required this.row,
     required this.cellSize,
   }) : super(
-    // Rows along x, cols along y for landscape
-    position: Vector2(row * cellSize, col * cellSize),
+    // Landscape: x = col (horizontal), y = row (vertical)
+    position: Vector2(col * cellSize, row * cellSize),
     size: Vector2.all(cellSize),
     paint: Paint()..color = _towerColor(type),
     anchor: Anchor.topLeft,

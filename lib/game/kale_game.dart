@@ -1,5 +1,6 @@
-import 'package:flame/game.dart';
+import 'package:flame/components.dart';
 import 'package:flame/events.dart';
+import 'package:flame/game.dart';
 import 'package:flutter/material.dart';
 import 'components/map/game_map.dart';
 import 'components/castle.dart';
@@ -19,7 +20,11 @@ import 'systems/synergy_system.dart';
 
 enum GamePhase { prep, waveActive, waveBreak, paused, gameOver }
 
-class KaleGame extends FlameGame with TapCallbacks {
+class KaleGame extends FlameGame {
+  static const double fixedCellSize = 40.0;
+  static final double _gameWidth = GameConfig.gridColumns * fixedCellSize;
+  static final double _gameHeight = GameConfig.gridRows * fixedCellSize;
+
   late GameMap gameMap;
   late Castle castle;
   late EconomySystem economy;
@@ -67,7 +72,12 @@ class KaleGame extends FlameGame with TapCallbacks {
   KaleGame({
     required this.mapSeed,
     this.difficulty = DifficultyTier.apprentice,
-  });
+  }) : super(
+    camera: CameraComponent.withFixedResolution(
+      width: _gameWidth,
+      height: _gameHeight,
+    ),
+  );
 
   @override
   Color backgroundColor() => const Color(0xFF1A150E);
@@ -76,18 +86,20 @@ class KaleGame extends FlameGame with TapCallbacks {
   Future<void> onLoad() async {
     await super.onLoad();
 
-    // Flame canvas: size.x=short side, size.y=long side in landscape
-    // Map grid: rows along x (short=10 rows), columns along y (long=16 cols)
-    final cellByRow = size.x / GameConfig.gridRows;
-    final cellByCol = size.y / GameConfig.gridColumns;
-    cellSize = (cellByRow < cellByCol ? cellByRow : cellByCol).clamp(1.0, double.infinity);
+    // Fixed resolution: world is exactly _gameWidth x _gameHeight
+    // Viewfinder anchor topLeft so (0,0) = top-left corner
+    camera.viewfinder.anchor = Anchor.topLeft;
+    cellSize = fixedCellSize;
 
     gameMap = GameMap(cellSize: cellSize);
     gameMap.generate(seed: mapSeed);
-    add(gameMap);
+    world.add(gameMap);
 
     castle = Castle(cellSize: cellSize);
-    add(castle);
+    world.add(castle);
+
+    // Tap handler in the world (receives world coordinates automatically)
+    world.add(_GridTapHandler(this));
 
     economy = EconomySystem();
     economy.difficultyMultiplier = difficulty.spiritMultiplier;
@@ -124,7 +136,7 @@ class KaleGame extends FlameGame with TapCallbacks {
     );
     _towers.add(tower);
     _towerPositions[(col: col, row: row)] = type;
-    add(tower);
+    world.add(tower);
 
     _recalculateSynergies();
     onStateChanged?.call();
@@ -179,7 +191,7 @@ class KaleGame extends FlameGame with TapCallbacks {
       difficulty: difficulty,
     );
     _enemies.add(enemy);
-    add(enemy);
+    world.add(enemy);
   }
 
   // --- Game Loop ---
@@ -197,7 +209,6 @@ class KaleGame extends FlameGame with TapCallbacks {
       if (_breakTimer <= 0) {
         startNextWave();
       } else if (_breakTimer.ceil() != oldSec) {
-        // Only notify once per second change to avoid excessive rebuilds
         onStateChanged?.call();
       }
       return;
@@ -267,7 +278,7 @@ class KaleGame extends FlameGame with TapCallbacks {
       if (target != null) {
         final proj = tower.tryFire(target.position);
         if (proj != null) {
-          add(proj);
+          world.add(proj);
           // Instant hit for simplicity (projectile visual only)
           _applyTowerDamage(tower, target);
         }
@@ -275,7 +286,7 @@ class KaleGame extends FlameGame with TapCallbacks {
     }
 
     // Clean up projectiles that have hit
-    final projectiles = children.whereType<Projectile>().toList();
+    final projectiles = world.children.whereType<Projectile>().toList();
     for (final p in projectiles) {
       if (p.hasHit) p.removeFromParent();
     }
@@ -306,7 +317,6 @@ class KaleGame extends FlameGame with TapCallbacks {
         enemy.applyEffect(StatusEffect.curse(armorReduce: 8, duration: 4.0));
         break;
       case TowerType.lightning:
-        // Double damage to wet enemies
         final actualDmg = enemy.isWet ? damage * 2 : damage;
         enemy.takeDamage(actualDmg);
         break;
@@ -363,17 +373,17 @@ class KaleGame extends FlameGame with TapCallbacks {
 
   GamePhase _previousPhase = GamePhase.prep;
 
-  // --- Tap Handling ---
+  // --- Tap handling via world component ---
 
-  @override
-  void onTapDown(TapDownEvent event) {
+  void handleGridTap(Vector2 worldPos) {
     if (!_isReady) return;
     if (_phase == GamePhase.paused || _phase == GamePhase.gameOver) return;
 
-    final pos = event.localPosition;
-    // Screen x = row, screen y = col (swapped for landscape)
-    final col = (pos.y / cellSize).floor();
-    final row = (pos.x / cellSize).floor();
+    final col = (worldPos.x / cellSize).floor();
+    final row = (worldPos.y / cellSize).floor();
+
+    if (col < 0 || col >= GameConfig.gridColumns) return;
+    if (row < 0 || row >= GameConfig.gridRows) return;
 
     if (selectedTowerType != null) {
       placeTower(col, row, selectedTowerType!);
@@ -390,4 +400,20 @@ class KaleGame extends FlameGame with TapCallbacks {
       TowerData.availableAt(waveSystem.currentWave);
 
   void setTowerSlots(int slots) => _towerSlots = slots;
+}
+
+/// Transparent component in the world that catches taps and forwards to game.
+/// Being in the world means tap coordinates are automatically in world space.
+class _GridTapHandler extends PositionComponent with TapCallbacks {
+  final KaleGame game;
+
+  _GridTapHandler(this.game) : super(
+    size: Vector2(KaleGame._gameWidth, KaleGame._gameHeight),
+    priority: -1, // render behind everything
+  );
+
+  @override
+  void onTapDown(TapDownEvent event) {
+    game.handleGridTap(event.localPosition);
+  }
 }

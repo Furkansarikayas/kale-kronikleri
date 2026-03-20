@@ -107,8 +107,8 @@ class Enemy extends RectangleComponent {
     }
   }
 
-  // Rows along x, cols along y for landscape
-  Vector2 _gridToWorld(GridPos pos) => Vector2((pos.row + 0.5) * cellSize, (pos.col + 0.5) * cellSize);
+  // Landscape: x = col (horizontal), y = row (vertical)
+  Vector2 _gridToWorld(GridPos pos) => Vector2((pos.col + 0.5) * cellSize, (pos.row + 0.5) * cellSize);
 
   static Color _enemyColor(EnemyType type) {
     switch (type) {

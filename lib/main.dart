@@ -15,9 +15,9 @@ import 'screens/game_hud.dart';
 import 'screens/wave_break.dart';
 import 'screens/pause_overlay.dart';
 
-void main() {
+void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  SystemChrome.setPreferredOrientations([
+  await SystemChrome.setPreferredOrientations([
     DeviceOrientation.landscapeLeft,
     DeviceOrientation.landscapeRight,
   ]);
@@ -66,9 +66,17 @@ class _AppShellState extends State<AppShell> {
     _loadSave();
   }
 
+  // Debug: set to false before release
+  static const _debugAutoStart = false;
+
   Future<void> _loadSave() async {
     _saveManager = await SaveManager.create();
     setState(() => _saveLoaded = true);
+    if (_debugAutoStart) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _startGame(DifficultyTier.apprentice, []);
+      });
+    }
   }
 
   void _goToMainMenu() => setState(() => _screen = AppScreen.mainMenu);
