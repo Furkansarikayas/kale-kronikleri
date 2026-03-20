@@ -26,11 +26,11 @@ class GameConfig {
   GameConfig._();
   static const int gridColumns = 22;
   static const int gridRows = 10;
-  static const int baseCastleHp = 20;
-  static const int startingGold = 150;
+  static const int baseCastleHp = 50;
+  static const int startingGold = 200;
   static const double sellRefundRatio = 0.6;
-  static const int baseTowerSlots = 8;
-  static const double wavePrepTime = 10.0;
+  static const int baseTowerSlots = 10;
+  static const double wavePrepTime = 15.0;
 
   static int calculateDamage(int baseDamage, int armor) {
     if (baseDamage <= 0) return 0;

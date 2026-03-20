@@ -7,21 +7,21 @@ void main() {
   group('Castle', () {
     test('takes damage correctly', () {
       final castle = Castle(cellSize: 40.0);
-      expect(castle.hp, 20);
+      expect(castle.hp, GameConfig.baseCastleHp);
       castle.takeDamage(5);
-      expect(castle.hp, 15);
+      expect(castle.hp, GameConfig.baseCastleHp - 5);
       expect(castle.isDestroyed, false);
     });
 
     test('damage reduction works', () {
       final castle = Castle(cellSize: 40.0);
       castle.takeDamage(10, damageReduction: 0.5);
-      expect(castle.hp, 15);
+      expect(castle.hp, GameConfig.baseCastleHp - 5);
     });
 
     test('cannot go below 0', () {
       final castle = Castle(cellSize: 40.0);
-      castle.takeDamage(100);
+      castle.takeDamage(9999);
       expect(castle.hp, 0);
       expect(castle.isDestroyed, true);
     });
@@ -30,13 +30,13 @@ void main() {
       final castle = Castle(cellSize: 40.0);
       castle.takeDamage(10);
       castle.heal(5);
-      expect(castle.hp, 15);
+      expect(castle.hp, GameConfig.baseCastleHp - 5);
     });
 
     test('heal cannot exceed max', () {
       final castle = Castle(cellSize: 40.0);
       castle.heal(100);
-      expect(castle.hp, 20);
+      expect(castle.hp, GameConfig.baseCastleHp);
     });
   });
 

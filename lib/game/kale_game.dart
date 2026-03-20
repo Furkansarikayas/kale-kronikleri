@@ -260,6 +260,12 @@ class KaleGame extends FlameGame {
 
   void _updateTowerCombat(double dt) {
     for (final tower in _towers) {
+      // Spike walls deal contact damage to enemies on same cell
+      if (tower.type == TowerType.spikeWall) {
+        _updateSpikeWallDamage(tower, dt);
+        continue;
+      }
+
       if (!tower.canFire()) continue;
 
       // Find nearest enemy in range
@@ -289,6 +295,27 @@ class KaleGame extends FlameGame {
     final projectiles = world.children.whereType<Projectile>().toList();
     for (final p in projectiles) {
       if (p.hasHit) p.removeFromParent();
+    }
+  }
+
+  // Spike wall contact damage tracking
+  final Map<Tower, double> _spikeWallTimers = {};
+
+  void _updateSpikeWallDamage(Tower spikeWall, double dt) {
+    final timer = (_spikeWallTimers[spikeWall] ?? 0) + dt;
+    if (timer < 0.5) {
+      _spikeWallTimers[spikeWall] = timer;
+      return;
+    }
+    _spikeWallTimers[spikeWall] = 0;
+
+    final center = spikeWall.position + spikeWall.size / 2;
+    for (final enemy in _enemies) {
+      if (enemy.isDead || enemy.reachedCastle) continue;
+      final dist = center.distanceTo(enemy.position);
+      if (dist <= cellSize * 0.8) {
+        enemy.takeDamage(spikeWall.currentDamage);
+      }
     }
   }
 

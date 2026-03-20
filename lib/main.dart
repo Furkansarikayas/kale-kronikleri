@@ -184,6 +184,7 @@ class _AppShellState extends State<AppShell> {
     if (game == null) return const SizedBox.shrink();
 
     return Stack(
+      fit: StackFit.expand,
       children: [
         GameWidget(game: game),
         // HUD overlay (only after game is loaded)

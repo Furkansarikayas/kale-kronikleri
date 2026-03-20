@@ -21,5 +21,9 @@ class EconomySystem {
     _stoneSpirit += (baseAmount * difficultyMultiplier).round();
   }
 
-  void onWaveComplete(int waveNumber) { earnStoneSpirit(waveNumber * 2); }
+  void onWaveComplete(int waveNumber) {
+    earnStoneSpirit(waveNumber * 2);
+    // Gold bonus for surviving the wave
+    earnGold(10 + waveNumber * 5);
+  }
 }

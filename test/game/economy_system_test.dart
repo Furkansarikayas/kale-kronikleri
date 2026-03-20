@@ -7,11 +7,15 @@ void main() {
   setUp(() { eco = EconomySystem(); });
 
   test('starts with correct gold', () { expect(eco.gold, GameConfig.startingGold); });
-  test('can spend gold', () { expect(eco.trySpend(50), true); expect(eco.gold, 100); });
-  test('cannot overspend', () { expect(eco.trySpend(200), false); expect(eco.gold, GameConfig.startingGold); });
-  test('earn gold', () { eco.earnGold(30); expect(eco.gold, 180); });
+  test('can spend gold', () { expect(eco.trySpend(50), true); expect(eco.gold, GameConfig.startingGold - 50); });
+  test('cannot overspend', () { expect(eco.trySpend(9999), false); expect(eco.gold, GameConfig.startingGold); });
+  test('earn gold', () { eco.earnGold(30); expect(eco.gold, GameConfig.startingGold + 30); });
   test('sell value 60%', () { expect(eco.sellValue(100), 60); });
   test('stone spirit', () { eco.earnStoneSpirit(25); expect(eco.stoneSpirit, 25); });
-  test('wave completion bonus', () { eco.onWaveComplete(5); expect(eco.stoneSpirit, 10); });
+  test('wave completion gives spirit and gold', () {
+    eco.onWaveComplete(5);
+    expect(eco.stoneSpirit, 10);
+    expect(eco.gold, GameConfig.startingGold + 10 + 5 * 5); // base gold + wave bonus
+  });
   test('difficulty multiplier', () { eco.difficultyMultiplier = 2.5; eco.earnStoneSpirit(10); expect(eco.stoneSpirit, 25); });
 }

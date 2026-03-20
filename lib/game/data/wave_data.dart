@@ -27,10 +27,10 @@ class WaveData {
       return entries;
     }
 
-    final baseCount = 3 + waveNumber;
+    final baseCount = 2 + waveNumber;
     if (waveNumber <= 5) {
-      final types = [EnemyType.soldier, EnemyType.cavalry, EnemyType.goblin];
-      entries.add(WaveEntry(type: types[(waveNumber - 1) % types.length], count: baseCount));
+      final types = [EnemyType.soldier, EnemyType.soldier, EnemyType.goblin, EnemyType.cavalry, EnemyType.cavalry];
+      entries.add(WaveEntry(type: types[(waveNumber - 1) % types.length], count: baseCount, spawnDelay: waveNumber <= 2 ? 1.2 : 0.8));
     } else if (waveNumber <= 10) {
       entries.add(WaveEntry(type: EnemyType.soldier, count: baseCount ~/ 2));
       final med = [EnemyType.armoredGiant, EnemyType.undead, EnemyType.shieldBearer, EnemyType.healer];

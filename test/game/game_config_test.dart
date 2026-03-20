@@ -6,14 +6,14 @@ void main() {
     expect(GameConfig.gridColumns, 22);
     expect(GameConfig.gridRows, 10);
   });
-  test('base castle HP is 20', () {
-    expect(GameConfig.baseCastleHp, 20);
+  test('base castle HP is 50', () {
+    expect(GameConfig.baseCastleHp, 50);
   });
-  test('base tower slots is 8', () {
-    expect(GameConfig.baseTowerSlots, 8);
+  test('base tower slots is 10', () {
+    expect(GameConfig.baseTowerSlots, 10);
   });
-  test('starting gold is 150', () {
-    expect(GameConfig.startingGold, 150);
+  test('starting gold is 200', () {
+    expect(GameConfig.startingGold, 200);
   });
   test('sell refund ratio is 0.6', () {
     expect(GameConfig.sellRefundRatio, 0.6);

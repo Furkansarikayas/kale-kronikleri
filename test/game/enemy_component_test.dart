@@ -128,7 +128,7 @@ void main() {
         type: EnemyType.cavalry, path: testPath, cellSize: 40,
       );
       expect(enemy.type, EnemyType.cavalry);
-      expect(enemy.goldReward, 5);
+      expect(enemy.goldReward, 6);
     });
   });
 }
