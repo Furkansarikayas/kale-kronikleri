@@ -87,7 +87,7 @@ class _AppShellState extends State<AppShell> {
 
   void _startGame(DifficultyTier difficulty, List<ArtifactDef> artifacts) {
     final seed = Random().nextInt(999999);
-    final game = KaleGame(mapSeed: seed, difficulty: difficulty);
+    final game = KaleGame(mapSeed: seed, difficulty: difficulty, artifacts: artifacts);
 
     game.onStateChanged = () {
       if (mounted) setState(() {});
@@ -200,6 +200,7 @@ class _AppShellState extends State<AppShell> {
           towerSlots: game.towerSlots,
           towersPlaced: game.towersPlaced,
           activeSynergies: game.activeSynergyNames,
+          selectedPlacedTower: game.selectedPlacedTower,
           onStartWave: () => game.startNextWave(),
           onPause: () {
             game.togglePause();
@@ -207,6 +208,15 @@ class _AppShellState extends State<AppShell> {
           },
           onTowerSelected: (type) {
             game.selectedTowerType = type;
+            game.deselectPlacedTower();
+            setState(() {});
+          },
+          onSellTower: () {
+            game.sellSelectedTower();
+            setState(() {});
+          },
+          onUpgradeTower: () {
+            game.upgradeSelectedTower();
             setState(() {});
           },
         ),

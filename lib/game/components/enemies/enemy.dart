@@ -40,6 +40,7 @@ class Enemy extends RectangleComponent {
   int get goldReward => baseStats.goldReward;
   int get castleDamage => baseStats.castleDamage;
   List<StatusEffect> get activeEffects => _effects;
+  List<GridPos> get remainingPath => path.sublist(_pathIndex);
 
   double get currentSpeed {
     double speed = baseStats.speed;
@@ -67,6 +68,11 @@ class Enemy extends RectangleComponent {
       _hp = 0;
       _isDead = true;
     }
+  }
+
+  void heal(int amount) {
+    if (_isDead) return;
+    _hp = (_hp + amount).clamp(0, maxHp);
   }
 
   void applyEffect(StatusEffect effect) {
@@ -104,6 +110,48 @@ class Enemy extends RectangleComponent {
     } else {
       direction.normalize();
       position += direction * moveSpeed;
+    }
+  }
+
+  @override
+  void render(Canvas canvas) {
+    super.render(canvas);
+    if (_isDead || _reachedCastle) return;
+
+    // Draw HP bar above enemy
+    final barWidth = size.x;
+    final barHeight = 3.0;
+    final barY = -6.0;
+    final hpRatio = _hp / maxHp;
+
+    // Background
+    canvas.drawRect(
+      Rect.fromLTWH(0, barY, barWidth, barHeight),
+      Paint()..color = const Color(0x88000000),
+    );
+    // HP fill
+    final barColor = hpRatio > 0.5
+        ? Color.lerp(const Color(0xFFFFFF00), const Color(0xFF00FF00), (hpRatio - 0.5) * 2)!
+        : Color.lerp(const Color(0xFFFF0000), const Color(0xFFFFFF00), hpRatio * 2)!;
+    canvas.drawRect(
+      Rect.fromLTWH(0, barY, barWidth * hpRatio, barHeight),
+      Paint()..color = barColor,
+    );
+
+    // Status effect indicators
+    double indicatorX = 0;
+    for (final effect in _effects) {
+      if (effect.isExpired) continue;
+      Color dotColor;
+      switch (effect.type) {
+        case StatusType.burn: dotColor = const Color(0xFFFF4500); break;
+        case StatusType.poison: dotColor = const Color(0xFF00FF00); break;
+        case StatusType.slow: dotColor = const Color(0xFF87CEEB); break;
+        case StatusType.wet: dotColor = const Color(0xFF4169E1); break;
+        case StatusType.curse: dotColor = const Color(0xFF660066); break;
+      }
+      canvas.drawCircle(Offset(indicatorX + 2, barY - 3), 2, Paint()..color = dotColor);
+      indicatorX += 5;
     }
   }
 

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../game/data/tower_data.dart';
+import '../game/components/towers/tower.dart';
 
 class GameHud extends StatefulWidget {
   final int castleHp;
@@ -13,9 +14,12 @@ class GameHud extends StatefulWidget {
   final int towerSlots;
   final int towersPlaced;
   final List<String> activeSynergies;
+  final Tower? selectedPlacedTower;
   final VoidCallback onStartWave;
   final VoidCallback onPause;
   final ValueChanged<TowerType?> onTowerSelected;
+  final VoidCallback? onSellTower;
+  final VoidCallback? onUpgradeTower;
 
   const GameHud({
     super.key,
@@ -30,9 +34,12 @@ class GameHud extends StatefulWidget {
     required this.towerSlots,
     required this.towersPlaced,
     required this.activeSynergies,
+    this.selectedPlacedTower,
     required this.onStartWave,
     required this.onPause,
     required this.onTowerSelected,
+    this.onSellTower,
+    this.onUpgradeTower,
   });
 
   @override
@@ -162,6 +169,8 @@ class _GameHudState extends State<GameHud> {
   }
 
   Widget _buildBottomBar() {
+    final placedTower = widget.selectedPlacedTower;
+
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       color: _darkBg.withAlpha(220),
@@ -169,8 +178,11 @@ class _GameHudState extends State<GameHud> {
         top: false,
         child: Row(
           children: [
-            // Tower grid (2 rows x 6 cols)
-            Expanded(child: _buildTowerGrid()),
+            // Tower info panel or tower grid
+            if (placedTower != null)
+              Expanded(child: _buildTowerInfoPanel(placedTower))
+            else
+              Expanded(child: _buildTowerGrid()),
             const SizedBox(width: 8),
             // Start wave / wave active indicator
             if (!widget.isWaveActive)
@@ -202,6 +214,76 @@ class _GameHudState extends State<GameHud> {
               ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildTowerInfoPanel(Tower tower) {
+    final stats = tower.stats;
+    final tierName = stats.tierNames[tower.tier - 1];
+
+    return SizedBox(
+      height: 80,
+      child: Row(
+        children: [
+          // Tower info
+          Icon(_towerIcon(tower.type), color: _cream, size: 28),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(
+                  '$tierName (Lv.${tower.tier})',
+                  style: const TextStyle(color: _cream, fontSize: 13, fontWeight: FontWeight.bold),
+                ),
+                Text(
+                  'Hasar: ${tower.currentDamage}  Menzil: ${tower.currentRange.toStringAsFixed(1)}',
+                  style: TextStyle(color: _cream.withAlpha(180), fontSize: 10),
+                ),
+              ],
+            ),
+          ),
+          // Upgrade button
+          if (tower.canUpgrade)
+            Padding(
+              padding: const EdgeInsets.only(right: 6),
+              child: ElevatedButton(
+                onPressed: widget.gold >= tower.upgradeCost ? widget.onUpgradeTower : null,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.green[700],
+                  foregroundColor: _cream,
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  minimumSize: Size.zero,
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.arrow_upward, size: 16),
+                    Text('${tower.upgradeCost}g', style: const TextStyle(fontSize: 9)),
+                  ],
+                ),
+              ),
+            ),
+          // Sell button
+          ElevatedButton(
+            onPressed: widget.onSellTower,
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red[700],
+              foregroundColor: _cream,
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              minimumSize: Size.zero,
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.sell, size: 16),
+                Text('+${tower.sellValue}g', style: const TextStyle(fontSize: 9)),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }

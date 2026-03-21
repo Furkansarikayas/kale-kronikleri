@@ -17,6 +17,7 @@ import 'data/wave_data.dart';
 import 'systems/economy_system.dart';
 import 'systems/wave_system.dart';
 import 'systems/synergy_system.dart';
+import '../meta/artifact_system.dart';
 
 enum GamePhase { prep, waveActive, waveBreak, paused, gameOver }
 
@@ -34,6 +35,7 @@ class KaleGame extends FlameGame {
 
   final int mapSeed;
   final DifficultyTier difficulty;
+  final List<ArtifactDef> artifacts;
 
   bool _isReady = false;
   bool get isReady => _isReady;
@@ -45,6 +47,8 @@ class KaleGame extends FlameGame {
   final List<Tower> _towers = [];
   final Map<({int col, int row}), TowerType> _towerPositions = {};
   TowerType? selectedTowerType;
+  Tower? _selectedPlacedTower;
+  Tower? get selectedPlacedTower => _selectedPlacedTower;
   int _towerSlots = GameConfig.baseTowerSlots;
   int get towerSlots => _towerSlots;
   int get towersPlaced => _towers.length;
@@ -65,13 +69,20 @@ class KaleGame extends FlameGame {
   double _breakTimer = 0;
   double get breakTimeRemaining => _breakTimer;
 
+  // Artifact state
+  bool _totemUsed = false;
+  double _healerTickTimer = 0;
+
   // Callbacks for Flutter overlays
   VoidCallback? onStateChanged;
   void Function(bool isVictory)? onGameOver;
 
+  bool hasArtifact(int id) => artifacts.any((a) => a.id == id);
+
   KaleGame({
     required this.mapSeed,
     this.difficulty = DifficultyTier.apprentice,
+    this.artifacts = const [],
   }) : super(
     camera: CameraComponent.withFixedResolution(
       width: _gameWidth,
@@ -111,6 +122,43 @@ class KaleGame extends FlameGame {
     onStateChanged?.call(); // notify Flutter to show HUD
   }
 
+  // --- Artifact Helpers ---
+
+  double get _artifactFireRateMultiplier {
+    // id 1: Ateş Kalbi - Fire towers 25% faster
+    return hasArtifact(1) ? 0.75 : 1.0;
+  }
+
+  double get _artifactSlowDurationMultiplier {
+    // id 2: Buz Kristali - Slow duration 2x
+    return hasArtifact(2) ? 2.0 : 1.0;
+  }
+
+  double get _artifactArrowRangeBonus {
+    // id 3: Rüzgar Tılsımı - Arrow range +40%
+    return hasArtifact(3) ? 0.4 : 0.0;
+  }
+
+  int get _artifactWaveGoldBonus {
+    // id 4: Altın Taç - +15 gold per wave
+    return hasArtifact(4) ? 15 : 0;
+  }
+
+  double get _artifactBossDamageMultiplier {
+    // id 6: Ejderha Pulu - Boss damage +35%
+    return hasArtifact(6) ? 1.35 : 1.0;
+  }
+
+  double get _artifactLightningDamageMultiplier {
+    // id 9: Tanrı Çekici - Lightning damage 3x
+    return hasArtifact(9) ? 3.0 : 1.0;
+  }
+
+  double get _artifactSynergyMultiplier {
+    // id 10: Kader Aynası - All synergies 50% stronger
+    return hasArtifact(10) ? 1.5 : 1.0;
+  }
+
   // --- Tower Placement ---
 
   bool canPlaceTowerAt(int col, int row) {
@@ -134,6 +182,16 @@ class KaleGame extends FlameGame {
     final tower = TowerFactory.create(
       type: type, col: col, row: row, cellSize: cellSize,
     );
+    // Apply artifact bonuses
+    if (type == TowerType.arrow && _artifactArrowRangeBonus > 0) {
+      tower.artifactRangeMultiplier = 1.0 + _artifactArrowRangeBonus;
+    }
+    if (type == TowerType.fire && _artifactFireRateMultiplier < 1.0) {
+      tower.artifactFireRateMultiplier = _artifactFireRateMultiplier;
+    }
+    if (type == TowerType.lightning && _artifactLightningDamageMultiplier > 1.0) {
+      tower.artifactDamageMultiplier = _artifactLightningDamageMultiplier;
+    }
     _towers.add(tower);
     _towerPositions[(col: col, row: row)] = type;
     world.add(tower);
@@ -190,6 +248,10 @@ class KaleGame extends FlameGame {
       cellSize: cellSize,
       difficulty: difficulty,
     );
+    // Artifact: Gölge Pelerin (id 5) - First wave enemies 50% slow
+    if (hasArtifact(5) && waveSystem.currentWave == 1) {
+      enemy.applyEffect(StatusEffect.slow(factor: 0.5, duration: 999.0));
+    }
     _enemies.add(enemy);
     world.add(enemy);
   }
@@ -222,6 +284,19 @@ class KaleGame extends FlameGame {
     // Tower targeting & firing
     _updateTowerCombat(dt);
 
+    // Healer enemy mechanic
+    _updateHealerEnemies(dt);
+
+    // Artifact: Ebedi Alev - all enemies take constant burn
+    if (hasArtifact(11)) {
+      for (final enemy in _enemies) {
+        if (enemy.isDead || enemy.reachedCastle) continue;
+        if (!enemy.activeEffects.any((e) => e.type == StatusType.burn)) {
+          enemy.applyEffect(StatusEffect.burn(dps: 2, duration: 2.0));
+        }
+      }
+    }
+
     // Process enemies (remove dead/reached)
     _processEnemies();
 
@@ -230,10 +305,15 @@ class KaleGame extends FlameGame {
       _onWaveComplete();
     }
 
-    // Check game over
+    // Check game over - Artifact: Ölümsüz Totem (id 8) revive once
     if (castle.isDestroyed) {
-      _phase = GamePhase.gameOver;
-      onGameOver?.call(false);
+      if (hasArtifact(8) && !_totemUsed) {
+        _totemUsed = true;
+        castle.heal(castle.maxHp ~/ 2);
+      } else {
+        _phase = GamePhase.gameOver;
+        onGameOver?.call(false);
+      }
     }
   }
 
@@ -320,12 +400,17 @@ class KaleGame extends FlameGame {
   }
 
   void _applyTowerDamage(Tower tower, Enemy enemy) {
-    final damage = tower.currentDamage;
+    int damage = tower.currentDamage;
+
+    // Artifact: Boss damage +35%
+    if (enemy.baseStats.isBoss) {
+      damage = (damage * _artifactBossDamageMultiplier).round();
+    }
 
     switch (tower.type) {
       case TowerType.ice:
         enemy.takeDamage(damage);
-        enemy.applyEffect(StatusEffect.slow(factor: 0.4, duration: 2.0));
+        enemy.applyEffect(StatusEffect.slow(factor: 0.4, duration: 2.0 * _artifactSlowDurationMultiplier));
         break;
       case TowerType.fire:
         enemy.takeDamage(damage);
@@ -355,10 +440,32 @@ class KaleGame extends FlameGame {
 
   void _processEnemies() {
     final toRemove = <Enemy>[];
+    final toSpawn = <Enemy>[];
     for (final enemy in _enemies) {
       if (enemy.isDead) {
         economy.earnGold(enemy.goldReward);
         _enemiesKilled++;
+        // Undead split mechanic
+        if (enemy.baseStats.splitCount > 0) {
+          final remainingPath = enemy.remainingPath;
+          if (remainingPath.length > 1) {
+            for (int i = 0; i < enemy.baseStats.splitCount; i++) {
+              final split = Enemy(
+                type: enemy.type,
+                baseStats: EnemyStats(
+                  type: enemy.type, name: enemy.baseStats.name,
+                  hp: enemy.baseStats.splitHp, armor: 0,
+                  speed: enemy.baseStats.speed * 1.2,
+                  goldReward: 2, castleDamage: 1,
+                  difficulty: enemy.baseStats.difficulty,
+                ),
+                path: remainingPath,
+                cellSize: cellSize,
+              );
+              toSpawn.add(split);
+            }
+          }
+        }
         toRemove.add(enemy);
       } else if (enemy.reachedCastle) {
         castle.takeDamage(enemy.castleDamage);
@@ -369,11 +476,43 @@ class KaleGame extends FlameGame {
       _enemies.remove(enemy);
       enemy.removeFromParent();
     }
+    for (final enemy in toSpawn) {
+      _enemies.add(enemy);
+      world.add(enemy);
+    }
     if (toRemove.isNotEmpty) onStateChanged?.call();
+  }
+
+  void _updateHealerEnemies(double dt) {
+    _healerTickTimer += dt;
+    if (_healerTickTimer < 1.0) return;
+    _healerTickTimer = 0;
+
+    for (final enemy in _enemies) {
+      if (enemy.isDead || enemy.reachedCastle) continue;
+      if (enemy.type != EnemyType.healer) continue;
+
+      // Heal nearby enemies within 2 cells
+      for (final other in _enemies) {
+        if (other == enemy || other.isDead || other.reachedCastle) continue;
+        final dist = enemy.position.distanceTo(other.position);
+        if (dist <= cellSize * 2.0 && other.hp < other.maxHp) {
+          other.heal(5);
+        }
+      }
+    }
   }
 
   void _onWaveComplete() {
     economy.onWaveComplete(waveSystem.currentWave);
+    // Artifact: Altın Taç - +15 gold per wave
+    if (_artifactWaveGoldBonus > 0) {
+      economy.earnGold(_artifactWaveGoldBonus);
+    }
+    // Artifact: Cennet Kalkanı (id 12) - Full heal every 5 waves
+    if (hasArtifact(12) && waveSystem.currentWave % 5 == 0) {
+      castle.heal(castle.maxHp);
+    }
 
     if (waveSystem.isComplete) {
       _phase = GamePhase.gameOver;
@@ -412,10 +551,42 @@ class KaleGame extends FlameGame {
     if (col < 0 || col >= GameConfig.gridColumns) return;
     if (row < 0 || row >= GameConfig.gridRows) return;
 
+    // If we have a tower type selected, try to place it
     if (selectedTowerType != null) {
-      placeTower(col, row, selectedTowerType!);
-      selectedTowerType = null;
+      if (placeTower(col, row, selectedTowerType!)) {
+        selectedTowerType = null;
+      }
+      return;
     }
+
+    // Otherwise, check if there's a placed tower at this position
+    final existingType = _towerPositions[(col: col, row: row)];
+    if (existingType != null) {
+      final tower = _towers.firstWhere((t) => t.col == col && t.row == row);
+      _selectedPlacedTower = (_selectedPlacedTower == tower) ? null : tower;
+      onStateChanged?.call();
+      return;
+    }
+
+    // Tap empty space: deselect
+    _selectedPlacedTower = null;
+    onStateChanged?.call();
+  }
+
+  void sellSelectedTower() {
+    if (_selectedPlacedTower == null) return;
+    sellTower(_selectedPlacedTower!);
+    _selectedPlacedTower = null;
+  }
+
+  void upgradeSelectedTower() {
+    if (_selectedPlacedTower == null) return;
+    upgradeTower(_selectedPlacedTower!);
+  }
+
+  void deselectPlacedTower() {
+    _selectedPlacedTower = null;
+    onStateChanged?.call();
   }
 
   // --- Helpers ---

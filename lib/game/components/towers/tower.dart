@@ -16,6 +16,10 @@ class Tower extends RectangleComponent {
   final int row;
   final double cellSize;
 
+  double artifactDamageMultiplier = 1.0;
+  double artifactRangeMultiplier = 1.0;
+  double artifactFireRateMultiplier = 1.0;
+
   Tower({
     required this.type,
     required this.col,
@@ -35,9 +39,9 @@ class Tower extends RectangleComponent {
   int get tier => _tier;
   int get totalSpent => _totalSpent;
 
-  int get currentDamage => (stats.damageAtTier(_tier) * _synergyDamageMultiplier).round();
-  double get currentRange => stats.rangeAtTier(_tier) + _synergyRangeBonus;
-  double get currentFireRate => stats.fireRate * _synergyFireRateMultiplier;
+  int get currentDamage => (stats.damageAtTier(_tier) * _synergyDamageMultiplier * artifactDamageMultiplier).round();
+  double get currentRange => (stats.rangeAtTier(_tier) + _synergyRangeBonus) * artifactRangeMultiplier;
+  double get currentFireRate => stats.fireRate * _synergyFireRateMultiplier * artifactFireRateMultiplier;
 
   int get sellValue => (totalSpent * GameConfig.sellRefundRatio).round();
 
