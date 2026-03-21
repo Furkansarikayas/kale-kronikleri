@@ -20,6 +20,8 @@ class Tower extends RectangleComponent {
   double artifactDamageMultiplier = 1.0;
   double artifactRangeMultiplier = 1.0;
   double artifactFireRateMultiplier = 1.0;
+  double supportDamageMultiplier = 1.0;
+  double supportRangeMultiplier = 1.0;
   bool showRange = false;
 
   Tower({
@@ -41,8 +43,8 @@ class Tower extends RectangleComponent {
   int get tier => _tier;
   int get totalSpent => _totalSpent;
 
-  int get currentDamage => (stats.damageAtTier(_tier) * _synergyDamageMultiplier * artifactDamageMultiplier).round();
-  double get currentRange => (stats.rangeAtTier(_tier) + _synergyRangeBonus) * artifactRangeMultiplier;
+  int get currentDamage => (stats.damageAtTier(_tier) * _synergyDamageMultiplier * artifactDamageMultiplier * supportDamageMultiplier).round();
+  double get currentRange => (stats.rangeAtTier(_tier) + _synergyRangeBonus) * artifactRangeMultiplier * supportRangeMultiplier;
   double get currentFireRate => stats.fireRate * _synergyFireRateMultiplier * artifactFireRateMultiplier;
 
   int get sellValue => (totalSpent * GameConfig.sellRefundRatio).round();
@@ -187,9 +189,53 @@ class Tower extends RectangleComponent {
           canvas.drawLine(Offset(x, center.dy + r * 0.5), Offset(x, center.dy - r * 0.5), iconPaint..style = PaintingStyle.stroke..strokeWidth = 2);
         }
         break;
-      default:
-        // Small dot
+      case TowerType.support:
+        // Shield with plus sign (buff aura)
+        canvas.drawCircle(center, r * 0.7, iconPaint..style = PaintingStyle.stroke..strokeWidth = 1.5);
+        canvas.drawLine(Offset(center.dx, center.dy - r * 0.4), Offset(center.dx, center.dy + r * 0.4), iconPaint..strokeWidth = 2);
+        canvas.drawLine(Offset(center.dx - r * 0.4, center.dy), Offset(center.dx + r * 0.4, center.dy), iconPaint..strokeWidth = 2);
+        break;
+      case TowerType.wizard:
+        // Star shape
+        for (int i = 0; i < 4; i++) {
+          final angle = i * 3.14159 / 4 + 3.14159 / 8;
+          canvas.drawLine(
+            Offset(center.dx - r * 0.6 * _cos(angle), center.dy - r * 0.6 * _sin(angle)),
+            Offset(center.dx + r * 0.6 * _cos(angle), center.dy + r * 0.6 * _sin(angle)),
+            iconPaint..style = PaintingStyle.stroke..strokeWidth = 1.5,
+          );
+        }
+        break;
+      case TowerType.poison:
+        // Skull-like circle with dots
+        canvas.drawCircle(center, r * 0.5, iconPaint..style = PaintingStyle.stroke..strokeWidth = 1.5);
+        canvas.drawCircle(Offset(center.dx - r * 0.2, center.dy - r * 0.1), r * 0.1, iconPaint..style = PaintingStyle.fill);
+        canvas.drawCircle(Offset(center.dx + r * 0.2, center.dy - r * 0.1), r * 0.1, iconPaint..style = PaintingStyle.fill);
+        break;
+      case TowerType.water:
+        // Water drop shape
+        final path = Path()
+          ..moveTo(center.dx, center.dy - r * 0.8)
+          ..quadraticBezierTo(center.dx + r * 0.7, center.dy + r * 0.2, center.dx, center.dy + r * 0.7)
+          ..quadraticBezierTo(center.dx - r * 0.7, center.dy + r * 0.2, center.dx, center.dy - r * 0.8);
+        canvas.drawPath(path, iconPaint..style = PaintingStyle.fill);
+        break;
+      case TowerType.dark:
+        // Crescent moon
+        canvas.drawCircle(center, r * 0.5, iconPaint..style = PaintingStyle.fill);
+        canvas.drawCircle(Offset(center.dx + r * 0.2, center.dy - r * 0.1), r * 0.4, Paint()..color = _towerColor(TowerType.dark));
+        break;
+      case TowerType.holy:
+        // Sun rays
         canvas.drawCircle(center, r * 0.3, iconPaint..style = PaintingStyle.fill);
+        for (int i = 0; i < 8; i++) {
+          final angle = i * 3.14159 / 4;
+          canvas.drawLine(
+            Offset(center.dx + r * 0.4 * _cos(angle), center.dy + r * 0.4 * _sin(angle)),
+            Offset(center.dx + r * 0.7 * _cos(angle), center.dy + r * 0.7 * _sin(angle)),
+            iconPaint..style = PaintingStyle.stroke..strokeWidth = 1,
+          );
+        }
         break;
     }
   }

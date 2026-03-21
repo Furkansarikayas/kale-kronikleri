@@ -17,6 +17,15 @@ class Enemy extends RectangleComponent {
   bool _isDead = false;
   final List<StatusEffect> _effects = [];
 
+  // Burrower mechanic
+  bool _isBurrowed = false;
+  double _burrowTimer = 0;
+  double _burrowCooldown = 0;
+  static const double _burrowDuration = 1.5;
+  static const double _burrowCooldownTime = 5.0;
+  static const int _burrowSkipCells = 4;
+  bool get isBurrowed => _isBurrowed;
+
   Enemy({
     required this.type,
     required this.baseStats,
@@ -99,6 +108,11 @@ class Enemy extends RectangleComponent {
     }
     _effects.removeWhere((e) => e.isExpired);
 
+    // Burrower mechanic
+    if (type == EnemyType.burrower) {
+      _updateBurrower(dt);
+    }
+
     // Move along path
     if (_pathIndex >= path.length - 1) {
       _reachedCastle = true;
@@ -119,6 +133,28 @@ class Enemy extends RectangleComponent {
     }
   }
 
+  void _updateBurrower(double dt) {
+    if (_isBurrowed) {
+      _burrowTimer -= dt;
+      if (_burrowTimer <= 0) {
+        // Surface: skip cells forward
+        _isBurrowed = false;
+        _burrowCooldown = _burrowCooldownTime;
+        final newIndex = (_pathIndex + _burrowSkipCells).clamp(0, path.length - 1);
+        _pathIndex = newIndex;
+        position.setFrom(_gridToWorld(path[_pathIndex]));
+        paint.color = _enemyColor(type);
+      }
+    } else {
+      _burrowCooldown -= dt;
+      if (_burrowCooldown <= 0 && _pathIndex < path.length - _burrowSkipCells) {
+        _isBurrowed = true;
+        _burrowTimer = _burrowDuration;
+        paint.color = _enemyColor(type).withAlpha(80);
+      }
+    }
+  }
+
   @override
   void render(Canvas canvas) {
     super.render(canvas);
@@ -126,7 +162,6 @@ class Enemy extends RectangleComponent {
 
     // Draw type-specific decoration on top of the base rectangle
     final center = Offset(size.x / 2, size.y / 2);
-    final innerPaint = Paint()..color = const Color(0x44000000);
 
     if (baseStats.isBoss) {
       // Boss: draw crown
@@ -155,6 +190,10 @@ class Enemy extends RectangleComponent {
       final crossPaint = Paint()..color = const Color(0xFFFF0000);
       canvas.drawRect(Rect.fromCenter(center: center, width: size.x * 0.15, height: size.y * 0.5), crossPaint);
       canvas.drawRect(Rect.fromCenter(center: center, width: size.x * 0.5, height: size.y * 0.15), crossPaint);
+    } else if (type == EnemyType.burrower && _isBurrowed) {
+      // Burrowed: draw "underground" indicator
+      final digPaint = Paint()..color = const Color(0x88886633);
+      canvas.drawOval(Rect.fromCenter(center: Offset(center.dx, center.dy + size.y * 0.3), width: size.x * 0.8, height: size.y * 0.3), digPaint);
     }
 
     // Draw HP bar above enemy

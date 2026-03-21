@@ -10,6 +10,7 @@ class GameMap extends Component {
   late GridPos castleEntry;
   late double cellSize;
   late List<GridPos> enemyPath;
+  late List<List<GridPos>> enemyPaths;
 
   GameMap({required this.cellSize});
 
@@ -19,12 +20,16 @@ class GameMap extends Component {
     spawnPoints = result.spawnPoints;
     castleEntry = result.castleEntry;
 
-    // Pre-compute path
-    enemyPath = Pathfinding.findPath(
-      grid: grid,
-      start: spawnPoints.first,
-      end: castleEntry,
-    ) ?? [];
+    // Pre-compute paths for all spawn points
+    enemyPaths = [];
+    for (final spawn in spawnPoints) {
+      final path = Pathfinding.findPath(grid: grid, start: spawn, end: castleEntry);
+      if (path != null && path.isNotEmpty) {
+        enemyPaths.add(path);
+      }
+    }
+    // Legacy: first path for compatibility
+    enemyPath = enemyPaths.isNotEmpty ? enemyPaths.first : [];
 
     // Add cell components
     for (int r = 0; r < GameConfig.gridRows; r++) {

@@ -216,6 +216,8 @@ class _AppShellState extends State<AppShell> {
           totalSpirit: _saveManager!.stoneSpirit,
           towersPlaced: _lastTowersPlaced,
           enemiesKilled: _lastEnemiesKilled,
+          totalDamageDealt: _game?.totalDamageDealt ?? 0,
+          difficultyName: _game?.difficulty.name ?? '',
           onContinue: _goToRunSetup,
           onMainMenu: _goToMainMenu,
         );

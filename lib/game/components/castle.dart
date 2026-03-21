@@ -1,4 +1,3 @@
-import 'dart:math' as math;
 import 'package:flame/components.dart';
 import 'package:flutter/material.dart';
 import '../data/game_config.dart';
@@ -6,12 +5,10 @@ import '../data/game_config.dart';
 class Castle extends RectangleComponent {
   int _hp;
   final int maxHp;
-  final double _cellSize;
 
   Castle({required double cellSize, int? maxHp})
       : _hp = maxHp ?? GameConfig.baseCastleHp,
         maxHp = maxHp ?? GameConfig.baseCastleHp,
-        _cellSize = cellSize,
         super(
           // Landscape: x = col (horizontal), y = row (vertical)
           position: Vector2((GameConfig.gridColumns - 2) * cellSize, (GameConfig.gridRows ~/ 2 - 1) * cellSize),

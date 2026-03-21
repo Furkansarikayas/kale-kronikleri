@@ -264,7 +264,9 @@ class _GameHudState extends State<GameHud> {
                   style: const TextStyle(color: _cream, fontSize: 13, fontWeight: FontWeight.bold),
                 ),
                 Text(
-                  'Hasar: ${tower.currentDamage}  Menzil: ${tower.currentRange.toStringAsFixed(1)}',
+                  tower.type == TowerType.support
+                      ? 'Buff: +${(15 * tower.tier)}% hasar komşu kulelere'
+                      : 'Hasar: ${tower.currentDamage}  Menzil: ${tower.currentRange.toStringAsFixed(1)}',
                   style: TextStyle(color: _cream.withAlpha(180), fontSize: 10),
                 ),
               ],
@@ -334,7 +336,7 @@ class _GameHudState extends State<GameHud> {
           final hasSlot = widget.towersPlaced < widget.towerSlots;
 
           return Tooltip(
-            message: '${stats.name}\nHasar: ${stats.damage} | Menzil: ${stats.range} | Hiz: ${stats.fireRate}s',
+            message: '${stats.name}\nHasar: ${stats.damage} | Menzil: ${stats.range} | Hiz: ${stats.fireRate}s\n${_towerAbility(tower)}',
             child: GestureDetector(
               onTap: () {
                 if (canAfford && hasSlot) {
@@ -375,6 +377,23 @@ class _GameHudState extends State<GameHud> {
         },
       ),
     );
+  }
+
+  String _towerAbility(TowerType type) {
+    switch (type) {
+      case TowerType.arrow: return 'Hızlı ateş';
+      case TowerType.ice: return 'Yavaşlatma efekti';
+      case TowerType.fire: return 'Yanma hasarı';
+      case TowerType.lightning: return 'Islak düşmanlara 2x hasar';
+      case TowerType.poison: return 'Zaman içinde zehir hasarı';
+      case TowerType.cannon: return 'Alan hasarı (AoE patlama)';
+      case TowerType.spikeWall: return 'Yol üzerine yerleşir, temas hasarı';
+      case TowerType.support: return 'Komşu kuleleri güçlendirir';
+      case TowerType.water: return 'Islak efekti (yıldırım ile combo)';
+      case TowerType.wizard: return 'Zincir hasar (çoklu hedef)';
+      case TowerType.dark: return 'Lanet: zırh azaltma';
+      case TowerType.holy: return 'Karanlık düşmanlara +%50 hasar';
+    }
   }
 
   IconData _towerIcon(TowerType type) {

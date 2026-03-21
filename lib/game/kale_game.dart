@@ -2,6 +2,7 @@ import 'package:flame/components.dart';
 import 'package:flame/events.dart';
 import 'package:flame/game.dart';
 import 'package:flutter/material.dart';
+import 'dart:math' as math;
 import 'components/map/game_map.dart';
 import 'components/castle.dart';
 import 'components/towers/tower.dart';
@@ -10,6 +11,7 @@ import 'components/towers/projectile.dart';
 import 'components/enemies/enemy.dart';
 import 'components/enemies/enemy_factory.dart';
 import 'components/enemies/status_effect.dart';
+import 'components/floating_text.dart';
 import 'data/enemy_data.dart';
 import 'data/game_config.dart';
 import 'data/tower_data.dart';
@@ -76,11 +78,27 @@ class KaleGame extends FlameGame {
   bool _totemUsed = false;
   double _healerTickTimer = 0;
 
+  // Synergy effect timers
+  double _kiyametTimer = 0;
+  bool _buzulCagiActive = false;
+
+  // Castle AoE meta
+  double _castleAoeTimer = 0;
+
+  // Track total damage dealt for stats
+  int _totalDamageDealt = 0;
+  int get totalDamageDealt => _totalDamageDealt;
+
   // Speed control
   double _gameSpeed = 1.0;
   double get gameSpeed => _gameSpeed;
   void toggleSpeed() {
-    _gameSpeed = _gameSpeed >= 2.0 ? 1.0 : 2.0;
+    final maxSpeed = _metaSpeedOptions ? 3.0 : 2.0;
+    if (_gameSpeed >= maxSpeed) {
+      _gameSpeed = 1.0;
+    } else {
+      _gameSpeed += 1.0;
+    }
     onStateChanged?.call();
   }
 
@@ -115,8 +133,12 @@ class KaleGame extends FlameGame {
     camera.viewfinder.anchor = Anchor.topLeft;
     cellSize = fixedCellSize;
 
+    // Multiple spawn paths based on difficulty
+    final spawnCount = difficulty == DifficultyTier.apprentice ? 1
+        : difficulty == DifficultyTier.knight ? 1
+        : 2; // lord+ get 2 spawn points
     gameMap = GameMap(cellSize: cellSize);
-    gameMap.generate(seed: mapSeed);
+    gameMap.generate(seed: mapSeed, spawnCount: spawnCount);
     world.add(gameMap);
 
     castle = Castle(cellSize: cellSize);
@@ -145,19 +167,42 @@ class KaleGame extends FlameGame {
 
   void _applyMetaBonuses() {
     final savas = metaLevels['savas'] ?? 0;
+    final kesif = metaLevels['kesif'] ?? 0;
     final kale = metaLevels['kale'] ?? 0;
+    final efsane = metaLevels['efsane'] ?? 0;
 
     // Savaş tree
     if (savas >= 1) _towerSlots += 1; // Kule Hafızası: +1 slot
-    if (savas >= 2) castle.heal((castle.maxHp * 0.25).round()); // Demir İrade: +25% HP (heal bonus)
+    if (savas >= 2) castle.heal((castle.maxHp * 0.25).round()); // Demir İrade: +25% HP
+    if (savas >= 3) _metaUpgradeCostReduction = 0.20; // Usta Komutan: 20% cheaper upgrades
+    if (savas >= 4) _metaEarlyWaveDamageBonus = 0.30; // Savaş Çığlığı: +30% damage first 3 waves
+    if (savas >= 5) castle.heal(castle.maxHp); // Kale Muhafızı: double wall HP (full heal ≈ 2x effective)
+    if (savas >= 7) _metaPhysicalDamageBonus = 0.15; // Çelik Yumruk: +15% physical damage
+
+    // Keşif tree
+    if (kesif >= 1) _metaAllTowersUnlocked = true; // Şifre Çözücü: all towers from wave 1
+    if (kesif >= 4) _metaBonusGoldRoom = 0.15; // Hazine Avcısı: 15% bonus gold chance
 
     // Kale tree
+    if (kale >= 1) _metaDamageReduction = 0.30; // Taş Duvarlar: 30% damage reduction
     if (kale >= 2) _metaWaveGoldBonus = 8; // Hazine Odaları: +8 gold/wave
     if (kale >= 3) _metaHealPerWave = 0.15; // Onarım Loncası: 15% heal between waves
+    if (kale >= 5) _metaBossGoldMultiplier = 2.0; // Vergi Toplayıcı: 2x boss gold
+
+    // Efsane tree
+    if (efsane >= 2) _metaSpeedOptions = true; // Zaman Büküm: 3x speed option
   }
 
   int _metaWaveGoldBonus = 0;
   double _metaHealPerWave = 0;
+  double _metaUpgradeCostReduction = 0;
+  double _metaEarlyWaveDamageBonus = 0;
+  double _metaPhysicalDamageBonus = 0;
+  bool _metaAllTowersUnlocked = false;
+  double _metaBonusGoldRoom = 0;
+  double _metaDamageReduction = 0;
+  double _metaBossGoldMultiplier = 1.0;
+  bool _metaSpeedOptions = false;
   double _mutationWavePrepMult = 1.0;
   double _mutationGoldMult = 1.0;
   double _mutationTowerCostMult = 1.0;
@@ -256,7 +301,10 @@ class KaleGame extends FlameGame {
 
   bool upgradeTower(Tower tower) {
     if (!tower.canUpgrade) return false;
-    if (!economy.trySpend(tower.upgradeCost)) return false;
+    final cost = (_metaUpgradeCostReduction > 0)
+        ? (tower.upgradeCost * (1.0 - _metaUpgradeCostReduction)).round()
+        : tower.upgradeCost;
+    if (!economy.trySpend(cost)) return false;
     tower.upgrade();
     onStateChanged?.call();
     return true;
@@ -266,7 +314,12 @@ class KaleGame extends FlameGame {
     // Clear all tower synergy bonuses first
     for (final tower in _towers) {
       tower.clearSynergyBonus();
+      tower.supportDamageMultiplier = 1.0;
+      tower.supportRangeMultiplier = 1.0;
     }
+
+    // Apply support tower buff aura to adjacent towers
+    _applyingSupportBuffs();
 
     final active = synergySystem.recalculate(_towerPositions);
 
@@ -320,9 +373,33 @@ class KaleGame extends FlameGame {
       }
     }
 
+    // Track synergy effects
+    _buzulCagiActive = active.any((s) => s.id == 9);
+
     // Track synergy discovery
-    for (final synergy in active) {
+    if (active.isNotEmpty) {
       onSynergyDiscovered?.call();
+    }
+  }
+
+  void _applyingSupportBuffs() {
+    for (final support in _towers) {
+      if (support.type != TowerType.support) continue;
+      // Support tower buffs adjacent (8-directional) towers
+      // +15% damage per support tier, +5% range per tier
+      final dmgBonus = 1.0 + 0.15 * support.tier;
+      final rangeBonus = 1.0 + 0.05 * support.tier;
+
+      for (final other in _towers) {
+        if (other == support) continue;
+        final dc = (other.col - support.col).abs();
+        final dr = (other.row - support.row).abs();
+        if (dc <= 1 && dr <= 1) {
+          // Stack multiplicatively with existing support buffs
+          other.supportDamageMultiplier *= dmgBonus;
+          other.supportRangeMultiplier *= rangeBonus;
+        }
+      }
     }
   }
 
@@ -342,10 +419,13 @@ class KaleGame extends FlameGame {
   }
 
   void _spawnEnemy(EnemyType type) {
-    if (gameMap.enemyPath.isEmpty) return; // safety
+    if (gameMap.enemyPaths.isEmpty) return; // safety
+    // Pick a random path from available paths
+    final paths = gameMap.enemyPaths;
+    final path = paths[math.Random().nextInt(paths.length)];
     final enemy = EnemyFactory.create(
       type: type,
-      path: gameMap.enemyPath,
+      path: path,
       cellSize: cellSize,
       difficulty: difficulty,
     );
@@ -417,6 +497,12 @@ class KaleGame extends FlameGame {
       }
     }
 
+    // Synergy effects
+    _updateSynergyEffects(dt);
+
+    // Castle AoE meta (Antik Büyü)
+    _updateCastleAoe(dt);
+
     // Process enemies (remove dead/reached)
     _processEnemies();
 
@@ -468,11 +554,11 @@ class KaleGame extends FlameGame {
 
       if (!tower.canFire()) continue;
 
-      // Find nearest enemy in range
+      // Find nearest enemy in range (skip burrowed enemies)
       Enemy? target;
       double bestDist = double.infinity;
       for (final enemy in _enemies) {
-        if (enemy.isDead || enemy.reachedCastle) continue;
+        if (enemy.isDead || enemy.reachedCastle || enemy.isBurrowed) continue;
         if (!tower.isInRange(enemy.position)) continue;
         final d = (tower.position + tower.size / 2).distanceTo(enemy.position);
         if (d < bestDist) {
@@ -487,6 +573,16 @@ class KaleGame extends FlameGame {
           world.add(proj);
           // Instant hit for simplicity (projectile visual only)
           _applyTowerDamage(tower, target);
+
+          // Cannon AoE splash: 50% damage to enemies within 1.5 cells
+          if (tower.type == TowerType.cannon) {
+            _applyCannonSplash(tower, target);
+          }
+
+          // Wizard chain: hit 2 additional targets at 50% damage
+          if (tower.type == TowerType.wizard) {
+            _applyWizardChain(tower, target);
+          }
         }
       }
     }
@@ -511,7 +607,7 @@ class KaleGame extends FlameGame {
 
     final center = spikeWall.position + spikeWall.size / 2;
     for (final enemy in _enemies) {
-      if (enemy.isDead || enemy.reachedCastle) continue;
+      if (enemy.isDead || enemy.reachedCastle || enemy.isBurrowed) continue;
       final dist = center.distanceTo(enemy.position);
       if (dist <= cellSize * 0.8) {
         enemy.takeDamage(spikeWall.currentDamage);
@@ -519,13 +615,103 @@ class KaleGame extends FlameGame {
     }
   }
 
+  void _applyCannonSplash(Tower cannon, Enemy primaryTarget) {
+    final splashRadius = cellSize * 1.5;
+    final splashDamage = (cannon.currentDamage * 0.5).round();
+    for (final enemy in _enemies) {
+      if (enemy == primaryTarget || enemy.isDead || enemy.reachedCastle || enemy.isBurrowed) continue;
+      final dist = primaryTarget.position.distanceTo(enemy.position);
+      if (dist <= splashRadius) {
+        enemy.takeDamage(splashDamage);
+      }
+    }
+  }
+
+  void _updateSynergyEffects(double dt) {
+    // Buzul Çağı (id 9): 30% global slow when active
+    if (_buzulCagiActive) {
+      for (final enemy in _enemies) {
+        if (enemy.isDead || enemy.reachedCastle) continue;
+        if (!enemy.activeEffects.any((e) => e.type == StatusType.slow)) {
+          enemy.applyEffect(StatusEffect.slow(factor: 0.3, duration: 2.0));
+        }
+      }
+    }
+
+    // Kıyamet (id 10): massive AoE every 15 seconds
+    final kiyametActive = synergySystem.activeSynergies.any((s) => s.id == 10);
+    if (kiyametActive) {
+      _kiyametTimer += dt;
+      if (_kiyametTimer >= 15.0) {
+        _kiyametTimer = 0;
+        // Deal damage to ALL enemies on the map
+        for (final enemy in _enemies) {
+          if (enemy.isDead || enemy.reachedCastle || enemy.isBurrowed) continue;
+          final dmg = 25 + waveSystem.currentWave * 3;
+          enemy.takeDamage(dmg, bypassArmor: true);
+          _showDamageText(enemy.position, dmg);
+        }
+      }
+    }
+  }
+
+  void _updateCastleAoe(double dt) {
+    final kale = metaLevels['kale'] ?? 0;
+    if (kale < 7) return; // Antik Büyü: level 7 needed
+
+    _castleAoeTimer += dt;
+    if (_castleAoeTimer < 1.0) return;
+    _castleAoeTimer = 0;
+
+    final castleCenter = castle.position + castle.size / 2;
+    final range = cellSize * 3.0;
+    for (final enemy in _enemies) {
+      if (enemy.isDead || enemy.reachedCastle || enemy.isBurrowed) continue;
+      final dist = castleCenter.distanceTo(enemy.position);
+      if (dist <= range) {
+        enemy.takeDamage(5 + waveSystem.currentWave, bypassArmor: true);
+      }
+    }
+  }
+
+  void _applyWizardChain(Tower wizard, Enemy primaryTarget) {
+    // Chain to up to 2 additional enemies within 2 cells of primary target
+    final chainRange = cellSize * 2.0;
+    final chainDamage = (wizard.currentDamage * 0.5).round();
+    int chains = 0;
+    final maxChains = 2 + (wizard.tier > 2 ? 1 : 0); // tier 3+ gets extra chain
+
+    for (final enemy in _enemies) {
+      if (chains >= maxChains) break;
+      if (enemy == primaryTarget || enemy.isDead || enemy.reachedCastle || enemy.isBurrowed) continue;
+      final dist = primaryTarget.position.distanceTo(enemy.position);
+      if (dist <= chainRange) {
+        enemy.takeDamage(chainDamage);
+        chains++;
+      }
+    }
+  }
+
   void _applyTowerDamage(Tower tower, Enemy enemy) {
     int damage = tower.currentDamage;
+
+    // Meta: Savaş Çığlığı - +30% damage first 3 waves
+    if (_metaEarlyWaveDamageBonus > 0 && waveSystem.currentWave <= 3) {
+      damage = (damage * (1.0 + _metaEarlyWaveDamageBonus)).round();
+    }
+    // Meta: Çelik Yumruk - +15% physical (arrow, cannon, spikeWall)
+    if (_metaPhysicalDamageBonus > 0 &&
+        (tower.type == TowerType.arrow || tower.type == TowerType.cannon || tower.type == TowerType.spikeWall)) {
+      damage = (damage * (1.0 + _metaPhysicalDamageBonus)).round();
+    }
 
     // Artifact: Boss damage +35%
     if (enemy.baseStats.isBoss) {
       damage = (damage * _artifactBossDamageMultiplier).round();
     }
+
+    _totalDamageDealt += damage;
+    _showDamageText(enemy.position, damage);
 
     switch (tower.type) {
       case TowerType.ice:
@@ -552,6 +738,13 @@ class KaleGame extends FlameGame {
         final actualDmg = enemy.isWet ? damage * 2 : damage;
         enemy.takeDamage(actualDmg);
         break;
+      case TowerType.holy:
+        // Holy: bonus damage to undead and dark enemies
+        final holyBonus = (enemy.type == EnemyType.undead || enemy.type == EnemyType.darkKnight || enemy.type == EnemyType.shadowLord)
+            ? (damage * 0.5).round()
+            : 0;
+        enemy.takeDamage(damage + holyBonus);
+        break;
       default:
         enemy.takeDamage(damage);
         break;
@@ -563,7 +756,11 @@ class KaleGame extends FlameGame {
     final toSpawn = <Enemy>[];
     for (final enemy in _enemies) {
       if (enemy.isDead) {
-        economy.earnGold((enemy.goldReward * _mutationGoldMult).round());
+        double goldMult = _mutationGoldMult;
+        if (enemy.baseStats.isBoss && _metaBossGoldMultiplier > 1.0) {
+          goldMult *= _metaBossGoldMultiplier;
+        }
+        economy.earnGold((enemy.goldReward * goldMult).round());
         _enemiesKilled++;
         // Undead split mechanic
         if (enemy.baseStats.splitCount > 0) {
@@ -588,7 +785,10 @@ class KaleGame extends FlameGame {
         }
         toRemove.add(enemy);
       } else if (enemy.reachedCastle) {
-        castle.takeDamage(enemy.castleDamage);
+        final dmg = _metaDamageReduction > 0
+            ? (enemy.castleDamage * (1.0 - _metaDamageReduction)).ceil()
+            : enemy.castleDamage;
+        castle.takeDamage(dmg);
         toRemove.add(enemy);
       }
     }
@@ -636,6 +836,14 @@ class KaleGame extends FlameGame {
     // Meta: Onarım Loncası - heal between waves
     if (_metaHealPerWave > 0) {
       castle.heal((castle.maxHp * _metaHealPerWave).round());
+    }
+    // Meta: Hazine Avcısı - bonus gold room chance
+    if (_metaBonusGoldRoom > 0) {
+      final rng = math.Random();
+      if (rng.nextDouble() < _metaBonusGoldRoom) {
+        final bonus = 20 + waveSystem.currentWave * 3;
+        economy.earnGold(bonus);
+      }
     }
     // Artifact: Cennet Kalkanı (id 12) - Full heal every 5 waves
     if (hasArtifact(12) && waveSystem.currentWave % 5 == 0) {
@@ -732,7 +940,7 @@ class KaleGame extends FlameGame {
       synergySystem.activeSynergies.map((s) => s.name).toList();
 
   List<TowerType> get availableTowers =>
-      TowerData.availableAt(waveSystem.currentWave);
+      TowerData.availableAt(waveSystem.currentWave, allUnlocked: _metaAllTowersUnlocked);
 
   int adjustedTowerCost(TowerType type) =>
       (TowerData.getStats(type).cost * _mutationTowerCostMult).round();
@@ -742,6 +950,20 @@ class KaleGame extends FlameGame {
     final next = waveSystem.currentWave + 1;
     if (next > difficulty.totalWaves) return [];
     return WaveData.getWave(next, difficulty);
+  }
+
+  void _showDamageText(Vector2 pos, int damage) {
+    final color = damage >= 30
+        ? const Color(0xFFFF4444)
+        : damage >= 15
+            ? const Color(0xFFFFAA00)
+            : const Color(0xFFFFFFFF);
+    world.add(FloatingText(
+      text: '-$damage',
+      pos: pos + Vector2(0, -10),
+      color: color,
+      fontSize: damage >= 30 ? 14 : 10,
+    ));
   }
 
   /// Track discovered synergies
