@@ -85,9 +85,15 @@ class KaleGame extends FlameGame {
   // Castle AoE meta
   double _castleAoeTimer = 0;
 
+  // Son Nefes invincibility
+  double _invincibilityTimer = 0;
+  bool _sonNefesUsed = false;
+
   // Track total damage dealt for stats
   int _totalDamageDealt = 0;
   int get totalDamageDealt => _totalDamageDealt;
+  int _goldStolen = 0;
+  int get goldStolen => _goldStolen;
 
   // Speed control
   double _gameSpeed = 1.0;
@@ -192,6 +198,8 @@ class KaleGame extends FlameGame {
     // Efsane tree
     if (efsane >= 2) _metaSpeedOptions = true; // Zaman Büküm: 3x speed option
   }
+
+  bool get _metaSonNefes => (metaLevels['savas'] ?? 0) >= 6;
 
   int _metaWaveGoldBonus = 0;
   double _metaHealPerWave = 0;
@@ -511,9 +519,21 @@ class KaleGame extends FlameGame {
       _onWaveComplete();
     }
 
+    // Son Nefes invincibility countdown
+    if (_invincibilityTimer > 0) {
+      _invincibilityTimer -= dt;
+    }
+
     // Check game over - Artifact: Ölümsüz Totem (id 8) revive once
     if (castle.isDestroyed) {
-      if (hasArtifact(8) && !_totemUsed) {
+      if (_invincibilityTimer > 0) {
+        castle.heal(1); // keep alive during invincibility
+      } else if (_metaSonNefes && !_sonNefesUsed) {
+        // Son Nefes: 5 seconds invincibility when HP reaches 0
+        _sonNefesUsed = true;
+        _invincibilityTimer = 5.0;
+        castle.heal(1);
+      } else if (hasArtifact(8) && !_totemUsed) {
         _totemUsed = true;
         castle.heal(castle.maxHp ~/ 2);
       } else {
@@ -760,8 +780,16 @@ class KaleGame extends FlameGame {
         if (enemy.baseStats.isBoss && _metaBossGoldMultiplier > 1.0) {
           goldMult *= _metaBossGoldMultiplier;
         }
-        economy.earnGold((enemy.goldReward * goldMult).round());
+        final goldEarned = (enemy.goldReward * goldMult).round();
+        economy.earnGold(goldEarned);
         _enemiesKilled++;
+        // Show gold earned text
+        world.add(FloatingText(
+          text: '+${goldEarned}g',
+          pos: enemy.position + Vector2(0, -15),
+          color: const Color(0xFFFFD700),
+          fontSize: 9,
+        ));
         // Undead split mechanic
         if (enemy.baseStats.splitCount > 0) {
           final remainingPath = enemy.remainingPath;
@@ -789,6 +817,14 @@ class KaleGame extends FlameGame {
             ? (enemy.castleDamage * (1.0 - _metaDamageReduction)).ceil()
             : enemy.castleDamage;
         castle.takeDamage(dmg);
+        // Goblin steals gold when reaching castle
+        if (enemy.type == EnemyType.goblin) {
+          final stolen = (10 + waveSystem.currentWave * 2).clamp(0, economy.gold);
+          if (stolen > 0) {
+            economy.trySpend(stolen);
+            _goldStolen += stolen;
+          }
+        }
         toRemove.add(enemy);
       }
     }
@@ -818,6 +854,12 @@ class KaleGame extends FlameGame {
         final dist = enemy.position.distanceTo(other.position);
         if (dist <= cellSize * 2.0 && other.hp < other.maxHp) {
           other.heal(5);
+          world.add(FloatingText(
+            text: '+5',
+            pos: other.position + Vector2(0, -10),
+            color: const Color(0xFF00FF00),
+            fontSize: 8,
+          ));
         }
       }
     }

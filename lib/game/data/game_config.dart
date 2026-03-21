@@ -3,9 +3,9 @@ enum CellType { path, buildable, blocked, castle, spawn, pathBuildable }
 enum DifficultyTier {
   apprentice(totalWaves: 20, hpMultiplier: 1.0, speedMultiplier: 1.0, spiritMultiplier: 1.0, runsToUnlock: 0),
   knight(totalWaves: 25, hpMultiplier: 1.2, speedMultiplier: 1.0, spiritMultiplier: 1.5, runsToUnlock: 5),
-  lord(totalWaves: 30, hpMultiplier: 1.4, speedMultiplier: 1.2, spiritMultiplier: 2.5, runsToUnlock: 0),
-  king(totalWaves: 35, hpMultiplier: 1.6, speedMultiplier: 1.0, spiritMultiplier: 4.0, runsToUnlock: 0),
-  legend(totalWaves: 40, hpMultiplier: 2.0, speedMultiplier: 1.5, spiritMultiplier: 8.0, runsToUnlock: 0);
+  lord(totalWaves: 30, hpMultiplier: 1.4, speedMultiplier: 1.2, spiritMultiplier: 2.5, runsToUnlock: 10),
+  king(totalWaves: 35, hpMultiplier: 1.6, speedMultiplier: 1.0, spiritMultiplier: 4.0, runsToUnlock: 20),
+  legend(totalWaves: 40, hpMultiplier: 2.0, speedMultiplier: 1.5, spiritMultiplier: 8.0, runsToUnlock: 40);
 
   const DifficultyTier({
     required this.totalWaves,
