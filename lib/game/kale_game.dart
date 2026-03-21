@@ -63,6 +63,7 @@ class KaleGame extends FlameGame {
   final List<Enemy> _enemies = [];
   int _enemiesKilled = 0;
   int get enemiesKilled => _enemiesKilled;
+  int get enemiesAlive => _enemies.where((e) => !e.isDead && !e.reachedCastle).length;
 
   // Wave spawning
   List<WaveEntry> _pendingSpawns = [];

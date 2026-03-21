@@ -13,6 +13,8 @@ class GameHud extends StatefulWidget {
   final bool isWaveActive;
   final int towerSlots;
   final int towersPlaced;
+  final int enemiesAlive;
+  final int enemiesKilled;
   final List<String> activeSynergies;
   final Tower? selectedPlacedTower;
   final VoidCallback onStartWave;
@@ -35,6 +37,8 @@ class GameHud extends StatefulWidget {
     required this.isWaveActive,
     required this.towerSlots,
     required this.towersPlaced,
+    this.enemiesAlive = 0,
+    this.enemiesKilled = 0,
     required this.activeSynergies,
     this.selectedPlacedTower,
     required this.onStartWave,
@@ -102,6 +106,16 @@ class _GameHudState extends State<GameHud> {
               '${widget.towersPlaced}/${widget.towerSlots}',
               style: const TextStyle(color: _cream, fontSize: 14),
             ),
+            // Enemy count (during wave)
+            if (widget.isWaveActive && widget.enemiesAlive > 0) ...[
+              const SizedBox(width: 8),
+              Icon(Icons.pest_control, color: Colors.red.withAlpha(180), size: 16),
+              const SizedBox(width: 3),
+              Text(
+                '${widget.enemiesAlive}',
+                style: TextStyle(color: Colors.red.withAlpha(200), fontSize: 13),
+              ),
+            ],
             const Spacer(),
             // Active synergies indicator
             if (widget.activeSynergies.isNotEmpty)

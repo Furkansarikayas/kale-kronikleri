@@ -244,6 +244,8 @@ class _AppShellState extends State<AppShell> {
           isWaveActive: game.phase == GamePhase.waveActive,
           towerSlots: game.towerSlots,
           towersPlaced: game.towersPlaced,
+          enemiesAlive: game.enemiesAlive,
+          enemiesKilled: game.enemiesKilled,
           activeSynergies: game.activeSynergyNames,
           selectedPlacedTower: game.selectedPlacedTower,
           onStartWave: () => game.startNextWave(),
