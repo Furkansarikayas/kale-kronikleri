@@ -23,6 +23,7 @@ void main() async {
     DeviceOrientation.landscapeLeft,
     DeviceOrientation.landscapeRight,
   ]);
+  await SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
   runApp(const KaleKronikleriApp());
 }
 
@@ -72,7 +73,9 @@ class _AppShellState extends State<AppShell> {
   static const _debugAutoStart = false;
 
   Future<void> _loadSave() async {
+    debugPrint('KaleKronikleri: Loading save...');
     _saveManager = await SaveManager.create();
+    debugPrint('KaleKronikleri: Save loaded, showing main menu');
     setState(() => _saveLoaded = true);
     if (_debugAutoStart) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
