@@ -7,6 +7,7 @@ class GridCell extends RectangleComponent {
   final int col;
   final int row;
   final CellType cellType;
+  bool highlighted = false;
 
   GridCell({
     required this.col,
@@ -42,6 +43,23 @@ class GridCell extends RectangleComponent {
   @override
   void render(Canvas canvas) {
     super.render(canvas);
+
+    // Placement highlight
+    if (highlighted) {
+      canvas.drawRect(
+        Rect.fromLTWH(1, 1, size.x - 2, size.y - 2),
+        Paint()
+          ..color = const Color(0x3300FF00)
+          ..style = PaintingStyle.fill,
+      );
+      canvas.drawRect(
+        Rect.fromLTWH(1, 1, size.x - 2, size.y - 2),
+        Paint()
+          ..color = const Color(0x6600FF00)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 1.0,
+      );
+    }
 
     // Grid line (subtle)
     canvas.drawRect(

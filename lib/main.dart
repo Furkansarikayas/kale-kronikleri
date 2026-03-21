@@ -256,6 +256,7 @@ class _AppShellState extends State<AppShell> {
           onTowerSelected: (type) {
             game.selectedTowerType = type;
             game.deselectPlacedTower();
+            game.updatePlacementHighlight();
             setState(() {});
           },
           onSellTower: () {

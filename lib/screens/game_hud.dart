@@ -66,9 +66,35 @@ class _GameHudState extends State<GameHud> {
         // Top bar: HP, gold, wave, pause
         _buildTopBar(),
         const Spacer(),
+        // Tutorial hint on first wave prep
+        if (widget.currentWave == 0 && !widget.isWaveActive)
+          _buildTutorialHint(),
         // Bottom bar: tower selection + start wave
         _buildBottomBar(),
       ],
+    );
+  }
+
+  Widget _buildTutorialHint() {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 40, vertical: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      decoration: BoxDecoration(
+        color: _darkBg.withAlpha(230),
+        border: Border.all(color: _gold.withAlpha(100)),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.info_outline, color: _gold, size: 16),
+          const SizedBox(width: 8),
+          Text(
+            'Aşağıdan kule seç → Yeşil alana yerleştir → Dalga başlat!',
+            style: TextStyle(color: _cream.withAlpha(200), fontSize: 11),
+          ),
+        ],
+      ),
     );
   }
 

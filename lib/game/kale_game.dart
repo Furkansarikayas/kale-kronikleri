@@ -4,6 +4,7 @@ import 'package:flame/game.dart';
 import 'package:flutter/material.dart';
 import 'dart:math' as math;
 import 'components/map/game_map.dart';
+import 'components/map/grid_cell.dart';
 import 'components/castle.dart';
 import 'components/towers/tower.dart';
 import 'components/towers/tower_factory.dart';
@@ -989,6 +990,7 @@ class KaleGame extends FlameGame {
     if (selectedTowerType != null) {
       if (placeTower(col, row, selectedTowerType!)) {
         selectedTowerType = null;
+        updatePlacementHighlight();
       }
       return;
     }
@@ -1068,6 +1070,22 @@ class KaleGame extends FlameGame {
   VoidCallback? onSynergyDiscovered;
 
   void setTowerSlots(int slots) => _towerSlots = slots;
+
+  void updatePlacementHighlight() {
+    final cells = gameMap.children.whereType<GridCell>();
+    if (selectedTowerType == null || _towers.length >= _towerSlots) {
+      for (final cell in cells) {
+        cell.highlighted = false;
+      }
+      return;
+    }
+    final isSpikeWall = selectedTowerType == TowerType.spikeWall;
+    for (final cell in cells) {
+      final canPlace = gameMap.canPlaceTower(cell.col, cell.row, isSpikeWall: isSpikeWall)
+          && !_towerPositions.containsKey((col: cell.col, row: cell.row));
+      cell.highlighted = canPlace;
+    }
+  }
 }
 
 /// Transparent component in the world that catches taps and forwards to game.
