@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'package:flame/components.dart';
 import 'package:flutter/material.dart';
 import '../../data/tower_data.dart';
@@ -97,10 +98,13 @@ class Tower extends RectangleComponent {
   @override
   void render(Canvas canvas) {
     super.render(canvas);
+    final center = Offset(size.x / 2, size.y / 2);
+
+    // Draw type-specific icon
+    _drawTowerIcon(canvas, center);
 
     // Draw range circle when selected
     if (showRange && currentRange > 0) {
-      final center = Offset(size.x / 2, size.y / 2);
       final rangePixels = currentRange * cellSize;
       canvas.drawCircle(
         center, rangePixels,
@@ -128,6 +132,70 @@ class Tower extends RectangleComponent {
       }
     }
   }
+
+  void _drawTowerIcon(Canvas canvas, Offset center) {
+    final iconPaint = Paint()..color = const Color(0x88FFFFFF);
+    final r = size.x * 0.2;
+
+    switch (type) {
+      case TowerType.arrow:
+        // Draw arrow pointing up-right
+        final path = Path()
+          ..moveTo(center.dx - r, center.dy + r)
+          ..lineTo(center.dx + r, center.dy - r)
+          ..lineTo(center.dx + r, center.dy - r * 0.3)
+          ..lineTo(center.dx + r * 0.3, center.dy - r);
+        canvas.drawPath(path, iconPaint..style = PaintingStyle.stroke..strokeWidth = 2);
+        break;
+      case TowerType.ice:
+        // Snowflake: * shape
+        for (int i = 0; i < 3; i++) {
+          final angle = i * 3.14159 / 3;
+          canvas.drawLine(
+            Offset(center.dx - r * 0.8 * _cos(angle), center.dy - r * 0.8 * _sin(angle)),
+            Offset(center.dx + r * 0.8 * _cos(angle), center.dy + r * 0.8 * _sin(angle)),
+            iconPaint..style = PaintingStyle.stroke..strokeWidth = 1.5,
+          );
+        }
+        break;
+      case TowerType.fire:
+        // Flame shape
+        final path = Path()
+          ..moveTo(center.dx, center.dy - r)
+          ..quadraticBezierTo(center.dx + r, center.dy - r * 0.3, center.dx + r * 0.5, center.dy + r)
+          ..quadraticBezierTo(center.dx, center.dy + r * 0.3, center.dx - r * 0.5, center.dy + r)
+          ..quadraticBezierTo(center.dx - r, center.dy - r * 0.3, center.dx, center.dy - r);
+        canvas.drawPath(path, iconPaint..style = PaintingStyle.fill);
+        break;
+      case TowerType.lightning:
+        // Lightning bolt
+        final path = Path()
+          ..moveTo(center.dx + r * 0.2, center.dy - r)
+          ..lineTo(center.dx - r * 0.3, center.dy)
+          ..lineTo(center.dx + r * 0.1, center.dy)
+          ..lineTo(center.dx - r * 0.2, center.dy + r);
+        canvas.drawPath(path, iconPaint..style = PaintingStyle.stroke..strokeWidth = 2);
+        break;
+      case TowerType.cannon:
+        // Circle (cannonball)
+        canvas.drawCircle(center, r * 0.6, iconPaint..style = PaintingStyle.fill);
+        break;
+      case TowerType.spikeWall:
+        // Spikes
+        for (int i = 0; i < 3; i++) {
+          final x = center.dx - r + i * r;
+          canvas.drawLine(Offset(x, center.dy + r * 0.5), Offset(x, center.dy - r * 0.5), iconPaint..style = PaintingStyle.stroke..strokeWidth = 2);
+        }
+        break;
+      default:
+        // Small dot
+        canvas.drawCircle(center, r * 0.3, iconPaint..style = PaintingStyle.fill);
+        break;
+    }
+  }
+
+  static double _cos(double a) => math.cos(a);
+  static double _sin(double a) => math.sin(a);
 
   static Color _towerColor(TowerType type) {
     switch (type) {

@@ -118,6 +118,39 @@ class Enemy extends RectangleComponent {
     super.render(canvas);
     if (_isDead || _reachedCastle) return;
 
+    // Draw type-specific decoration on top of the base rectangle
+    final center = Offset(size.x / 2, size.y / 2);
+    final innerPaint = Paint()..color = const Color(0x44000000);
+
+    if (baseStats.isBoss) {
+      // Boss: draw crown
+      final crownPaint = Paint()..color = const Color(0xFFFFD700);
+      final crownY = size.y * 0.15;
+      final crownH = size.y * 0.25;
+      final points = [
+        Offset(size.x * 0.15, crownY + crownH),
+        Offset(size.x * 0.15, crownY),
+        Offset(size.x * 0.3, crownY + crownH * 0.5),
+        Offset(size.x * 0.5, crownY),
+        Offset(size.x * 0.7, crownY + crownH * 0.5),
+        Offset(size.x * 0.85, crownY),
+        Offset(size.x * 0.85, crownY + crownH),
+      ];
+      final path = Path()..addPolygon(points, true);
+      canvas.drawPath(path, crownPaint);
+    } else if (baseStats.armor > 0) {
+      // Armored: draw shield outline
+      canvas.drawCircle(center, size.x * 0.25, Paint()
+        ..color = const Color(0x66FFFFFF)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 2);
+    } else if (type == EnemyType.healer) {
+      // Healer: draw cross
+      final crossPaint = Paint()..color = const Color(0xFFFF0000);
+      canvas.drawRect(Rect.fromCenter(center: center, width: size.x * 0.15, height: size.y * 0.5), crossPaint);
+      canvas.drawRect(Rect.fromCenter(center: center, width: size.x * 0.5, height: size.y * 0.15), crossPaint);
+    }
+
     // Draw HP bar above enemy
     final barWidth = size.x;
     final barHeight = 3.0;
