@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../game/data/game_config.dart';
+import '../game/systems/mutation_system.dart';
 import '../meta/artifact_system.dart';
 
 class RunSetup extends StatefulWidget {
@@ -7,6 +8,7 @@ class RunSetup extends StatefulWidget {
   final int maxArtifacts;
   final DifficultyTier selectedDifficulty;
   final List<DifficultyTier> unlockedDifficulties;
+  final List<MutationType> weeklyMutations;
   final void Function(DifficultyTier difficulty, List<ArtifactDef> selectedArtifacts) onStart;
   final VoidCallback onBack;
 
@@ -16,6 +18,7 @@ class RunSetup extends StatefulWidget {
     required this.maxArtifacts,
     required this.selectedDifficulty,
     required this.unlockedDifficulties,
+    this.weeklyMutations = const [],
     required this.onStart,
     required this.onBack,
   });
@@ -54,8 +57,16 @@ class _RunSetupState extends State<RunSetup> {
         padding: const EdgeInsets.all(16),
         child: Row(
           children: [
-            // Left: Difficulty
-            Expanded(child: _buildDifficultySection()),
+            // Left: Difficulty + Mutations
+            Expanded(child: Column(
+              children: [
+                Expanded(child: _buildDifficultySection()),
+                if (widget.weeklyMutations.isNotEmpty) ...[
+                  const SizedBox(height: 12),
+                  _buildMutationSection(),
+                ],
+              ],
+            )),
             const SizedBox(width: 16),
             // Right: Artifacts
             Expanded(flex: 2, child: _buildArtifactSection()),
@@ -191,6 +202,34 @@ class _RunSetupState extends State<RunSetup> {
             },
           ),
         ),
+      ],
+    );
+  }
+
+  Widget _buildMutationSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text('Haftalik Mutasyonlar', style: TextStyle(color: _gold, fontSize: 14, fontWeight: FontWeight.bold)),
+        const SizedBox(height: 6),
+        ...widget.weeklyMutations.map((m) => Padding(
+          padding: const EdgeInsets.only(bottom: 4),
+          child: Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: Colors.red.withAlpha(20),
+              border: Border.all(color: Colors.red.withAlpha(80)),
+              borderRadius: BorderRadius.circular(6),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(m.displayName, style: const TextStyle(color: Colors.redAccent, fontSize: 12, fontWeight: FontWeight.bold)),
+                Text(m.description, style: TextStyle(color: _cream.withAlpha(150), fontSize: 10)),
+              ],
+            ),
+          ),
+        )),
       ],
     );
   }

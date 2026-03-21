@@ -51,7 +51,7 @@ class Enemy extends RectangleComponent {
   }
 
   int get currentArmor {
-    double armor = baseStats.armor.toDouble();
+    double armor = baseStats.armor.toDouble() + _bonusArmor;
     for (final e in _effects) {
       if (e.type == StatusType.curse) armor -= e.armorReduction;
     }
@@ -70,9 +70,15 @@ class Enemy extends RectangleComponent {
     }
   }
 
+  int _bonusArmor = 0;
+
   void heal(int amount) {
     if (_isDead) return;
     _hp = (_hp + amount).clamp(0, maxHp);
+  }
+
+  void addBonusArmor(int amount) {
+    _bonusArmor += amount;
   }
 
   void applyEffect(StatusEffect effect) {

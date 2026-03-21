@@ -17,6 +17,7 @@ import 'data/wave_data.dart';
 import 'systems/economy_system.dart';
 import 'systems/wave_system.dart';
 import 'systems/synergy_system.dart';
+import 'systems/mutation_system.dart';
 import '../meta/artifact_system.dart';
 
 enum GamePhase { prep, waveActive, waveBreak, paused, gameOver }
@@ -37,6 +38,7 @@ class KaleGame extends FlameGame {
   final DifficultyTier difficulty;
   final List<ArtifactDef> artifacts;
   final Map<String, int> metaLevels;
+  final List<MutationType> mutations;
 
   bool _isReady = false;
   bool get isReady => _isReady;
@@ -93,6 +95,7 @@ class KaleGame extends FlameGame {
     this.difficulty = DifficultyTier.apprentice,
     this.artifacts = const [],
     this.metaLevels = const {},
+    this.mutations = const [],
   }) : super(
     camera: CameraComponent.withFixedResolution(
       width: _gameWidth,
@@ -127,6 +130,11 @@ class KaleGame extends FlameGame {
     waveSystem = WaveSystem(difficulty: difficulty);
     synergySystem = SynergySystem();
 
+    // Apply mutation effects to wave prep time
+    _mutationWavePrepMult = MutationSystem.wavePrepMultiplier(mutations);
+    _mutationGoldMult = MutationSystem.goldRewardMultiplier(mutations);
+    _mutationTowerCostMult = MutationSystem.towerCostMultiplier(mutations);
+
     // Apply meta tree bonuses
     _applyMetaBonuses();
 
@@ -150,6 +158,9 @@ class KaleGame extends FlameGame {
 
   int _metaWaveGoldBonus = 0;
   double _metaHealPerWave = 0;
+  double _mutationWavePrepMult = 1.0;
+  double _mutationGoldMult = 1.0;
+  double _mutationTowerCostMult = 1.0;
 
   // --- Artifact Helpers ---
 
@@ -206,7 +217,8 @@ class KaleGame extends FlameGame {
 
     final isSpikeWall = type == TowerType.spikeWall;
     if (!gameMap.canPlaceTower(col, row, isSpikeWall: isSpikeWall)) return false;
-    if (!economy.trySpend(stats.cost)) return false; // deduct AFTER validation
+    final adjustedCost = (stats.cost * _mutationTowerCostMult).round();
+    if (!economy.trySpend(adjustedCost)) return false; // deduct AFTER validation
 
     final tower = TowerFactory.create(
       type: type, col: col, row: row, cellSize: cellSize,
@@ -251,7 +263,62 @@ class KaleGame extends FlameGame {
   }
 
   void _recalculateSynergies() {
-    synergySystem.recalculate(_towerPositions);
+    // Clear all tower synergy bonuses first
+    for (final tower in _towers) {
+      tower.clearSynergyBonus();
+    }
+
+    final active = synergySystem.recalculate(_towerPositions);
+
+    // Apply synergy bonuses to involved towers
+    for (final synergy in active) {
+      final synergyMult = _artifactSynergyMultiplier; // Kader Aynası artifact
+      final anchor = synergy.anchorPosition;
+
+      // Find towers at and adjacent to the anchor that are part of this synergy
+      for (final tower in _towers) {
+        final dc = (tower.col - anchor.col).abs();
+        final dr = (tower.row - anchor.row).abs();
+        if (dc > 1 || dr > 1) continue; // not adjacent
+
+        // Check if this tower type is part of the synergy
+        if (!synergy.definition.requiredTowers.contains(tower.type)) continue;
+
+        // Apply bonuses based on synergy type
+        switch (synergy.id) {
+          case 1: // Dondur-Patlat: 2x damage
+            tower.applySynergyBonus(damageMultiplier: 1.0 + 1.0 * synergyMult);
+            break;
+          case 2: // Buhar Hasarı: +1 range, faster fire
+            tower.applySynergyBonus(rangeBonus: 1.0 * synergyMult, fireRateMultiplier: 0.8);
+            break;
+          case 3: // Şok Dalgası: 2x damage
+            tower.applySynergyBonus(damageMultiplier: 1.0 + 1.0 * synergyMult);
+            break;
+          case 4: // Asit Tuzağı: +1.5 range
+            tower.applySynergyBonus(rangeBonus: 1.5 * synergyMult);
+            break;
+          case 5: // Yanık Asit: 1.5x damage
+            tower.applySynergyBonus(damageMultiplier: 1.0 + 0.5 * synergyMult);
+            break;
+          case 6: // Denge Patlaması: 2x damage
+            tower.applySynergyBonus(damageMultiplier: 1.0 + 1.0 * synergyMult);
+            break;
+          case 7: // Buz Hapsi: slower fire but more range
+            tower.applySynergyBonus(rangeBonus: 1.0 * synergyMult, fireRateMultiplier: 0.7);
+            break;
+          case 8: // Cehennem Hattı: 1.8x damage
+            tower.applySynergyBonus(damageMultiplier: 1.0 + 0.8 * synergyMult);
+            break;
+          case 9: // Buzul Çağı: +2 range
+            tower.applySynergyBonus(rangeBonus: 2.0 * synergyMult);
+            break;
+          case 10: // Kıyamet: 2.5x damage
+            tower.applySynergyBonus(damageMultiplier: 1.0 + 1.5 * synergyMult);
+            break;
+        }
+      }
+    }
   }
 
   // --- Wave Control ---
@@ -277,6 +344,15 @@ class KaleGame extends FlameGame {
       cellSize: cellSize,
       difficulty: difficulty,
     );
+    // Mutation: fast enemies
+    if (mutations.contains(MutationType.fastEnemies)) {
+      enemy.applyEffect(StatusEffect.slow(factor: -0.3, duration: 999999.0)); // negative = speed boost
+    }
+    // Mutation: armored all
+    final bonusArmor = MutationSystem.bonusArmor(mutations);
+    if (bonusArmor > 0) {
+      enemy.addBonusArmor(bonusArmor);
+    }
     // Artifact: Gölge Pelerin (id 5) - First wave enemies 50% slow
     if (hasArtifact(5) && waveSystem.currentWave == 1) {
       enemy.applyEffect(StatusEffect.slow(factor: 0.5, duration: 999.0));
@@ -474,7 +550,7 @@ class KaleGame extends FlameGame {
     final toSpawn = <Enemy>[];
     for (final enemy in _enemies) {
       if (enemy.isDead) {
-        economy.earnGold(enemy.goldReward);
+        economy.earnGold((enemy.goldReward * _mutationGoldMult).round());
         _enemiesKilled++;
         // Undead split mechanic
         if (enemy.baseStats.splitCount > 0) {
@@ -559,7 +635,7 @@ class KaleGame extends FlameGame {
       return;
     }
 
-    _breakTimer = GameConfig.wavePrepTime;
+    _breakTimer = GameConfig.wavePrepTime * _mutationWavePrepMult;
     _phase = GamePhase.waveBreak;
     onStateChanged?.call();
   }
@@ -644,6 +720,9 @@ class KaleGame extends FlameGame {
 
   List<TowerType> get availableTowers =>
       TowerData.availableAt(waveSystem.currentWave);
+
+  int adjustedTowerCost(TowerType type) =>
+      (TowerData.getStats(type).cost * _mutationTowerCostMult).round();
 
   void setTowerSlots(int slots) => _towerSlots = slots;
 }

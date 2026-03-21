@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'game/kale_game.dart';
 import 'game/data/game_config.dart';
+import 'game/systems/mutation_system.dart';
 import 'meta/artifact_system.dart';
 import 'meta/meta_tree.dart';
 import 'meta/save_manager.dart';
@@ -87,6 +88,7 @@ class _AppShellState extends State<AppShell> {
 
   void _startGame(DifficultyTier difficulty, List<ArtifactDef> artifacts) {
     final seed = Random().nextInt(999999);
+    final weeklyMutations = MutationSystem.getWeeklyMutations();
     final game = KaleGame(
       mapSeed: seed,
       difficulty: difficulty,
@@ -97,6 +99,7 @@ class _AppShellState extends State<AppShell> {
         'kale': _saveManager!.metaKale,
         'efsane': _saveManager!.metaEfsane,
       },
+      mutations: weeklyMutations,
     );
 
     game.onStateChanged = () {
@@ -149,6 +152,7 @@ class _AppShellState extends State<AppShell> {
           maxArtifacts: 3,
           selectedDifficulty: DifficultyTier.apprentice,
           unlockedDifficulties: _unlockedDifficulties(),
+          weeklyMutations: MutationSystem.getWeeklyMutations(),
           onStart: _startGame,
           onBack: _goToMainMenu,
         );
