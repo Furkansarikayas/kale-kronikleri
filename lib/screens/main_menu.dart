@@ -55,28 +55,27 @@ class MainMenu extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(height: 24),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
+                  Wrap(
+                    alignment: WrapAlignment.center,
+                    spacing: 12,
+                    runSpacing: 8,
                     children: [
                       _MenuButton(
                         label: 'OYNA',
                         icon: Icons.play_arrow,
                         onPressed: onPlay,
                       ),
-                      const SizedBox(width: 16),
                       _MenuButton(
                         label: 'META AGACI',
                         icon: Icons.account_tree,
                         onPressed: onMeta,
                       ),
-                      if (onSettings != null) ...[
-                        const SizedBox(width: 16),
+                      if (onSettings != null)
                         _MenuButton(
                           label: 'AYARLAR',
                           icon: Icons.settings,
                           onPressed: onSettings!,
                         ),
-                      ],
                     ],
                   ),
                   const SizedBox(height: 16),
@@ -139,8 +138,8 @@ class _MenuButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      width: 180,
-      height: 44,
+      width: 160,
+      height: 42,
       child: ElevatedButton.icon(
         onPressed: onPressed,
         icon: Icon(icon, size: 20),
