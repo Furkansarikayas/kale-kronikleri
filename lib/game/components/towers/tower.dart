@@ -19,6 +19,7 @@ class Tower extends RectangleComponent {
   double artifactDamageMultiplier = 1.0;
   double artifactRangeMultiplier = 1.0;
   double artifactFireRateMultiplier = 1.0;
+  bool showRange = false;
 
   Tower({
     required this.type,
@@ -91,6 +92,41 @@ class Tower extends RectangleComponent {
     final center = position + size / 2;
     final dist = center.distanceTo(targetPos);
     return dist <= currentRange * cellSize;
+  }
+
+  @override
+  void render(Canvas canvas) {
+    super.render(canvas);
+
+    // Draw range circle when selected
+    if (showRange && currentRange > 0) {
+      final center = Offset(size.x / 2, size.y / 2);
+      final rangePixels = currentRange * cellSize;
+      canvas.drawCircle(
+        center, rangePixels,
+        Paint()
+          ..color = const Color(0x22FFFFFF)
+          ..style = PaintingStyle.fill,
+      );
+      canvas.drawCircle(
+        center, rangePixels,
+        Paint()
+          ..color = const Color(0x66FFFFFF)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 1.0,
+      );
+    }
+
+    // Draw tier indicator dots
+    if (_tier > 1) {
+      for (int i = 0; i < _tier; i++) {
+        canvas.drawCircle(
+          Offset(size.x * 0.2 + i * 6, size.y - 4),
+          2,
+          Paint()..color = const Color(0xFFFFD700),
+        );
+      }
+    }
   }
 
   static Color _towerColor(TowerType type) {

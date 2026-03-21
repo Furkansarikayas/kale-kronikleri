@@ -87,7 +87,17 @@ class _AppShellState extends State<AppShell> {
 
   void _startGame(DifficultyTier difficulty, List<ArtifactDef> artifacts) {
     final seed = Random().nextInt(999999);
-    final game = KaleGame(mapSeed: seed, difficulty: difficulty, artifacts: artifacts);
+    final game = KaleGame(
+      mapSeed: seed,
+      difficulty: difficulty,
+      artifacts: artifacts,
+      metaLevels: {
+        'savas': _saveManager!.metaSavas,
+        'kesif': _saveManager!.metaKesif,
+        'kale': _saveManager!.metaKale,
+        'efsane': _saveManager!.metaEfsane,
+      },
+    );
 
     game.onStateChanged = () {
       if (mounted) setState(() {});

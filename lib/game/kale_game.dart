@@ -36,6 +36,7 @@ class KaleGame extends FlameGame {
   final int mapSeed;
   final DifficultyTier difficulty;
   final List<ArtifactDef> artifacts;
+  final Map<String, int> metaLevels;
 
   bool _isReady = false;
   bool get isReady => _isReady;
@@ -83,6 +84,7 @@ class KaleGame extends FlameGame {
     required this.mapSeed,
     this.difficulty = DifficultyTier.apprentice,
     this.artifacts = const [],
+    this.metaLevels = const {},
   }) : super(
     camera: CameraComponent.withFixedResolution(
       width: _gameWidth,
@@ -117,10 +119,29 @@ class KaleGame extends FlameGame {
     waveSystem = WaveSystem(difficulty: difficulty);
     synergySystem = SynergySystem();
 
+    // Apply meta tree bonuses
+    _applyMetaBonuses();
+
     _phase = GamePhase.prep;
     _isReady = true;
     onStateChanged?.call(); // notify Flutter to show HUD
   }
+
+  void _applyMetaBonuses() {
+    final savas = metaLevels['savas'] ?? 0;
+    final kale = metaLevels['kale'] ?? 0;
+
+    // Savaş tree
+    if (savas >= 1) _towerSlots += 1; // Kule Hafızası: +1 slot
+    if (savas >= 2) castle.heal((castle.maxHp * 0.25).round()); // Demir İrade: +25% HP (heal bonus)
+
+    // Kale tree
+    if (kale >= 2) _metaWaveGoldBonus = 8; // Hazine Odaları: +8 gold/wave
+    if (kale >= 3) _metaHealPerWave = 0.15; // Onarım Loncası: 15% heal between waves
+  }
+
+  int _metaWaveGoldBonus = 0;
+  double _metaHealPerWave = 0;
 
   // --- Artifact Helpers ---
 
@@ -509,6 +530,14 @@ class KaleGame extends FlameGame {
     if (_artifactWaveGoldBonus > 0) {
       economy.earnGold(_artifactWaveGoldBonus);
     }
+    // Meta: Hazine Odaları - +8 gold per wave
+    if (_metaWaveGoldBonus > 0) {
+      economy.earnGold(_metaWaveGoldBonus);
+    }
+    // Meta: Onarım Loncası - heal between waves
+    if (_metaHealPerWave > 0) {
+      castle.heal((castle.maxHp * _metaHealPerWave).round());
+    }
     // Artifact: Cennet Kalkanı (id 12) - Full heal every 5 waves
     if (hasArtifact(12) && waveSystem.currentWave % 5 == 0) {
       castle.heal(castle.maxHp);
@@ -563,18 +592,26 @@ class KaleGame extends FlameGame {
     final existingType = _towerPositions[(col: col, row: row)];
     if (existingType != null) {
       final tower = _towers.firstWhere((t) => t.col == col && t.row == row);
-      _selectedPlacedTower = (_selectedPlacedTower == tower) ? null : tower;
-      onStateChanged?.call();
+      _selectPlacedTower((_selectedPlacedTower == tower) ? null : tower);
       return;
     }
 
     // Tap empty space: deselect
-    _selectedPlacedTower = null;
+    _selectPlacedTower(null);
+  }
+
+  void _selectPlacedTower(Tower? tower) {
+    // Clear previous range display
+    _selectedPlacedTower?.showRange = false;
+    _selectedPlacedTower = tower;
+    // Show new range display
+    _selectedPlacedTower?.showRange = true;
     onStateChanged?.call();
   }
 
   void sellSelectedTower() {
     if (_selectedPlacedTower == null) return;
+    _selectedPlacedTower!.showRange = false;
     sellTower(_selectedPlacedTower!);
     _selectedPlacedTower = null;
   }
@@ -585,6 +622,7 @@ class KaleGame extends FlameGame {
   }
 
   void deselectPlacedTower() {
+    _selectedPlacedTower?.showRange = false;
     _selectedPlacedTower = null;
     onStateChanged?.call();
   }
