@@ -23,6 +23,8 @@ class Tower extends RectangleComponent {
   double supportDamageMultiplier = 1.0;
   double supportRangeMultiplier = 1.0;
   bool showRange = false;
+  int kills = 0;
+  int totalDamageDealt = 0;
 
   Tower({
     required this.type,

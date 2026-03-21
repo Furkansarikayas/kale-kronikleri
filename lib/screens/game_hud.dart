@@ -269,6 +269,10 @@ class _GameHudState extends State<GameHud> {
                       : 'Hasar: ${tower.currentDamage}  Menzil: ${tower.currentRange.toStringAsFixed(1)}',
                   style: TextStyle(color: _cream.withAlpha(180), fontSize: 10),
                 ),
+                Text(
+                  'Kills: ${tower.kills}  Toplam: ${tower.totalDamageDealt}',
+                  style: TextStyle(color: _cream.withAlpha(120), fontSize: 9),
+                ),
               ],
             ),
           ),

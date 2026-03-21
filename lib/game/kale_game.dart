@@ -495,6 +495,12 @@ class KaleGame extends FlameGame {
       }
     }
 
+    // DarkKnight aura: nearby allies get +5 armor (applied as bonus armor if not already)
+    _updateDarkKnightAura();
+
+    // Cavalry dash: cavalry periodically bursts forward
+    _updateCavalryDash(dt);
+
     // Artifact: Ebedi Alev - all enemies take constant burn
     if (hasArtifact(11)) {
       for (final enemy in _enemies) {
@@ -647,6 +653,47 @@ class KaleGame extends FlameGame {
     }
   }
 
+  // DarkKnight aura: gives adjacent enemies armor
+  final Set<Enemy> _darkKnightBuffed = {};
+
+  void _updateDarkKnightAura() {
+    for (final dk in _enemies) {
+      if (dk.isDead || dk.reachedCastle) continue;
+      if (dk.type != EnemyType.darkKnight) continue;
+
+      for (final other in _enemies) {
+        if (other == dk || other.isDead || other.reachedCastle) continue;
+        if (_darkKnightBuffed.contains(other)) continue;
+        final dist = dk.position.distanceTo(other.position);
+        if (dist <= cellSize * 2.0) {
+          other.addBonusArmor(5);
+          _darkKnightBuffed.add(other);
+        }
+      }
+    }
+  }
+
+  // Cavalry dash: short burst of speed periodically
+  final Map<Enemy, double> _cavalryDashTimers = {};
+
+  void _updateCavalryDash(double dt) {
+    for (final enemy in _enemies) {
+      if (enemy.isDead || enemy.reachedCastle) continue;
+      if (enemy.type != EnemyType.cavalry) continue;
+
+      final timer = (_cavalryDashTimers[enemy] ?? 0) + dt;
+      if (timer >= 4.0) {
+        // Dash: apply speed boost for 1 second
+        if (!enemy.activeEffects.any((e) => e.type == StatusType.slow && e.slowFactor < 0)) {
+          enemy.applyEffect(StatusEffect.slow(factor: -0.8, duration: 1.0)); // negative = speed boost
+        }
+        _cavalryDashTimers[enemy] = 0;
+      } else {
+        _cavalryDashTimers[enemy] = timer;
+      }
+    }
+  }
+
   void _updateSynergyEffects(double dt) {
     // Buzul Çağı (id 9): 30% global slow when active
     if (_buzulCagiActive) {
@@ -731,7 +778,11 @@ class KaleGame extends FlameGame {
     }
 
     _totalDamageDealt += damage;
+    tower.totalDamageDealt += damage;
     _showDamageText(enemy.position, damage);
+
+    // Track kill (pre-check: if this damage will kill the enemy)
+    final willKill = enemy.hp > 0 && enemy.hp <= damage;
 
     switch (tower.type) {
       case TowerType.ice:
@@ -768,6 +819,10 @@ class KaleGame extends FlameGame {
       default:
         enemy.takeDamage(damage);
         break;
+    }
+
+    if (willKill || enemy.isDead) {
+      tower.kills++;
     }
   }
 
