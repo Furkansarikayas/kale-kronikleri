@@ -3,15 +3,21 @@ import 'package:flutter/material.dart';
 class MainMenu extends StatelessWidget {
   final VoidCallback onPlay;
   final VoidCallback onMeta;
+  final VoidCallback? onSettings;
   final int stoneSpirit;
   final int totalRuns;
+  final int bestWave;
+  final int totalKills;
 
   const MainMenu({
     super.key,
     required this.onPlay,
     required this.onMeta,
+    this.onSettings,
     required this.stoneSpirit,
     required this.totalRuns,
+    this.bestWave = 0,
+    this.totalKills = 0,
   });
 
   static const _gold = Color(0xFFBA7517);
@@ -63,25 +69,27 @@ class MainMenu extends StatelessWidget {
                         icon: Icons.account_tree,
                         onPressed: onMeta,
                       ),
+                      if (onSettings != null) ...[
+                        const SizedBox(width: 16),
+                        _MenuButton(
+                          label: 'AYARLAR',
+                          icon: Icons.settings,
+                          onPressed: onSettings!,
+                        ),
+                      ],
                     ],
                   ),
                   const SizedBox(height: 16),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
+                  // Stats grid
+                  Wrap(
+                    spacing: 16,
+                    runSpacing: 6,
+                    alignment: WrapAlignment.center,
                     children: [
-                      const Icon(Icons.diamond, color: _gold, size: 14),
-                      const SizedBox(width: 4),
-                      Text(
-                        'Tas Ruhu: $stoneSpirit',
-                        style: const TextStyle(color: _cream, fontSize: 12),
-                      ),
-                      const SizedBox(width: 20),
-                      const Icon(Icons.loop, color: _gold, size: 14),
-                      const SizedBox(width: 4),
-                      Text(
-                        'Toplam Kosu: $totalRuns',
-                        style: const TextStyle(color: _cream, fontSize: 12),
-                      ),
+                      _StatChip(icon: Icons.diamond, label: 'Tas Ruhu', value: '$stoneSpirit'),
+                      _StatChip(icon: Icons.loop, label: 'Kosu', value: '$totalRuns'),
+                      if (bestWave > 0) _StatChip(icon: Icons.waves, label: 'En Iyi Dalga', value: '$bestWave'),
+                      if (totalKills > 0) _StatChip(icon: Icons.dangerous, label: 'Toplam Oldurulen', value: '$totalKills'),
                     ],
                   ),
                 ],
@@ -90,6 +98,29 @@ class MainMenu extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+class _StatChip extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final String value;
+
+  const _StatChip({required this.icon, required this.label, required this.value});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, color: const Color(0xFFBA7517), size: 13),
+        const SizedBox(width: 3),
+        Text(
+          '$label: $value',
+          style: const TextStyle(color: Color(0xFFF5EDD8), fontSize: 11),
+        ),
+      ],
     );
   }
 }

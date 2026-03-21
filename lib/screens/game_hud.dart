@@ -333,39 +333,42 @@ class _GameHudState extends State<GameHud> {
           final canAfford = widget.gold >= stats.cost;
           final hasSlot = widget.towersPlaced < widget.towerSlots;
 
-          return GestureDetector(
-            onTap: () {
-              if (canAfford && hasSlot) {
-                widget.onTowerSelected(isSelected ? null : tower);
-              }
-            },
-            child: Container(
-              decoration: BoxDecoration(
-                color: isSelected ? _gold.withAlpha(100) : _darkBg,
-                border: Border.all(
-                  color: isSelected ? _gold : (canAfford ? _cream.withAlpha(80) : Colors.red.withAlpha(80)),
-                  width: isSelected ? 2 : 1,
+          return Tooltip(
+            message: '${stats.name}\nHasar: ${stats.damage} | Menzil: ${stats.range} | Hiz: ${stats.fireRate}s',
+            child: GestureDetector(
+              onTap: () {
+                if (canAfford && hasSlot) {
+                  widget.onTowerSelected(isSelected ? null : tower);
+                }
+              },
+              child: Container(
+                decoration: BoxDecoration(
+                  color: isSelected ? _gold.withAlpha(100) : _darkBg,
+                  border: Border.all(
+                    color: isSelected ? _gold : (canAfford ? _cream.withAlpha(80) : Colors.red.withAlpha(80)),
+                    width: isSelected ? 2 : 1,
+                  ),
+                  borderRadius: BorderRadius.circular(4),
                 ),
-                borderRadius: BorderRadius.circular(4),
-              ),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(
-                    _towerIcon(tower),
-                    color: canAfford ? _cream : Colors.grey,
-                    size: 18,
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    '${stats.cost}',
-                    style: TextStyle(
-                      color: canAfford ? _gold : Colors.grey,
-                      fontSize: 10,
-                      fontWeight: FontWeight.bold,
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(
+                      _towerIcon(tower),
+                      color: canAfford ? _cream : Colors.grey,
+                      size: 18,
                     ),
-                  ),
-                ],
+                    const SizedBox(height: 2),
+                    Text(
+                      '${stats.cost}',
+                      style: TextStyle(
+                        color: canAfford ? _gold : Colors.grey,
+                        fontSize: 10,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
           );

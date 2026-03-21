@@ -15,6 +15,7 @@ import 'screens/meta_screen.dart';
 import 'screens/game_hud.dart';
 import 'screens/wave_break.dart';
 import 'screens/pause_overlay.dart';
+import 'screens/settings_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -40,7 +41,7 @@ class KaleKronikleriApp extends StatelessWidget {
   }
 }
 
-enum AppScreen { mainMenu, runSetup, game, meta, death }
+enum AppScreen { mainMenu, runSetup, game, meta, death, settings }
 
 class AppShell extends StatefulWidget {
   const AppShell({super.key});
@@ -86,6 +87,8 @@ class _AppShellState extends State<AppShell> {
 
   void _goToMeta() => setState(() => _screen = AppScreen.meta);
 
+  void _goToSettings() => setState(() => _screen = AppScreen.settings);
+
   void _startGame(DifficultyTier difficulty, List<ArtifactDef> artifacts) {
     final seed = Random().nextInt(999999);
     final weeklyMutations = MutationSystem.getWeeklyMutations();
@@ -105,6 +108,19 @@ class _AppShellState extends State<AppShell> {
     game.onStateChanged = () {
       if (mounted) setState(() {});
     };
+    game.onSynergyDiscovered = () {
+      // Save discovered synergies
+      for (final synergy in game.activeSynergyNames) {
+        final synergyId = game.synergySystem.activeSynergies
+            .where((s) => s.name == synergy)
+            .map((s) => s.id)
+            .firstOrNull;
+        if (synergyId != null) {
+          _saveManager!.discoverSynergy(synergyId);
+        }
+      }
+    };
+
     game.onGameOver = (isVictory) {
       _lastVictory = isVictory;
       _lastWaves = game.waveSystem.currentWave;
@@ -141,8 +157,11 @@ class _AppShellState extends State<AppShell> {
         return MainMenu(
           onPlay: _goToRunSetup,
           onMeta: _goToMeta,
+          onSettings: _goToSettings,
           stoneSpirit: _saveManager!.stoneSpirit,
           totalRuns: _saveManager!.totalRuns,
+          bestWave: _saveManager!.bestWave,
+          totalKills: _saveManager!.totalKills,
         );
 
       case AppScreen.runSetup:
@@ -176,6 +195,15 @@ class _AppShellState extends State<AppShell> {
             await _saveManager!.unlockMetaNode(treeId, cost: node.cost);
             setState(() {});
           },
+          onBack: _goToMainMenu,
+        );
+
+      case AppScreen.settings:
+        return SettingsScreen(
+          soundEnabled: _saveManager!.soundEnabled,
+          musicEnabled: _saveManager!.musicEnabled,
+          onSoundChanged: (v) => _saveManager!.setSoundEnabled(v),
+          onMusicChanged: (v) => _saveManager!.setMusicEnabled(v),
           onBack: _goToMainMenu,
         );
 
@@ -247,6 +275,7 @@ class _AppShellState extends State<AppShell> {
             totalWaves: game.difficulty.totalWaves,
             gold: game.economy.gold,
             timeRemaining: game.breakTimeRemaining,
+            wavePreview: game.nextWavePreview,
             onStartNow: () => game.startNextWave(),
           ),
         // Pause overlay

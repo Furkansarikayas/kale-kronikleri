@@ -319,6 +319,11 @@ class KaleGame extends FlameGame {
         }
       }
     }
+
+    // Track synergy discovery
+    for (final synergy in active) {
+      onSynergyDiscovered?.call();
+    }
   }
 
   // --- Wave Control ---
@@ -393,6 +398,14 @@ class KaleGame extends FlameGame {
 
     // Healer enemy mechanic
     _updateHealerEnemies(dt);
+
+    // Troll regeneration: heals 3 HP/sec
+    for (final enemy in _enemies) {
+      if (enemy.isDead || enemy.reachedCastle) continue;
+      if (enemy.type == EnemyType.troll && enemy.hp < enemy.maxHp) {
+        enemy.heal((3 * dt).ceil());
+      }
+    }
 
     // Artifact: Ebedi Alev - all enemies take constant burn
     if (hasArtifact(11)) {
@@ -723,6 +736,16 @@ class KaleGame extends FlameGame {
 
   int adjustedTowerCost(TowerType type) =>
       (TowerData.getStats(type).cost * _mutationTowerCostMult).round();
+
+  /// Preview of next wave composition
+  List<WaveEntry> get nextWavePreview {
+    final next = waveSystem.currentWave + 1;
+    if (next > difficulty.totalWaves) return [];
+    return WaveData.getWave(next, difficulty);
+  }
+
+  /// Track discovered synergies
+  VoidCallback? onSynergyDiscovered;
 
   void setTowerSlots(int slots) => _towerSlots = slots;
 }
