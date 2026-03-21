@@ -74,6 +74,14 @@ class KaleGame extends FlameGame {
   bool _totemUsed = false;
   double _healerTickTimer = 0;
 
+  // Speed control
+  double _gameSpeed = 1.0;
+  double get gameSpeed => _gameSpeed;
+  void toggleSpeed() {
+    _gameSpeed = _gameSpeed >= 2.0 ? 1.0 : 2.0;
+    onStateChanged?.call();
+  }
+
   // Callbacks for Flutter overlays
   VoidCallback? onStateChanged;
   void Function(bool isVictory)? onGameOver;
@@ -285,6 +293,8 @@ class KaleGame extends FlameGame {
 
     if (!_isReady) return;
     if (_phase == GamePhase.paused || _phase == GamePhase.gameOver) return;
+
+    dt *= _gameSpeed;
 
     if (_phase == GamePhase.waveBreak) {
       final oldSec = _breakTimer.ceil();

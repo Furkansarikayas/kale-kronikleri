@@ -20,6 +20,8 @@ class GameHud extends StatefulWidget {
   final ValueChanged<TowerType?> onTowerSelected;
   final VoidCallback? onSellTower;
   final VoidCallback? onUpgradeTower;
+  final VoidCallback? onToggleSpeed;
+  final double gameSpeed;
 
   const GameHud({
     super.key,
@@ -40,6 +42,8 @@ class GameHud extends StatefulWidget {
     required this.onTowerSelected,
     this.onSellTower,
     this.onUpgradeTower,
+    this.onToggleSpeed,
+    this.gameSpeed = 1.0,
   });
 
   @override
@@ -122,6 +126,27 @@ class _GameHudState extends State<GameHud> {
                   ),
                 ),
               ),
+            const SizedBox(width: 8),
+            // Speed button
+            GestureDetector(
+              onTap: widget.onToggleSpeed,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                decoration: BoxDecoration(
+                  color: widget.gameSpeed > 1 ? _gold.withAlpha(80) : Colors.transparent,
+                  borderRadius: BorderRadius.circular(4),
+                  border: Border.all(color: _cream.withAlpha(80)),
+                ),
+                child: Text(
+                  '${widget.gameSpeed.toStringAsFixed(0)}x',
+                  style: TextStyle(
+                    color: widget.gameSpeed > 1 ? _gold : _cream,
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ),
             const SizedBox(width: 8),
             // Pause button
             IconButton(

@@ -113,6 +113,7 @@ class _AppShellState extends State<AppShell> {
       _saveManager!.addStoneSpirit(_lastSpiritEarned);
       _saveManager!.incrementRuns();
       _saveManager!.addKills(_lastEnemiesKilled);
+      _saveManager!.updateBestWave(_lastWaves);
 
       if (mounted) setState(() => _screen = AppScreen.death);
     };
@@ -229,6 +230,11 @@ class _AppShellState extends State<AppShell> {
             game.upgradeSelectedTower();
             setState(() {});
           },
+          onToggleSpeed: () {
+            game.toggleSpeed();
+            setState(() {});
+          },
+          gameSpeed: game.gameSpeed,
         ),
         // Wave break overlay
         if (game.isReady && game.phase == GamePhase.waveBreak)
