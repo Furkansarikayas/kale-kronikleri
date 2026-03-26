@@ -5,7 +5,7 @@ import 'package:flutter/material.dart';
 import 'dart:math' as math;
 import 'components/map/game_map.dart';
 import 'components/map/grid_cell.dart';
-import 'components/background.dart';
+import 'components/background/parallax_background.dart';
 import 'components/atmosphere_overlay.dart';
 import 'components/castle.dart';
 import 'components/towers/tower.dart';
@@ -16,6 +16,7 @@ import 'components/enemies/enemy_factory.dart';
 import 'components/enemies/status_effect.dart';
 import 'components/floating_text.dart';
 import 'components/effects/hit_effect.dart';
+import 'components/effects/screen_shake.dart';
 import 'data/enemy_data.dart';
 import 'data/game_config.dart';
 import 'data/tower_data.dart';
@@ -46,6 +47,7 @@ class KaleGame extends FlameGame {
   final List<ArtifactDef> artifacts;
   final Map<String, int> metaLevels;
   final List<MutationType> mutations;
+  final bool initialScreenShakeEnabled;
 
   bool _isReady = false;
   bool get isReady => _isReady;
@@ -101,8 +103,7 @@ class KaleGame extends FlameGame {
   bool _sonNefesUsed = false;
 
   // Screen shake
-  double _shakeTimer = 0;
-  double _shakeIntensity = 0;
+  late ScreenShake screenShake;
 
   // Kill streak
   int _killStreak = 0;
@@ -152,6 +153,7 @@ class KaleGame extends FlameGame {
     this.artifacts = const [],
     this.metaLevels = const {},
     this.mutations = const [],
+    this.initialScreenShakeEnabled = true,
   }) : super(
     camera: CameraComponent.withFixedResolution(
       width: _gameWidth,
@@ -173,13 +175,17 @@ class KaleGame extends FlameGame {
     camera.viewfinder.anchor = Anchor.topLeft;
     cellSize = fixedCellSize;
 
+    // Screen shake effect
+    screenShake = ScreenShake()..enabled = initialScreenShakeEnabled;
+    add(screenShake);
+
     // Multiple spawn paths based on difficulty
     final spawnCount = difficulty == DifficultyTier.apprentice ? 1
         : difficulty == DifficultyTier.knight ? 1
         : 2; // lord+ get 2 spawn points
     gameMap = GameMap(cellSize: cellSize);
     gameMap.generate(seed: mapSeed, spawnCount: spawnCount);
-    world.add(GameBackground());
+    world.add(ParallaxBackground(biome: difficulty.biome));
     world.add(gameMap);
     world.add(AtmosphereOverlay());
 
@@ -628,16 +634,7 @@ class KaleGame extends FlameGame {
     }
 
     // Screen shake
-    if (_shakeTimer > 0) {
-      _shakeTimer -= dt;
-      final rng = math.Random();
-      final dx = (rng.nextDouble() - 0.5) * _shakeIntensity;
-      final dy = (rng.nextDouble() - 0.5) * _shakeIntensity;
-      camera.viewfinder.position = Vector2(dx, dy);
-      if (_shakeTimer <= 0) {
-        camera.viewfinder.position = Vector2.zero();
-      }
-    }
+    camera.viewfinder.position = screenShake.offset;
 
     // Check game over - Artifact: Ölümsüz Totem (id 8) revive once
     if (castle.isDestroyed) {
@@ -1069,6 +1066,10 @@ class KaleGame extends FlameGame {
         }
         // Death particle effect
         world.add(HitEffect.death(pos: enemy.position));
+        // Boss death: big screen shake
+        if (enemy.baseStats.isBoss) {
+          screenShake.shake(duration: 0.5, intensity: 8.0);
+        }
         // Show gold earned text (with streak indicator)
         final streakText = _killStreak >= 3 ? ' x$_killStreak!' : '';
         world.add(FloatingText(
@@ -1111,8 +1112,10 @@ class KaleGame extends FlameGame {
         }
         if (dmg > 0) {
           castle.takeDamage(dmg);
-          _shakeTimer = 0.2;
-          _shakeIntensity = (dmg * 1.5).clamp(2.0, 8.0);
+          screenShake.shake(
+            duration: 0.2,
+            intensity: (dmg * 1.5).clamp(2.0, 8.0).toDouble(),
+          );
         }
         // Goblin steals gold when reaching castle
         if (enemy.type == EnemyType.goblin) {
