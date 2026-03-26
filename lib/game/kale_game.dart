@@ -28,6 +28,7 @@ import 'systems/mutation_system.dart';
 import '../meta/artifact_system.dart';
 import 'rendering/sprite_cache.dart';
 import 'components/rendering/castle_sprites.dart';
+import 'components/rendering/tower_sprites.dart';
 
 enum GamePhase { prep, waveActive, waveBreak, paused, gameOver }
 
@@ -172,6 +173,7 @@ class KaleGame extends FlameGame {
     // Initialize sprite caches before creating any game components
     await SpriteCache.instance.initialize(biome: difficulty.biome);
     await CastleSpriteGenerator.instance.initialize();
+    await TowerSpriteGenerator.instance.initialize();
 
     // Fixed resolution: world is exactly _gameWidth x _gameHeight
     camera.viewfinder.anchor = Anchor.topLeft;

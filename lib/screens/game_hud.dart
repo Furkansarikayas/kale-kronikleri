@@ -1,7 +1,9 @@
+import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import '../game/data/tower_data.dart';
 import '../game/data/synergy_data.dart';
 import '../game/components/towers/tower.dart';
+import 'widgets/glass_panel.dart';
 
 class GameHud extends StatefulWidget {
   final int castleHp;
@@ -71,7 +73,6 @@ class GameHud extends StatefulWidget {
 
 class _GameHudState extends State<GameHud> with SingleTickerProviderStateMixin {
   static const _bgDark = Color(0xFF0D0D15);
-  static const _bgPanel = Color(0xDD111118);
   static const _gold = Color(0xFFD4A843);
   static const _goldDark = Color(0xFFBA7517);
   static const _cream = Color(0xFFF0E6D0);
@@ -110,83 +111,83 @@ class _GameHudState extends State<GameHud> with SingleTickerProviderStateMixin {
   }
 
   Widget _buildTutorialHint() {
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 40, vertical: 4),
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [_bgPanel, _bgDark.withAlpha(240)],
-        ),
-        border: Border.all(color: _gold.withAlpha(120)),
-        borderRadius: BorderRadius.circular(10),
-        boxShadow: [
-          BoxShadow(color: _gold.withAlpha(30), blurRadius: 12, spreadRadius: 1),
-        ],
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            padding: const EdgeInsets.all(4),
-            decoration: BoxDecoration(
-              color: _gold.withAlpha(40),
-              shape: BoxShape.circle,
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 4),
+      child: GlassPanel(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+        borderRadius: 10,
+        borderColor: _gold.withAlpha(120),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(4),
+              decoration: BoxDecoration(
+                color: _gold.withAlpha(40),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(Icons.info_outline, color: _gold, size: 16),
             ),
-            child: const Icon(Icons.info_outline, color: _gold, size: 16),
-          ),
-          const SizedBox(width: 10),
-          Text(
-            'Asagidan kule sec -> Yesil alana yerlestir -> Dalga baslat!',
-            style: TextStyle(color: _cream.withAlpha(210), fontSize: 11, letterSpacing: 0.3),
-          ),
-        ],
+            const SizedBox(width: 10),
+            Text(
+              'Asagidan kule sec -> Yesil alana yerlestir -> Dalga baslat!',
+              style: TextStyle(color: _cream.withAlpha(210), fontSize: 11, letterSpacing: 0.3),
+            ),
+          ],
+        ),
       ),
     );
   }
 
   Widget _buildTopBar() {
-    return Container(
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [Color(0xDD0D0D15), Color(0xCC12121A)],
-        ),
-        border: const Border(
-          bottom: BorderSide(color: Color(0x55D4A843), width: 1),
-        ),
-        boxShadow: [
-          BoxShadow(color: Colors.black.withAlpha(80), blurRadius: 8, offset: const Offset(0, 2)),
-        ],
+    return ClipRRect(
+      borderRadius: const BorderRadius.only(
+        bottomLeft: Radius.circular(12),
+        bottomRight: Radius.circular(12),
       ),
-      child: SafeArea(
-        bottom: false,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-          child: Row(
-            children: [
-              _buildHpBar(),
-              const SizedBox(width: 12),
-              _buildGoldDisplay(),
-              const SizedBox(width: 10),
-              _buildWaveCounter(),
-              const SizedBox(width: 8),
-              _buildSlotsBadge(),
-              if (widget.isWaveActive && widget.waveEnemyTotal > 0) ...[
-                const SizedBox(width: 8),
-                _buildEnemyCounter(),
-              ],
-              const Spacer(),
-              if (widget.activeSynergies.isNotEmpty) ...[
-                _buildSynergyBadge(),
-                const SizedBox(width: 6),
-              ],
-              _buildAutoWaveButton(),
-              const SizedBox(width: 4),
-              _buildSpeedButton(),
-              const SizedBox(width: 6),
-              _buildPauseButton(),
+      child: BackdropFilter(
+        filter: ui.ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+        child: Container(
+          decoration: BoxDecoration(
+            color: const Color(0xAA0D0D15),
+            border: const Border(
+              bottom: BorderSide(color: Color(0x55D4A843), width: 1),
+            ),
+            boxShadow: [
+              BoxShadow(color: const Color(0x33D4A843).withValues(alpha: 0.1), blurRadius: 12, spreadRadius: 1),
+              BoxShadow(color: Colors.black.withAlpha(80), blurRadius: 8, offset: const Offset(0, 2)),
             ],
+          ),
+          child: SafeArea(
+            bottom: false,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              child: Row(
+                children: [
+                  _buildHpBar(),
+                  const SizedBox(width: 12),
+                  _buildGoldDisplay(),
+                  const SizedBox(width: 10),
+                  _buildWaveCounter(),
+                  const SizedBox(width: 8),
+                  _buildSlotsBadge(),
+                  if (widget.isWaveActive && widget.waveEnemyTotal > 0) ...[
+                    const SizedBox(width: 8),
+                    _buildEnemyCounter(),
+                  ],
+                  const Spacer(),
+                  if (widget.activeSynergies.isNotEmpty) ...[
+                    _buildSynergyBadge(),
+                    const SizedBox(width: 6),
+                  ],
+                  _buildAutoWaveButton(),
+                  const SizedBox(width: 4),
+                  _buildSpeedButton(),
+                  const SizedBox(width: 6),
+                  _buildPauseButton(),
+                ],
+              ),
+            ),
           ),
         ),
       ),
@@ -425,79 +426,109 @@ class _GameHudState extends State<GameHud> with SingleTickerProviderStateMixin {
   Widget _buildHpBar() {
     final ratio = widget.maxCastleHp > 0 ? widget.castleHp / widget.maxCastleHp : 0.0;
     final hasShield = widget.maxSecondaryShield > 0;
+    final isLowHp = ratio > 0 && ratio < 0.3;
 
-    return SizedBox(
-      width: 110,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Row(
+    return AnimatedBuilder(
+      animation: _pulseController,
+      builder: (context, child) {
+        final glowAlpha = isLowHp ? (40 + (60 * _pulseController.value)).round() : 0;
+        return Container(
+          width: 110,
+          padding: const EdgeInsets.all(2),
+          decoration: isLowHp
+              ? BoxDecoration(
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(
+                    color: Colors.red.withAlpha(glowAlpha),
+                    width: 1,
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.red.withAlpha(glowAlpha ~/ 2),
+                      blurRadius: 8 + 4 * _pulseController.value,
+                      spreadRadius: 1,
+                    ),
+                  ],
+                )
+              : null,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(Icons.favorite, color: Color(0xFFCC4444), size: 10),
-              const SizedBox(width: 3),
-              Text(
-                hasShield
-                    ? '${widget.castleHp}/${widget.maxCastleHp} +${widget.secondaryShield}'
-                    : '${widget.castleHp}/${widget.maxCastleHp}',
-                style: const TextStyle(color: _cream, fontSize: 10, fontWeight: FontWeight.w500),
+              Row(
+                children: [
+                  const Icon(Icons.favorite, color: Color(0xFFCC4444), size: 10),
+                  const SizedBox(width: 3),
+                  Text(
+                    hasShield
+                        ? '${widget.castleHp}/${widget.maxCastleHp} +${widget.secondaryShield}'
+                        : '${widget.castleHp}/${widget.maxCastleHp}',
+                    style: const TextStyle(color: _cream, fontSize: 10, fontWeight: FontWeight.w500),
+                  ),
+                ],
               ),
+              const SizedBox(height: 3),
+              CustomPaint(
+                size: const Size(106, 10),
+                painter: _HpBarPainter(ratio: ratio, isFull: ratio >= 1.0),
+              ),
+              if (hasShield) ...[
+                const SizedBox(height: 2),
+                CustomPaint(
+                  size: const Size(106, 5),
+                  painter: _ShieldBarPainter(
+                    ratio: widget.maxSecondaryShield > 0
+                        ? widget.secondaryShield / widget.maxSecondaryShield
+                        : 0.0,
+                  ),
+                ),
+              ],
             ],
           ),
-          const SizedBox(height: 3),
-          CustomPaint(
-            size: const Size(110, 10),
-            painter: _HpBarPainter(ratio: ratio, isFull: ratio >= 1.0),
-          ),
-          if (hasShield) ...[
-            const SizedBox(height: 2),
-            CustomPaint(
-              size: const Size(110, 5),
-              painter: _ShieldBarPainter(
-                ratio: widget.maxSecondaryShield > 0
-                    ? widget.secondaryShield / widget.maxSecondaryShield
-                    : 0.0,
-              ),
-            ),
-          ],
-        ],
-      ),
+        );
+      },
     );
   }
 
   Widget _buildBottomBar() {
     final placedTower = widget.selectedPlacedTower;
 
-    return Container(
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [Color(0xCC12121A), Color(0xDD0D0D15)],
-        ),
-        border: const Border(
-          top: BorderSide(color: Color(0x44D4A843), width: 1),
-        ),
-        boxShadow: [
-          BoxShadow(color: Colors.black.withAlpha(80), blurRadius: 8, offset: const Offset(0, -2)),
-        ],
+    return ClipRRect(
+      borderRadius: const BorderRadius.only(
+        topLeft: Radius.circular(12),
+        topRight: Radius.circular(12),
       ),
-      child: SafeArea(
-        top: false,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-          child: Row(
-            children: [
-              if (placedTower != null)
-                Expanded(child: _buildTowerInfoPanel(placedTower))
-              else
-                Expanded(child: _buildTowerGrid()),
-              const SizedBox(width: 8),
-              if (!widget.isWaveActive)
-                _buildStartWaveButton()
-              else
-                _buildWaveActiveIndicator(),
+      child: BackdropFilter(
+        filter: ui.ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+        child: Container(
+          decoration: BoxDecoration(
+            color: const Color(0xAA0D0D15),
+            border: const Border(
+              top: BorderSide(color: Color(0x44D4A843), width: 1),
+            ),
+            boxShadow: [
+              BoxShadow(color: const Color(0x33D4A843).withValues(alpha: 0.1), blurRadius: 12, spreadRadius: 1),
+              BoxShadow(color: Colors.black.withAlpha(80), blurRadius: 8, offset: const Offset(0, -2)),
             ],
+          ),
+          child: SafeArea(
+            top: false,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+              child: Row(
+                children: [
+                  if (placedTower != null)
+                    Expanded(child: _buildTowerInfoPanel(placedTower))
+                  else
+                    Expanded(child: _buildTowerGrid()),
+                  const SizedBox(width: 8),
+                  if (!widget.isWaveActive)
+                    _buildStartWaveButton()
+                  else
+                    _buildWaveActiveIndicator(),
+                ],
+              ),
+            ),
           ),
         ),
       ),
@@ -608,13 +639,15 @@ class _GameHudState extends State<GameHud> with SingleTickerProviderStateMixin {
     final canTarget = tower.type != TowerType.spikeWall && tower.type != TowerType.support;
     final tColor = _towerTypeColor(tower.type);
 
-    return Container(
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(10),
+      child: BackdropFilter(
+        filter: ui.ImageFilter.blur(sigmaX: 8, sigmaY: 8),
+        child: Container(
       height: 80,
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [_bgPanel, _bgDark.withAlpha(220)],
-        ),
+        color: const Color(0xAA0D0D15),
         borderRadius: BorderRadius.circular(10),
         border: Border.all(color: tColor.withAlpha(100)),
         boxShadow: [
@@ -750,6 +783,8 @@ class _GameHudState extends State<GameHud> with SingleTickerProviderStateMixin {
           ),
         ],
       ),
+    ),
+      ),
     );
   }
 
@@ -759,39 +794,33 @@ class _GameHudState extends State<GameHud> with SingleTickerProviderStateMixin {
     ).toList();
     if (relevant.isEmpty) return const SizedBox.shrink();
 
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 40, vertical: 2),
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [_bgPanel, _bgDark.withAlpha(230)],
-        ),
-        border: Border.all(color: _gold.withAlpha(100)),
-        borderRadius: BorderRadius.circular(8),
-        boxShadow: [
-          BoxShadow(color: _gold.withAlpha(15), blurRadius: 8),
-        ],
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const Icon(Icons.auto_awesome, color: _gold, size: 12),
-          const SizedBox(width: 6),
-          Flexible(
-            child: Text(
-              relevant.map((s) {
-                final others = s.requiredTowers
-                    .where((t) => t != selected || s.requiredTowers.where((r) => r == t).length > 1)
-                    .toSet()
-                    .map((t) => TowerData.getStats(t).name.split(' ').first)
-                    .join('+');
-                return '${s.name} (${others.isNotEmpty ? "+$others" : "\u00d73"})';
-              }).join('  |  '),
-              style: TextStyle(color: _cream.withAlpha(200), fontSize: 9),
-              overflow: TextOverflow.ellipsis,
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 2),
+      child: GlassPanel(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        borderRadius: 8,
+        borderColor: _gold.withAlpha(100),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.auto_awesome, color: _gold, size: 12),
+            const SizedBox(width: 6),
+            Flexible(
+              child: Text(
+                relevant.map((s) {
+                  final others = s.requiredTowers
+                      .where((t) => t != selected || s.requiredTowers.where((r) => r == t).length > 1)
+                      .toSet()
+                      .map((t) => TowerData.getStats(t).name.split(' ').first)
+                      .join('+');
+                  return '${s.name} (${others.isNotEmpty ? "+$others" : "\u00d73"})';
+                }).join('  |  '),
+                style: TextStyle(color: _cream.withAlpha(200), fontSize: 9),
+                overflow: TextOverflow.ellipsis,
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -820,7 +849,10 @@ class _GameHudState extends State<GameHud> with SingleTickerProviderStateMixin {
                   widget.onTowerSelected(isSelected ? null : tower);
                 }
               },
-              child: AnimatedContainer(
+              child: AnimatedScale(
+                scale: isSelected ? 1.08 : 1.0,
+                duration: const Duration(milliseconds: 200),
+                child: AnimatedContainer(
                 duration: const Duration(milliseconds: 200),
                 width: 62,
                 decoration: BoxDecoration(
@@ -886,6 +918,7 @@ class _GameHudState extends State<GameHud> with SingleTickerProviderStateMixin {
                     const SizedBox(height: 2),
                   ],
                 ),
+              ),
               ),
             ),
           );

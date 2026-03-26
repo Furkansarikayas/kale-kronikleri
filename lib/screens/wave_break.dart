@@ -1,7 +1,9 @@
+import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import '../game/data/enemy_data.dart';
 import '../game/data/tower_data.dart';
 import '../game/data/wave_data.dart';
+import 'widgets/glass_panel.dart';
 
 class WaveBreak extends StatelessWidget {
   final int nextWave;
@@ -31,16 +33,17 @@ class WaveBreak extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Center(
-      child: Container(
-        width: 320,
-        padding: const EdgeInsets.all(24),
-        decoration: BoxDecoration(
-          color: _darkBg.withAlpha(240),
-          border: Border.all(color: _gold),
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: Column(
+    return BackdropFilter(
+      filter: ui.ImageFilter.blur(sigmaX: 8, sigmaY: 8),
+      child: Center(
+        child: GlassPanel(
+          padding: const EdgeInsets.all(24),
+          borderColor: _gold,
+          borderRadius: 12,
+          blur: 12,
+          child: SizedBox(
+            width: 320,
+            child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             Text(
@@ -151,6 +154,8 @@ class WaveBreak extends StatelessWidget {
               ),
             ],
           ],
+        ),
+          ),
         ),
       ),
     );

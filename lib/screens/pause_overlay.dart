@@ -1,4 +1,6 @@
+import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
+import 'widgets/glass_panel.dart';
 
 class PauseOverlay extends StatelessWidget {
   final VoidCallback onResume;
@@ -20,18 +22,19 @@ class PauseOverlay extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      color: Colors.black54,
-      child: Center(
-        child: Container(
-          width: 280,
-          padding: const EdgeInsets.all(24),
-          decoration: BoxDecoration(
-            color: _darkBg,
-            border: Border.all(color: _gold, width: 2),
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: Column(
+    return BackdropFilter(
+      filter: ui.ImageFilter.blur(sigmaX: 8, sigmaY: 8),
+      child: Container(
+        color: Colors.black38,
+        child: Center(
+          child: GlassPanel(
+            padding: const EdgeInsets.all(24),
+            borderColor: _gold,
+            borderRadius: 12,
+            blur: 12,
+            child: SizedBox(
+              width: 280,
+              child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               const Text(
@@ -98,6 +101,8 @@ class PauseOverlay extends StatelessWidget {
                 child: const Text('ANA MENU'),
               ),
             ],
+          ),
+            ),
           ),
         ),
       ),

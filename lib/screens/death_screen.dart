@@ -1,4 +1,6 @@
+import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
+import 'widgets/glass_panel.dart';
 
 class DeathScreen extends StatelessWidget {
   final bool isVictory;
@@ -62,16 +64,17 @@ class DeathScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: _darkBg,
-      body: Center(
-        child: Container(
-          width: 400,
-          padding: const EdgeInsets.all(32),
-          decoration: BoxDecoration(
-            color: _darkBg,
-            border: Border.all(color: _gold, width: 2),
-            borderRadius: BorderRadius.circular(16),
-          ),
-          child: Column(
+      body: BackdropFilter(
+        filter: ui.ImageFilter.blur(sigmaX: 6, sigmaY: 6),
+        child: Center(
+          child: GlassPanel(
+            padding: const EdgeInsets.all(32),
+            borderColor: _gold,
+            borderRadius: 16,
+            blur: 12,
+            child: SizedBox(
+              width: 400,
+              child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               Icon(
@@ -173,6 +176,8 @@ class DeathScreen extends StatelessWidget {
                 ],
               ),
             ],
+          ),
+            ),
           ),
         ),
       ),

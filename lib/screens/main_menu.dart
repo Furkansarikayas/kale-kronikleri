@@ -1,5 +1,7 @@
 import 'dart:math' as math;
+import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
+import 'widgets/glass_panel.dart';
 
 class MainMenu extends StatefulWidget {
   final VoidCallback onPlay;
@@ -385,18 +387,11 @@ class _PremiumStatChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    return GlassPanel(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [Color(0xFF151520), Color(0xFF111118)],
-        ),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: const Color(0x33D4A843), width: 0.5),
-        boxShadow: [
-          BoxShadow(color: Colors.black.withAlpha(40), blurRadius: 4),
-        ],
-      ),
+      borderRadius: 8,
+      borderColor: const Color(0x33D4A843),
+      blur: 8,
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -447,7 +442,11 @@ class _PremiumMenuButtonState extends State<_PremiumMenuButton> {
         widget.onPressed();
       },
       onTapCancel: () => setState(() => _pressed = false),
-      child: AnimatedContainer(
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(12),
+        child: BackdropFilter(
+          filter: ui.ImageFilter.blur(sigmaX: 6, sigmaY: 6),
+          child: AnimatedContainer(
         duration: const Duration(milliseconds: 100),
         width: 170,
         height: 48,
@@ -468,10 +467,15 @@ class _PremiumMenuButtonState extends State<_PremiumMenuButton> {
               ? []
               : [
                   BoxShadow(
-                    color: const Color(0xFFD4A843).withAlpha(30),
-                    blurRadius: 8,
-                    spreadRadius: 1,
+                    color: const Color(0xFFD4A843).withAlpha(40),
+                    blurRadius: 12,
+                    spreadRadius: 2,
                     offset: const Offset(0, 2),
+                  ),
+                  BoxShadow(
+                    color: const Color(0xFFBA7517).withAlpha(20),
+                    blurRadius: 20,
+                    spreadRadius: 4,
                   ),
                 ],
         ),
@@ -520,6 +524,8 @@ class _PremiumMenuButtonState extends State<_PremiumMenuButton> {
               ),
             ),
           ],
+        ),
+      ),
         ),
       ),
     );
