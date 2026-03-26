@@ -4,6 +4,7 @@ import 'package:kale_kronikleri/game/components/enemies/enemy_factory.dart';
 import 'package:kale_kronikleri/game/components/enemies/status_effect.dart';
 import 'package:kale_kronikleri/game/data/enemy_data.dart';
 import 'package:kale_kronikleri/game/data/game_config.dart';
+import 'package:kale_kronikleri/game/data/tower_data.dart';
 import 'package:kale_kronikleri/game/systems/pathfinding.dart';
 
 void main() {
@@ -129,6 +130,26 @@ void main() {
       );
       expect(enemy.type, EnemyType.cavalry);
       expect(enemy.goldReward, 6);
+    });
+  });
+
+  group('EnemyData.getWeaknesses', () {
+    test('cavalry is weak to ice and spikeWall', () {
+      final weaknesses = EnemyData.getWeaknesses(EnemyType.cavalry);
+      expect(weaknesses, contains(TowerType.ice));
+      expect(weaknesses, contains(TowerType.spikeWall));
+    });
+
+    test('soldier has no weaknesses', () {
+      final weaknesses = EnemyData.getWeaknesses(EnemyType.soldier);
+      expect(weaknesses, isEmpty);
+    });
+
+    test('all enemy types have weakness data', () {
+      for (final type in EnemyType.values) {
+        // Should not throw
+        EnemyData.getWeaknesses(type);
+      }
     });
   });
 }

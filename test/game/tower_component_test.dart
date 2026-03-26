@@ -45,6 +45,26 @@ void main() {
       expect(tower.currentDamage, baseDmg);
     });
 
+    test('kaleRuhuMultiplier boosts damage', () {
+      final tower = Tower(type: TowerType.arrow, col: 0, row: 0, cellSize: 40);
+      final baseDmg = tower.currentDamage;
+      tower.kaleRuhuMultiplier = 1.10;
+      expect(tower.currentDamage, (baseDmg * 1.10).round());
+    });
+
+    test('default targeting mode is nearest', () {
+      final tower = Tower(type: TowerType.arrow, col: 0, row: 0, cellSize: 40);
+      expect(tower.targetingMode, TargetingMode.nearest);
+    });
+
+    test('targeting mode can be changed', () {
+      final tower = Tower(type: TowerType.arrow, col: 0, row: 0, cellSize: 40);
+      tower.targetingMode = TargetingMode.first;
+      expect(tower.targetingMode, TargetingMode.first);
+      tower.targetingMode = TargetingMode.strongest;
+      expect(tower.targetingMode, TargetingMode.strongest);
+    });
+
     test('spike wall and support cannot fire', () {
       final spike = Tower(type: TowerType.spikeWall, col: 0, row: 0, cellSize: 40);
       expect(spike.canFire(), false);

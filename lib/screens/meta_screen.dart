@@ -56,13 +56,15 @@ class _MetaScreenState extends State<MetaScreen> {
         children: [
           // Tree tabs
           SizedBox(
-            width: 140,
+            width: 150,
             child: ListView(
               children: MetaTree.trees.map((tree) {
                 final isSelected = tree.id == _selectedTreeId;
+                final level = widget.unlockedLevels[tree.id] ?? 0;
                 return ListTile(
                   selected: isSelected,
                   selectedTileColor: _gold.withAlpha(30),
+                  leading: Icon(_treeIcon(tree.id), color: isSelected ? _gold : _cream.withAlpha(120), size: 20),
                   title: Text(
                     tree.name,
                     style: TextStyle(
@@ -70,6 +72,10 @@ class _MetaScreenState extends State<MetaScreen> {
                       fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
                       fontSize: 13,
                     ),
+                  ),
+                  subtitle: Text(
+                    '$level / ${tree.nodes.length}',
+                    style: TextStyle(color: _cream.withAlpha(80), fontSize: 10),
                   ),
                   onTap: () => setState(() => _selectedTreeId = tree.id),
                 );
@@ -82,6 +88,16 @@ class _MetaScreenState extends State<MetaScreen> {
         ],
       ),
     );
+  }
+
+  IconData _treeIcon(String treeId) {
+    switch (treeId) {
+      case 'savas': return Icons.shield;
+      case 'kesif': return Icons.explore;
+      case 'kale': return Icons.castle;
+      case 'efsane': return Icons.auto_awesome;
+      default: return Icons.star;
+    }
   }
 
   Widget _buildNodeList() {

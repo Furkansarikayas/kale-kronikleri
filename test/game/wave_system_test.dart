@@ -37,4 +37,14 @@ void main() {
     for (int i = 0; i < 20; i++) ws.startNextWave();
     expect(ws.isComplete, true);
   });
+  test('WaveSystem extendWaves allows more waves', () {
+    final ws = WaveSystem(difficulty: DifficultyTier.apprentice);
+    for (int i = 0; i < 20; i++) ws.startNextWave();
+    expect(ws.isComplete, true);
+    ws.extendWaves(5);
+    expect(ws.isComplete, false);
+    expect(ws.totalWaves, 25);
+    ws.startNextWave();
+    expect(ws.currentWave, 21);
+  });
 }

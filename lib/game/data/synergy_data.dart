@@ -22,6 +22,7 @@ class SynergyData {
     SynergyDef(id: 8, name: 'Cehennem Hattı', description: 'Aralarındaki yol sürekli yanar', requiredTowers: [TowerType.fire, TowerType.fire, TowerType.fire], isTriple: true),
     SynergyDef(id: 9, name: 'Buzul Çağı', description: 'Tüm harita %30 yavaşlama', requiredTowers: [TowerType.ice, TowerType.ice, TowerType.ice], isTriple: true),
     SynergyDef(id: 10, name: 'Kıyamet', description: '15sn\'de bir masif alan hasarı', requiredTowers: [TowerType.arrow, TowerType.fire, TowerType.lightning], isTriple: true),
+    SynergyDef(id: 11, name: 'Tanrıların Gazabı', description: 'Tüm kulelere 3× hasar + sürekli alan hasarı', requiredTowers: [TowerType.dark, TowerType.holy, TowerType.lightning], isTriple: true),
   ];
 
   static List<SynergyDef> findMatchingSynergies(Set<TowerType> adjacentTypes) {

@@ -37,6 +37,16 @@ class GameMap extends Component {
         add(GridCell(col: c, row: r, cellType: grid[r][c], cellSize: cellSize));
       }
     }
+
+    // Set neighbor types for edge blending
+    for (final child in children.whereType<GridCell>()) {
+      child.setNeighbors(
+        top: child.row > 0 ? grid[child.row - 1][child.col] : CellType.blocked,
+        bottom: child.row < GameConfig.gridRows - 1 ? grid[child.row + 1][child.col] : CellType.blocked,
+        left: child.col > 0 ? grid[child.row][child.col - 1] : CellType.blocked,
+        right: child.col < GameConfig.gridColumns - 1 ? grid[child.row][child.col + 1] : CellType.blocked,
+      );
+    }
   }
 
   CellType cellAt(int col, int row) {

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../game/data/enemy_data.dart';
+import '../game/data/tower_data.dart';
 import '../game/data/wave_data.dart';
 
 class WaveBreak extends StatelessWidget {
@@ -10,6 +11,7 @@ class WaveBreak extends StatelessWidget {
   final List<WaveEntry> wavePreview;
   final VoidCallback onStartNow;
   final VoidCallback? onWatchAd; // null = ad not available
+  final bool showEnemyWeakness;
 
   const WaveBreak({
     super.key,
@@ -20,6 +22,7 @@ class WaveBreak extends StatelessWidget {
     this.wavePreview = const [],
     required this.onStartNow,
     this.onWatchAd,
+    this.showEnemyWeakness = false,
   });
 
   static const _gold = Color(0xFFBA7517);
@@ -90,8 +93,10 @@ class WaveBreak extends StatelessWidget {
                     const SizedBox(height: 4),
                     Wrap(
                       spacing: 8,
+                      runSpacing: 4,
                       children: wavePreview.map((entry) {
                         final stats = EnemyData.getStats(entry.type);
+                        final weaknesses = showEnemyWeakness ? EnemyData.getWeaknesses(entry.type) : <TowerType>[];
                         return Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
@@ -107,6 +112,13 @@ class WaveBreak extends StatelessWidget {
                               '${stats.name} x${entry.count}',
                               style: TextStyle(color: _cream.withAlpha(200), fontSize: 10),
                             ),
+                            if (weaknesses.isNotEmpty) ...[
+                              const SizedBox(width: 3),
+                              ...weaknesses.map((t) => Padding(
+                                padding: const EdgeInsets.only(left: 1),
+                                child: Icon(_towerIcon(t), color: const Color(0xFFFF6666), size: 9),
+                              )),
+                            ],
                           ],
                         );
                       }).toList(),
@@ -142,6 +154,23 @@ class WaveBreak extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  IconData _towerIcon(TowerType type) {
+    switch (type) {
+      case TowerType.arrow: return Icons.north_east;
+      case TowerType.ice: return Icons.ac_unit;
+      case TowerType.fire: return Icons.local_fire_department;
+      case TowerType.lightning: return Icons.bolt;
+      case TowerType.poison: return Icons.science;
+      case TowerType.cannon: return Icons.adjust;
+      case TowerType.spikeWall: return Icons.fence;
+      case TowerType.support: return Icons.shield;
+      case TowerType.water: return Icons.water_drop;
+      case TowerType.wizard: return Icons.auto_fix_high;
+      case TowerType.dark: return Icons.nightlight;
+      case TowerType.holy: return Icons.wb_sunny;
+    }
   }
 
   Color _enemyColor(EnemyType type) {

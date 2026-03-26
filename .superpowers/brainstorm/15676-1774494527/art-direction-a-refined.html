@@ -1,0 +1,357 @@
+<h2>Stylized 2D — Detaylı Görsel Konsept</h2>
+<p class="subtitle">Kale Kronikleri'nin yeni yüzü: Canlı renkler, güçlü siluetler, dramatik efektler</p>
+
+<!-- Full game mockup -->
+<div class="section">
+  <h3>Oyun İçi Görünüm — Tam Sahne</h3>
+  <div class="mockup">
+    <div class="mockup-header">Dalga 5 / 20 — Savaş Aktif</div>
+    <div class="mockup-body" style="background: linear-gradient(180deg, #0a0e1a 0%, #1a1035 30%, #121a2e 60%, #0f1a12 100%); min-height: 340px; position: relative; overflow: hidden; padding: 0;">
+
+      <!-- Sky glow -->
+      <div style="position: absolute; top: -20px; left: 50%; transform: translateX(-50%); width: 400px; height: 120px; background: radial-gradient(ellipse, rgba(120,60,180,0.25), transparent 70%); pointer-events: none;"></div>
+
+      <!-- Stars -->
+      <div style="position: absolute; top: 8px; left: 12%; width: 2px; height: 2px; background: #fff; border-radius: 50%; box-shadow: 0 0 4px #fff;"></div>
+      <div style="position: absolute; top: 18px; left: 35%; width: 1px; height: 1px; background: #ddd; border-radius: 50%; box-shadow: 0 0 3px #ddd;"></div>
+      <div style="position: absolute; top: 6px; left: 58%; width: 2px; height: 2px; background: #fff; border-radius: 50%; box-shadow: 0 0 5px #fff;"></div>
+      <div style="position: absolute; top: 22px; left: 78%; width: 1px; height: 1px; background: #ccc; border-radius: 50%; box-shadow: 0 0 3px #ccc;"></div>
+      <div style="position: absolute; top: 12px; left: 90%; width: 2px; height: 2px; background: #fff; border-radius: 50%; box-shadow: 0 0 4px #fff;"></div>
+
+      <!-- Moon -->
+      <div style="position: absolute; top: 12px; right: 40px; width: 28px; height: 28px; background: radial-gradient(circle at 40% 40%, #f0e6d0, #d4c4a0); border-radius: 50%; box-shadow: 0 0 30px rgba(240,230,208,0.3), 0 0 60px rgba(240,230,208,0.1);"></div>
+
+      <!-- HUD Top Bar -->
+      <div style="position: absolute; top: 0; left: 0; right: 0; height: 36px; background: linear-gradient(180deg, rgba(0,0,0,0.85), rgba(0,0,0,0.3)); display: flex; align-items: center; padding: 0 12px; gap: 16px; z-index: 10;">
+        <!-- HP -->
+        <div style="display: flex; align-items: center; gap: 4px;">
+          <span style="color: #e94560; font-size: 13px;">❤️</span>
+          <div style="width: 80px; height: 10px; background: rgba(0,0,0,0.6); border-radius: 5px; border: 1px solid rgba(233,69,96,0.4); overflow: hidden;">
+            <div style="width: 85%; height: 100%; background: linear-gradient(90deg, #e94560, #ff6b81); border-radius: 4px; box-shadow: 0 0 8px rgba(233,69,96,0.5);"></div>
+          </div>
+          <span style="color: #ff6b81; font-size: 10px; font-family: monospace;">43/50</span>
+        </div>
+        <!-- Gold -->
+        <div style="display: flex; align-items: center; gap: 4px;">
+          <div style="width: 12px; height: 12px; background: radial-gradient(circle, #ffd700, #b8860b); border-radius: 50%; box-shadow: 0 0 6px rgba(255,215,0,0.5);"></div>
+          <span style="color: #ffd700; font-size: 11px; font-weight: bold; font-family: monospace; text-shadow: 0 0 6px rgba(255,215,0,0.3);">285</span>
+        </div>
+        <!-- Wave -->
+        <div style="display: flex; align-items: center; gap: 4px; margin-left: auto;">
+          <span style="color: #b8aef0; font-size: 10px; text-transform: uppercase; letter-spacing: 1px;">Dalga</span>
+          <span style="color: #e0d4ff; font-size: 13px; font-weight: bold; font-family: monospace;">5/20</span>
+        </div>
+        <!-- Speed -->
+        <div style="padding: 2px 8px; background: rgba(78,205,196,0.2); border: 1px solid rgba(78,205,196,0.4); border-radius: 4px;">
+          <span style="color: #4ecdc4; font-size: 10px; font-weight: bold;">1x</span>
+        </div>
+      </div>
+
+      <!-- Background mountains -->
+      <div style="position: absolute; bottom: 100px; left: 0; right: 0; height: 80px;">
+        <div style="position: absolute; bottom: 0; left: -5%; width: 40%; height: 70px; background: linear-gradient(135deg, #1a1035, #0f0a20); clip-path: polygon(0% 100%, 30% 10%, 60% 40%, 100% 100%); opacity: 0.6;"></div>
+        <div style="position: absolute; bottom: 0; left: 30%; width: 45%; height: 80px; background: linear-gradient(135deg, #15102a, #0d0820); clip-path: polygon(0% 100%, 40% 5%, 70% 30%, 100% 100%); opacity: 0.5;"></div>
+        <div style="position: absolute; bottom: 0; right: -5%; width: 40%; height: 60px; background: linear-gradient(135deg, #1a1035, #0f0a20); clip-path: polygon(0% 100%, 50% 15%, 100% 100%); opacity: 0.4;"></div>
+      </div>
+
+      <!-- Ground with texture -->
+      <div style="position: absolute; bottom: 0; left: 0; right: 0; height: 110px; background: linear-gradient(0deg, #0d1a0d 0%, #142014 40%, #1a2a1a 70%, #0f1a12 100%);"></div>
+
+      <!-- Path with glow -->
+      <div style="position: absolute; bottom: 35px; left: 0; right: 0; height: 44px; background: linear-gradient(0deg, #2a2018, #3a3025, #2a2018); border-top: 2px solid rgba(212,168,67,0.3); border-bottom: 2px solid rgba(212,168,67,0.2); box-shadow: 0 0 20px rgba(212,168,67,0.08);">
+        <!-- Path stones -->
+        <div style="position: absolute; top: 8px; left: 10%; width: 18px; height: 10px; background: rgba(255,255,255,0.04); border-radius: 3px;"></div>
+        <div style="position: absolute; top: 18px; left: 25%; width: 14px; height: 8px; background: rgba(255,255,255,0.03); border-radius: 2px;"></div>
+        <div style="position: absolute; top: 6px; left: 45%; width: 20px; height: 12px; background: rgba(255,255,255,0.04); border-radius: 3px;"></div>
+        <div style="position: absolute; top: 20px; left: 65%; width: 16px; height: 8px; background: rgba(255,255,255,0.03); border-radius: 2px;"></div>
+        <div style="position: absolute; top: 10px; left: 82%; width: 18px; height: 10px; background: rgba(255,255,255,0.04); border-radius: 3px;"></div>
+      </div>
+
+      <!-- Grass tufts -->
+      <div style="position: absolute; bottom: 78px; left: 8%; width: 12px; height: 8px; background: transparent; border-bottom: 8px solid rgba(40,80,40,0.6); border-left: 3px solid transparent; border-right: 3px solid transparent;"></div>
+      <div style="position: absolute; bottom: 80px; left: 42%; width: 10px; height: 6px; background: transparent; border-bottom: 6px solid rgba(40,80,40,0.5); border-left: 2px solid transparent; border-right: 2px solid transparent;"></div>
+      <div style="position: absolute; bottom: 76px; left: 72%; width: 14px; height: 10px; background: transparent; border-bottom: 10px solid rgba(40,80,40,0.5); border-left: 3px solid transparent; border-right: 3px solid transparent;"></div>
+
+      <!-- === TOWERS === -->
+
+      <!-- Fire Tower - Detailed -->
+      <div style="position: absolute; bottom: 78px; left: 12%; width: 48px; height: 68px;">
+        <!-- Base platform -->
+        <div style="position: absolute; bottom: 0; left: -4px; right: -4px; height: 14px; background: linear-gradient(0deg, #3a3030, #4a4040); border-radius: 3px; border: 1px solid #5a4a4a;"></div>
+        <!-- Tower body -->
+        <div style="position: absolute; bottom: 12px; left: 4px; right: 4px; height: 48px; background: linear-gradient(180deg, #4a1a1a, #3a1212, #2d0e0e); border: 1px solid #6a3030; border-radius: 4px 4px 2px 2px; box-shadow: 0 0 25px rgba(233,69,96,0.3);">
+          <!-- Window slits -->
+          <div style="position: absolute; top: 10px; left: 6px; width: 4px; height: 10px; background: rgba(233,69,96,0.6); border-radius: 2px; box-shadow: 0 0 6px rgba(233,69,96,0.4);"></div>
+          <div style="position: absolute; top: 10px; right: 6px; width: 4px; height: 10px; background: rgba(233,69,96,0.6); border-radius: 2px; box-shadow: 0 0 6px rgba(233,69,96,0.4);"></div>
+          <!-- Brick lines -->
+          <div style="position: absolute; top: 25px; left: 2px; right: 2px; height: 1px; background: rgba(255,255,255,0.06);"></div>
+          <div style="position: absolute; top: 35px; left: 2px; right: 2px; height: 1px; background: rgba(255,255,255,0.06);"></div>
+        </div>
+        <!-- Fire orb on top -->
+        <div style="position: absolute; top: 0; left: 50%; transform: translateX(-50%); width: 22px; height: 26px;">
+          <div style="width: 22px; height: 22px; background: radial-gradient(circle at 45% 55%, #fff5e0, #ffb347, #e94560, #8b0000); border-radius: 50% 50% 50% 50% / 60% 60% 40% 40%; box-shadow: 0 0 20px rgba(233,69,96,0.7), 0 0 40px rgba(255,179,71,0.4), 0 -5px 15px rgba(255,245,224,0.3); animation: none;"></div>
+          <!-- Flame tip -->
+          <div style="position: absolute; top: -6px; left: 50%; transform: translateX(-50%); width: 8px; height: 10px; background: linear-gradient(0deg, #ffb347, #e94560, transparent); border-radius: 50% 50% 20% 20%; opacity: 0.8;"></div>
+        </div>
+        <!-- Ground glow -->
+        <div style="position: absolute; bottom: -6px; left: 50%; transform: translateX(-50%); width: 60px; height: 12px; background: radial-gradient(ellipse, rgba(233,69,96,0.25), transparent); border-radius: 50%;"></div>
+      </div>
+
+      <!-- Ice Tower - Detailed -->
+      <div style="position: absolute; bottom: 78px; left: 30%; width: 48px; height: 68px;">
+        <div style="position: absolute; bottom: 0; left: -4px; right: -4px; height: 14px; background: linear-gradient(0deg, #2a3040, #3a4050); border-radius: 3px; border: 1px solid #4a5a6a;"></div>
+        <div style="position: absolute; bottom: 12px; left: 4px; right: 4px; height: 48px; background: linear-gradient(180deg, #1a3050, #153060, #102a50); border: 1px solid #2a5080; border-radius: 4px 4px 2px 2px; box-shadow: 0 0 25px rgba(78,205,196,0.2);">
+          <div style="position: absolute; top: 8px; left: 50%; transform: translateX(-50%); width: 20px; height: 20px; background: none; position: relative;">
+            <!-- Snowflake -->
+            <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); width: 2px; height: 16px; background: rgba(78,205,196,0.7); box-shadow: 0 0 4px rgba(78,205,196,0.5);"></div>
+            <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%) rotate(60deg); width: 2px; height: 16px; background: rgba(78,205,196,0.7); box-shadow: 0 0 4px rgba(78,205,196,0.5);"></div>
+            <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%) rotate(-60deg); width: 2px; height: 16px; background: rgba(78,205,196,0.7); box-shadow: 0 0 4px rgba(78,205,196,0.5);"></div>
+          </div>
+          <!-- Ice crystals on surface -->
+          <div style="position: absolute; bottom: 4px; left: 4px; width: 6px; height: 10px; background: linear-gradient(0deg, rgba(78,205,196,0.3), transparent); clip-path: polygon(50% 0%, 0% 100%, 100% 100%);"></div>
+          <div style="position: absolute; bottom: 4px; right: 6px; width: 5px; height: 8px; background: linear-gradient(0deg, rgba(78,205,196,0.25), transparent); clip-path: polygon(50% 0%, 0% 100%, 100% 100%);"></div>
+        </div>
+        <!-- Crystal top -->
+        <div style="position: absolute; top: 0; left: 50%; transform: translateX(-50%); width: 18px; height: 22px; background: linear-gradient(180deg, rgba(160,230,255,0.9), rgba(78,205,196,0.7), rgba(40,120,140,0.8)); clip-path: polygon(50% 0%, 15% 35%, 0% 100%, 100% 100%, 85% 35%); box-shadow: 0 0 15px rgba(78,205,196,0.5), 0 0 30px rgba(78,205,196,0.2);"></div>
+        <div style="position: absolute; bottom: -6px; left: 50%; transform: translateX(-50%); width: 60px; height: 12px; background: radial-gradient(ellipse, rgba(78,205,196,0.2), transparent); border-radius: 50%;"></div>
+      </div>
+
+      <!-- Lightning Tower -->
+      <div style="position: absolute; bottom: 78px; left: 58%; width: 48px; height: 68px;">
+        <div style="position: absolute; bottom: 0; left: -4px; right: -4px; height: 14px; background: linear-gradient(0deg, #302840, #403850); border-radius: 3px; border: 1px solid #504860;"></div>
+        <div style="position: absolute; bottom: 12px; left: 4px; right: 4px; height: 48px; background: linear-gradient(180deg, #2a1a50, #351f6a, #201040); border: 1px solid #5030a0; border-radius: 4px 4px 2px 2px; box-shadow: 0 0 25px rgba(167,139,250,0.25);">
+          <!-- Lightning symbol -->
+          <div style="position: absolute; top: 10px; left: 50%; transform: translateX(-50%); width: 14px; height: 22px;">
+            <div style="width: 14px; height: 22px; background: none; position: relative;">
+              <div style="position: absolute; top: 0; left: 2px; width: 10px; height: 12px; background: linear-gradient(135deg, #ffd700, #a78bfa); clip-path: polygon(60% 0%, 100% 45%, 45% 45%, 70% 100%, 0% 50%, 55% 50%); box-shadow: 0 0 8px rgba(167,139,250,0.6);"></div>
+            </div>
+          </div>
+        </div>
+        <!-- Electric orb -->
+        <div style="position: absolute; top: 2px; left: 50%; transform: translateX(-50%); width: 18px; height: 18px; background: radial-gradient(circle, #fff, #a78bfa, #5b21b6); border-radius: 50%; box-shadow: 0 0 15px rgba(167,139,250,0.7), 0 0 35px rgba(167,139,250,0.3);"></div>
+        <div style="position: absolute; bottom: -6px; left: 50%; transform: translateX(-50%); width: 60px; height: 12px; background: radial-gradient(ellipse, rgba(167,139,250,0.2), transparent); border-radius: 50%;"></div>
+      </div>
+
+      <!-- Castle - Right side -->
+      <div style="position: absolute; bottom: 25px; right: 20px; width: 65px; height: 95px;">
+        <!-- Castle base -->
+        <div style="position: absolute; bottom: 0; left: 0; right: 0; height: 60px; background: linear-gradient(180deg, #4a3828, #3a2a1a, #2d2015); border: 1px solid #6a5838; border-radius: 3px;">
+          <!-- Gate -->
+          <div style="position: absolute; bottom: 0; left: 50%; transform: translateX(-50%); width: 18px; height: 24px; background: linear-gradient(180deg, #1a1008, #0d0804); border-radius: 9px 9px 0 0; border: 1px solid #6a5838; border-bottom: none;"></div>
+          <!-- Windows -->
+          <div style="position: absolute; top: 8px; left: 8px; width: 8px; height: 10px; background: rgba(212,168,67,0.4); border-radius: 4px 4px 0 0; box-shadow: 0 0 8px rgba(212,168,67,0.3);"></div>
+          <div style="position: absolute; top: 8px; right: 8px; width: 8px; height: 10px; background: rgba(212,168,67,0.4); border-radius: 4px 4px 0 0; box-shadow: 0 0 8px rgba(212,168,67,0.3);"></div>
+        </div>
+        <!-- Left turret -->
+        <div style="position: absolute; bottom: 50px; left: -4px; width: 18px; height: 45px; background: linear-gradient(180deg, #5a4830, #4a3828); border: 1px solid #6a5838; border-radius: 2px;">
+          <div style="position: absolute; top: -6px; left: 50%; transform: translateX(-50%); width: 22px; height: 8px; background: #5a4830; border: 1px solid #6a5838; border-radius: 2px;">
+            <div style="display: flex; justify-content: space-between; padding: 0 2px;">
+              <div style="width: 4px; height: 5px; background: #6a5838;"></div>
+              <div style="width: 4px; height: 5px; background: #6a5838;"></div>
+              <div style="width: 4px; height: 5px; background: #6a5838;"></div>
+            </div>
+          </div>
+        </div>
+        <!-- Right turret -->
+        <div style="position: absolute; bottom: 50px; right: -4px; width: 18px; height: 45px; background: linear-gradient(180deg, #5a4830, #4a3828); border: 1px solid #6a5838; border-radius: 2px;">
+          <div style="position: absolute; top: -6px; left: 50%; transform: translateX(-50%); width: 22px; height: 8px; background: #5a4830; border: 1px solid #6a5838; border-radius: 2px;">
+            <div style="display: flex; justify-content: space-between; padding: 0 2px;">
+              <div style="width: 4px; height: 5px; background: #6a5838;"></div>
+              <div style="width: 4px; height: 5px; background: #6a5838;"></div>
+              <div style="width: 4px; height: 5px; background: #6a5838;"></div>
+            </div>
+          </div>
+        </div>
+        <!-- Banner -->
+        <div style="position: absolute; top: 18px; left: 50%; transform: translateX(-50%); width: 14px; height: 20px; background: linear-gradient(180deg, #8b0000, #a01010); clip-path: polygon(0% 0%, 100% 0%, 100% 70%, 50% 100%, 0% 70%); box-shadow: 0 0 8px rgba(139,0,0,0.4);"></div>
+        <!-- Castle warm glow -->
+        <div style="position: absolute; bottom: -10px; left: 50%; transform: translateX(-50%); width: 80px; height: 20px; background: radial-gradient(ellipse, rgba(212,168,67,0.15), transparent); border-radius: 50%;"></div>
+      </div>
+
+      <!-- === ENEMIES === -->
+
+      <!-- Enemy 1 - Soldier -->
+      <div style="position: absolute; bottom: 38px; left: 48%; width: 26px; height: 32px;">
+        <!-- Body -->
+        <div style="width: 26px; height: 26px; background: linear-gradient(180deg, #c0392b, #96281b); border-radius: 4px 4px 2px 2px; border: 1px solid #e74c3c; box-shadow: 0 0 10px rgba(231,76,60,0.4); position: relative;">
+          <!-- Eyes -->
+          <div style="position: absolute; top: 6px; left: 4px; width: 5px; height: 3px; background: #fff; border-radius: 50%;"></div>
+          <div style="position: absolute; top: 6px; right: 4px; width: 5px; height: 3px; background: #fff; border-radius: 50%;"></div>
+          <!-- Shield -->
+          <div style="position: absolute; top: 12px; left: 50%; transform: translateX(-50%); width: 12px; height: 10px; background: linear-gradient(180deg, #7f8c8d, #5a6366); border-radius: 2px 2px 6px 6px; border: 1px solid #95a5a6;"></div>
+        </div>
+        <!-- HP bar -->
+        <div style="position: absolute; top: -6px; left: 50%; transform: translateX(-50%); width: 28px; height: 4px; background: rgba(0,0,0,0.7); border-radius: 2px; overflow: hidden;">
+          <div style="width: 100%; height: 100%; background: linear-gradient(90deg, #2ecc71, #27ae60); border-radius: 2px;"></div>
+        </div>
+      </div>
+
+      <!-- Enemy 2 - Damaged soldier -->
+      <div style="position: absolute; bottom: 40px; left: 40%; width: 26px; height: 32px;">
+        <div style="width: 26px; height: 26px; background: linear-gradient(180deg, #c0392b, #96281b); border-radius: 4px 4px 2px 2px; border: 1px solid #e74c3c; box-shadow: 0 0 10px rgba(231,76,60,0.4); position: relative;">
+          <div style="position: absolute; top: 6px; left: 4px; width: 5px; height: 3px; background: #fff; border-radius: 50%;"></div>
+          <div style="position: absolute; top: 6px; right: 4px; width: 5px; height: 3px; background: #fff; border-radius: 50%;"></div>
+        </div>
+        <div style="position: absolute; top: -6px; left: 50%; transform: translateX(-50%); width: 28px; height: 4px; background: rgba(0,0,0,0.7); border-radius: 2px; overflow: hidden;">
+          <div style="width: 40%; height: 100%; background: linear-gradient(90deg, #e74c3c, #c0392b); border-radius: 2px;"></div>
+        </div>
+        <!-- Burn effect -->
+        <div style="position: absolute; top: -2px; right: -4px; width: 10px; height: 12px; background: radial-gradient(circle, rgba(255,179,71,0.6), rgba(233,69,96,0.3), transparent); border-radius: 50%;"></div>
+      </div>
+
+      <!-- Enemy 3 - Armored Giant -->
+      <div style="position: absolute; bottom: 36px; left: 22%; width: 34px; height: 42px;">
+        <div style="width: 34px; height: 36px; background: linear-gradient(180deg, #5a6366, #3d4447, #2c3133); border-radius: 4px 4px 2px 2px; border: 1px solid #7f8c8d; box-shadow: 0 0 12px rgba(127,140,141,0.3); position: relative;">
+          <!-- Helmet -->
+          <div style="position: absolute; top: -4px; left: 50%; transform: translateX(-50%); width: 28px; height: 10px; background: linear-gradient(180deg, #7f8c8d, #5a6366); border-radius: 4px 4px 0 0; border: 1px solid #95a5a6;"></div>
+          <div style="position: absolute; top: 6px; left: 4px; width: 6px; height: 2px; background: #e74c3c; border-radius: 50%; box-shadow: 0 0 4px rgba(231,76,60,0.6);"></div>
+          <div style="position: absolute; top: 6px; right: 4px; width: 6px; height: 2px; background: #e74c3c; border-radius: 50%; box-shadow: 0 0 4px rgba(231,76,60,0.6);"></div>
+          <!-- Armor lines -->
+          <div style="position: absolute; top: 14px; left: 3px; right: 3px; height: 1px; background: rgba(255,255,255,0.1);"></div>
+          <div style="position: absolute; top: 20px; left: 3px; right: 3px; height: 1px; background: rgba(255,255,255,0.1);"></div>
+        </div>
+        <div style="position: absolute; top: -10px; left: 50%; transform: translateX(-50%); width: 36px; height: 4px; background: rgba(0,0,0,0.7); border-radius: 2px; overflow: hidden;">
+          <div style="width: 75%; height: 100%; background: linear-gradient(90deg, #f39c12, #e67e22); border-radius: 2px;"></div>
+        </div>
+      </div>
+
+      <!-- === PROJECTILES === -->
+
+      <!-- Fire projectile with trail -->
+      <div style="position: absolute; top: 58%; left: 18%; width: 80px; height: 6px; transform: rotate(-8deg);">
+        <div style="position: absolute; right: 0; width: 8px; height: 8px; background: radial-gradient(circle, #fff, #ffb347, #e94560); border-radius: 50%; box-shadow: 0 0 10px rgba(233,69,96,0.8);"></div>
+        <div style="position: absolute; right: 8px; width: 50px; height: 4px; top: 2px; background: linear-gradient(90deg, transparent, rgba(233,69,96,0.3), rgba(255,179,71,0.6)); border-radius: 2px;"></div>
+      </div>
+
+      <!-- Ice projectile -->
+      <div style="position: absolute; top: 55%; left: 36%; width: 60px; height: 6px; transform: rotate(-5deg);">
+        <div style="position: absolute; right: 0; width: 7px; height: 7px; background: radial-gradient(circle, #fff, #4ecdc4); border-radius: 50%; box-shadow: 0 0 8px rgba(78,205,196,0.8);"></div>
+        <div style="position: absolute; right: 7px; width: 40px; height: 3px; top: 2px; background: linear-gradient(90deg, transparent, rgba(78,205,196,0.5)); border-radius: 2px;"></div>
+      </div>
+
+      <!-- Lightning bolt -->
+      <div style="position: absolute; top: 42%; left: 63%; width: 3px; height: 50px; transform: rotate(12deg);">
+        <svg viewBox="0 0 10 50" style="width: 10px; height: 50px; filter: drop-shadow(0 0 6px rgba(167,139,250,0.8));">
+          <polyline points="5,0 3,12 7,15 2,28 8,32 4,42 6,50" fill="none" stroke="#a78bfa" stroke-width="2"/>
+          <polyline points="5,0 3,12 7,15 2,28 8,32 4,42 6,50" fill="none" stroke="#fff" stroke-width="0.8" opacity="0.6"/>
+        </svg>
+      </div>
+
+      <!-- === FLOATING DAMAGE TEXT === -->
+      <div style="position: absolute; top: 48%; left: 42%; color: #ff6b81; font-size: 12px; font-weight: bold; font-family: monospace; text-shadow: 0 0 6px rgba(233,69,96,0.6), 0 1px 2px rgba(0,0,0,0.8);">-15</div>
+      <div style="position: absolute; top: 52%; left: 23%; color: #4ecdc4; font-size: 11px; font-weight: bold; font-family: monospace; text-shadow: 0 0 6px rgba(78,205,196,0.6), 0 1px 2px rgba(0,0,0,0.8);">❄ SLOW</div>
+
+      <!-- === PARTICLES === -->
+      <div style="position: absolute; top: 40%; left: 15%; width: 3px; height: 3px; background: #e94560; border-radius: 50%; box-shadow: 0 0 6px #e94560;"></div>
+      <div style="position: absolute; top: 55%; left: 20%; width: 2px; height: 2px; background: #ffb347; border-radius: 50%; box-shadow: 0 0 4px #ffb347;"></div>
+      <div style="position: absolute; top: 35%; left: 33%; width: 3px; height: 3px; background: #4ecdc4; border-radius: 50%; box-shadow: 0 0 6px #4ecdc4;"></div>
+      <div style="position: absolute; top: 62%; left: 55%; width: 2px; height: 2px; background: #a78bfa; border-radius: 50%; box-shadow: 0 0 5px #a78bfa;"></div>
+      <div style="position: absolute; top: 28%; left: 62%; width: 3px; height: 3px; background: #a78bfa; border-radius: 50%; box-shadow: 0 0 8px #a78bfa;"></div>
+
+      <!-- Synergy glow between Fire & Ice towers -->
+      <div style="position: absolute; bottom: 95px; left: 21%; width: 80px; height: 30px; background: radial-gradient(ellipse, rgba(212,168,67,0.12), transparent); border-radius: 50%;"></div>
+
+      <!-- === BOTTOM HUD === -->
+      <div style="position: absolute; bottom: 0; left: 0; right: 0; height: 26px; background: linear-gradient(0deg, rgba(0,0,0,0.9), rgba(0,0,0,0.5)); display: flex; align-items: center; padding: 0 8px; gap: 6px;">
+        <!-- Tower slots -->
+        <div style="display: flex; gap: 4px;">
+          <div style="width: 20px; height: 20px; background: linear-gradient(135deg, rgba(233,69,96,0.3), rgba(233,69,96,0.1)); border: 1px solid rgba(233,69,96,0.5); border-radius: 3px; display: flex; align-items: center; justify-content: center; font-size: 10px;">🔥</div>
+          <div style="width: 20px; height: 20px; background: linear-gradient(135deg, rgba(78,205,196,0.3), rgba(78,205,196,0.1)); border: 1px solid rgba(78,205,196,0.5); border-radius: 3px; display: flex; align-items: center; justify-content: center; font-size: 10px;">❄️</div>
+          <div style="width: 20px; height: 20px; background: linear-gradient(135deg, rgba(167,139,250,0.3), rgba(167,139,250,0.1)); border: 1px solid rgba(167,139,250,0.5); border-radius: 3px; display: flex; align-items: center; justify-content: center; font-size: 10px;">⚡</div>
+          <div style="width: 20px; height: 20px; background: linear-gradient(135deg, rgba(255,255,255,0.1), rgba(255,255,255,0.05)); border: 1px solid rgba(255,255,255,0.2); border-radius: 3px; display: flex; align-items: center; justify-content: center; font-size: 10px;">🏹</div>
+          <div style="width: 20px; height: 20px; background: linear-gradient(135deg, rgba(46,204,113,0.3), rgba(46,204,113,0.1)); border: 1px solid rgba(46,204,113,0.5); border-radius: 3px; display: flex; align-items: center; justify-content: center; font-size: 10px;">☠️</div>
+        </div>
+        <div style="margin-left: auto; display: flex; align-items: center; gap: 6px;">
+          <span style="color: #ccc; font-size: 9px;">Düşman: </span>
+          <span style="color: #e94560; font-size: 10px; font-weight: bold;">8/12</span>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- Before/After comparison -->
+<div class="section">
+  <h3>Önce → Sonra Karşılaştırması</h3>
+  <div class="split">
+    <div class="mockup">
+      <div class="mockup-header">Mevcut — Eski Stil</div>
+      <div class="mockup-body" style="background: #2a5a2a; min-height: 160px; position: relative; overflow: hidden; padding: 0;">
+        <!-- Old style flat green grid -->
+        <div style="position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: repeating-linear-gradient(90deg, #2a5a2a 0px, #2a5a2a 39px, #1a4a1a 39px, #1a4a1a 40px), repeating-linear-gradient(0deg, #2a5a2a 0px, #2a5a2a 39px, #1a4a1a 39px, #1a4a1a 40px);"></div>
+        <!-- Old path -->
+        <div style="position: absolute; bottom: 30px; left: 0; right: 0; height: 40px; background: repeating-linear-gradient(90deg, #8B7355 0px, #8B7355 19px, #7B6345 19px, #7B6345 20px); border-top: 2px solid #5B4325; border-bottom: 2px solid #5B4325;"></div>
+        <!-- Old towers - flat squares -->
+        <div style="position: absolute; bottom: 72px; left: 15%; width: 36px; height: 36px; background: #c0392b; border: 2px solid #96281b;"></div>
+        <div style="position: absolute; bottom: 72px; left: 45%; width: 36px; height: 36px; background: #2980b9; border: 2px solid #1a5276;"></div>
+        <!-- Old enemy - plain circle -->
+        <div style="position: absolute; bottom: 36px; left: 30%; width: 24px; height: 24px; background: #e74c3c; border-radius: 50%; border: 2px solid #c0392b;"></div>
+        <div style="position: absolute; bottom: 10px; left: 0; right: 0; text-align: center; color: rgba(255,255,255,0.4); font-size: 10px;">Düz renkler, basit şekiller</div>
+      </div>
+    </div>
+    <div class="mockup">
+      <div class="mockup-header">Yeni — Stylized 2D</div>
+      <div class="mockup-body" style="background: linear-gradient(180deg, #0a0e1a, #12102a, #0f1a12); min-height: 160px; position: relative; overflow: hidden; padding: 0;">
+        <div style="position: absolute; bottom: 0; left: 0; right: 0; height: 50px; background: linear-gradient(0deg, #0d1a0d, #1a2a1a);"></div>
+        <div style="position: absolute; bottom: 20px; left: 0; right: 0; height: 30px; background: linear-gradient(0deg, #2a2018, #3a3025, #2a2018); border-top: 1px solid rgba(212,168,67,0.3); box-shadow: 0 0 15px rgba(212,168,67,0.06);"></div>
+        <!-- New tower with glow -->
+        <div style="position: absolute; bottom: 50px; left: 13%; width: 36px; height: 50px; background: linear-gradient(180deg, #4a1a1a, #2d0e0e); border: 1px solid #6a3030; border-radius: 3px; box-shadow: 0 0 20px rgba(233,69,96,0.3);">
+          <div style="position: absolute; top: -8px; left: 50%; transform: translateX(-50%); width: 14px; height: 14px; background: radial-gradient(circle, #fff5e0, #e94560); border-radius: 50%; box-shadow: 0 0 15px rgba(233,69,96,0.7);"></div>
+        </div>
+        <!-- New tower 2 -->
+        <div style="position: absolute; bottom: 50px; left: 43%; width: 36px; height: 50px; background: linear-gradient(180deg, #1a3050, #102a50); border: 1px solid #2a5080; border-radius: 3px; box-shadow: 0 0 20px rgba(78,205,196,0.2);">
+          <div style="position: absolute; top: -8px; left: 50%; transform: translateX(-50%); width: 14px; height: 18px; background: linear-gradient(180deg, rgba(160,230,255,0.9), rgba(78,205,196,0.7)); clip-path: polygon(50% 0%, 10% 100%, 90% 100%); box-shadow: 0 0 12px rgba(78,205,196,0.5);"></div>
+        </div>
+        <!-- New enemy with glow -->
+        <div style="position: absolute; bottom: 24px; left: 28%; width: 22px; height: 22px; background: linear-gradient(180deg, #c0392b, #96281b); border-radius: 4px; border: 1px solid #e74c3c; box-shadow: 0 0 10px rgba(231,76,60,0.4);"></div>
+        <!-- Particles & projectile -->
+        <div style="position: absolute; top: 40%; left: 20%; width: 40px; height: 2px; background: linear-gradient(90deg, transparent, rgba(233,69,96,0.6)); transform: rotate(-10deg);"></div>
+        <div style="position: absolute; top: 35%; left: 18%; width: 2px; height: 2px; background: #e94560; border-radius: 50%; box-shadow: 0 0 4px #e94560;"></div>
+        <div style="position: absolute; bottom: 6px; left: 0; right: 0; text-align: center; color: rgba(255,255,255,0.4); font-size: 10px;">Gradient, glow, particle, atmosfer</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Key features -->
+<div class="section">
+  <h3>Bu Tarza Dahil Olan Özellikler</h3>
+  <div class="options" data-multiselect>
+    <div class="option" data-choice="particles" onclick="toggleSelect(this)">
+      <div class="letter" style="background: linear-gradient(135deg, #e94560, #ff6b81);">✦</div>
+      <div class="content">
+        <h3>Zengin Particle Sistemleri</h3>
+        <p>Her kule tipine özel parçacıklar — ateş kıvılcımları, buz kristalleri, yıldırım kıvılcımları. Mermi izleri, hasar efektleri, sinerji parıltıları.</p>
+      </div>
+    </div>
+    <div class="option" data-choice="lighting" onclick="toggleSelect(this)">
+      <div class="letter" style="background: linear-gradient(135deg, #ffd700, #ffb347);">☀</div>
+      <div class="content">
+        <h3>Dinamik Işıklandırma</h3>
+        <p>Her kulenin kendi renk ışığı — çevreyi aydınlatır, gölgeler oluşturur. Sinerji aktifken altın parıltı. Gece atmosferi + ay ışığı.</p>
+      </div>
+    </div>
+    <div class="option" data-choice="atmosphere" onclick="toggleSelect(this)">
+      <div class="letter" style="background: linear-gradient(135deg, #a78bfa, #7c3aed);">◈</div>
+      <div class="content">
+        <h3>Atmosferik Arka Plan</h3>
+        <p>Dağ siluetleri, yıldızlı gece gökyüzü, hafif sis katmanları, vignette efekti. Dalga ilerledikçe atmosfer koyulaşır.</p>
+      </div>
+    </div>
+    <div class="option" data-choice="ui" onclick="toggleSelect(this)">
+      <div class="letter" style="background: linear-gradient(135deg, #4ecdc4, #26a69a);">◻</div>
+      <div class="content">
+        <h3>Modern Glassmorphism UI</h3>
+        <p>Yarı saydam paneller, bulanık arka plan, neon vurgular, yumuşak gölgeler. HUD minimal ama bilgilendirici. Animasyonlu geçişler.</p>
+      </div>
+    </div>
+    <div class="option" data-choice="combat" onclick="toggleSelect(this)">
+      <div class="letter" style="background: linear-gradient(135deg, #e74c3c, #c0392b);">⚔</div>
+      <div class="content">
+        <h3>Etkileyici Savaş Efektleri</h3>
+        <p>Mermi izleri (trail), darbe patlamaları, ekran sarsıntısı (screen shake), hasar sayıları (floating text), ölüm animasyonları.</p>
+      </div>
+    </div>
+  </div>
+</div>

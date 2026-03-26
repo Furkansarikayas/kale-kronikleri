@@ -10,6 +10,7 @@ class DeathScreen extends StatelessWidget {
   final int enemiesKilled;
   final int totalDamageDealt;
   final String difficultyName;
+  final List<String> activeSynergies;
   final VoidCallback onContinue;
   final VoidCallback onMainMenu;
 
@@ -24,6 +25,7 @@ class DeathScreen extends StatelessWidget {
     required this.enemiesKilled,
     this.totalDamageDealt = 0,
     this.difficultyName = '',
+    this.activeSynergies = const [],
     required this.onContinue,
     required this.onMainMenu,
   });
@@ -31,6 +33,24 @@ class DeathScreen extends StatelessWidget {
   static const _gold = Color(0xFFBA7517);
   static const _cream = Color(0xFFF5EDD8);
   static const _darkBg = Color(0xFF1A150E);
+
+  static const _tips = [
+    'Buz + Yıldırım kombosu 2x hasar verir! Islak düşmanları çarp.',
+    'Destek kulesi komşu kulelerin hasarını artırır. Merkeze yerleştir!',
+    'Kulelerin hedefleme modunu değiştirebilirsin: Yakın, İlk, Güçlü.',
+    'Zehir kulesi zaman içinde hasar verir, zırhlı düşmanlara etkili.',
+    'Dikenli duvar yol üstüne yerleşir ve temas hasarı verir.',
+    'Sinerji için kuleleri yan yana koy (8 yönlü komşuluk).',
+    'Meta ağacından kalıcı güçlendirmeler satın al!',
+    'Oto-dalga açarak dalgalar arası beklemeyi atlayabilirsin.',
+    'Top kulesi alan hasarı verir - düşman gruplarına karşı güçlü.',
+    'Büyücü kulesi zincir hasarı ile birden fazla düşmana vurur.',
+  ];
+
+  String _getTip() {
+    final index = (wavesCompleted + enemiesKilled) % _tips.length;
+    return _tips[index];
+  }
 
   String _formatNumber(int n) {
     if (n >= 1000000) return '${(n / 1000000).toStringAsFixed(1)}M';
@@ -81,6 +101,23 @@ class DeathScreen extends StatelessWidget {
               _StatRow(label: 'Dusmanlar', value: '$enemiesKilled'),
               _StatRow(label: 'Kuleler', value: '$towersPlaced'),
               if (totalDamageDealt > 0) _StatRow(label: 'Toplam Hasar', value: _formatNumber(totalDamageDealt)),
+              if (activeSynergies.isNotEmpty) ...[
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    Icon(Icons.auto_awesome, color: _gold.withAlpha(180), size: 14),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        activeSynergies.join(', '),
+                        style: TextStyle(color: _gold.withAlpha(180), fontSize: 11),
+                        overflow: TextOverflow.ellipsis,
+                        maxLines: 2,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
               const Divider(color: _gold, height: 24),
               _StatRow(
                 label: 'Kazanilan Tas Ruhu',
@@ -88,6 +125,30 @@ class DeathScreen extends StatelessWidget {
                 highlight: true,
               ),
               _StatRow(label: 'Toplam Tas Ruhu', value: '$totalSpirit'),
+              // Tip for defeated players
+              if (!isVictory) ...[
+                const SizedBox(height: 12),
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: _gold.withAlpha(15),
+                    border: Border.all(color: _gold.withAlpha(60)),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(Icons.lightbulb_outline, color: _gold.withAlpha(180), size: 16),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          _getTip(),
+                          style: TextStyle(color: _cream.withAlpha(200), fontSize: 11, fontStyle: FontStyle.italic),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
               const SizedBox(height: 24),
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,

@@ -1,4 +1,5 @@
 import 'game_config.dart';
+import 'tower_data.dart';
 
 enum EnemyType {
   soldier, cavalry, goblin,
@@ -58,4 +59,22 @@ class EnemyData {
     EnemyType.dragonEmperor: EnemyStats(type: EnemyType.dragonEmperor, name: 'Ejderha İmparatoru', hp: 800, armor: 0, speed: 0.3, goldReward: 100, castleDamage: 5, difficulty: EnemyDifficulty.boss, isBoss: true),
   };
   static EnemyStats getStats(EnemyType type) => _stats[type]!;
+
+  /// Tower types that deal bonus damage or are especially effective against this enemy.
+  static List<TowerType> getWeaknesses(EnemyType type) {
+    switch (type) {
+      case EnemyType.soldier: return []; // basic, no special weakness
+      case EnemyType.cavalry: return [TowerType.ice, TowerType.spikeWall]; // slow stops speed
+      case EnemyType.goblin: return [TowerType.fire, TowerType.cannon]; // low HP, AoE
+      case EnemyType.armoredGiant: return [TowerType.dark, TowerType.poison]; // armor reduction
+      case EnemyType.undead: return [TowerType.holy, TowerType.fire]; // holy purge, fire burn
+      case EnemyType.shieldBearer: return [TowerType.dark, TowerType.lightning]; // bypass shield
+      case EnemyType.healer: return [TowerType.poison, TowerType.arrow]; // fast kill before heal
+      case EnemyType.burrower: return [TowerType.lightning, TowerType.cannon]; // AoE hits underground
+      case EnemyType.troll: return [TowerType.fire, TowerType.poison]; // prevents regen
+      case EnemyType.darkKnight: return [TowerType.holy, TowerType.ice]; // holy counter
+      case EnemyType.shadowLord: return [TowerType.holy, TowerType.lightning]; // boss weakness
+      case EnemyType.dragonEmperor: return [TowerType.ice, TowerType.dark]; // ice counter fire boss
+    }
+  }
 }

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../game/data/tower_data.dart';
+import '../game/data/synergy_data.dart';
 import '../game/components/towers/tower.dart';
 
 class GameHud extends StatefulWidget {
@@ -24,6 +25,13 @@ class GameHud extends StatefulWidget {
   final VoidCallback? onUpgradeTower;
   final VoidCallback? onToggleSpeed;
   final double gameSpeed;
+  final int secondaryShield;
+  final int maxSecondaryShield;
+  final bool showSynergyHints;
+  final bool autoWave;
+  final VoidCallback? onToggleAutoWave;
+  final VoidCallback? onCycleTargeting;
+  final int waveEnemyTotal;
 
   const GameHud({
     super.key,
@@ -48,28 +56,54 @@ class GameHud extends StatefulWidget {
     this.onUpgradeTower,
     this.onToggleSpeed,
     this.gameSpeed = 1.0,
+    this.secondaryShield = 0,
+    this.maxSecondaryShield = 0,
+    this.showSynergyHints = false,
+    this.autoWave = false,
+    this.onToggleAutoWave,
+    this.onCycleTargeting,
+    this.waveEnemyTotal = 0,
   });
 
   @override
   State<GameHud> createState() => _GameHudState();
 }
 
-class _GameHudState extends State<GameHud> {
-  static const _gold = Color(0xFFBA7517);
-  static const _cream = Color(0xFFF5EDD8);
-  static const _darkBg = Color(0xFF1A150E);
+class _GameHudState extends State<GameHud> with SingleTickerProviderStateMixin {
+  static const _bgDark = Color(0xFF0D0D15);
+  static const _bgPanel = Color(0xDD111118);
+  static const _gold = Color(0xFFD4A843);
+  static const _goldDark = Color(0xFFBA7517);
+  static const _cream = Color(0xFFF0E6D0);
+  static const _creamDim = Color(0xAAB8AE98);
+
+  late AnimationController _pulseController;
+
+  @override
+  void initState() {
+    super.initState();
+    _pulseController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1500),
+    )..repeat(reverse: true);
+  }
+
+  @override
+  void dispose() {
+    _pulseController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     return Column(
       children: [
-        // Top bar: HP, gold, wave, pause
         _buildTopBar(),
         const Spacer(),
-        // Tutorial hint on first wave prep
         if (widget.currentWave == 0 && !widget.isWaveActive)
           _buildTutorialHint(),
-        // Bottom bar: tower selection + start wave
+        if (widget.showSynergyHints && widget.selectedTower != null)
+          _buildSynergyHints(widget.selectedTower!),
         _buildBottomBar(),
       ],
     );
@@ -78,20 +112,32 @@ class _GameHudState extends State<GameHud> {
   Widget _buildTutorialHint() {
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 40, vertical: 4),
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
       decoration: BoxDecoration(
-        color: _darkBg.withAlpha(230),
-        border: Border.all(color: _gold.withAlpha(100)),
-        borderRadius: BorderRadius.circular(8),
+        gradient: LinearGradient(
+          colors: [_bgPanel, _bgDark.withAlpha(240)],
+        ),
+        border: Border.all(color: _gold.withAlpha(120)),
+        borderRadius: BorderRadius.circular(10),
+        boxShadow: [
+          BoxShadow(color: _gold.withAlpha(30), blurRadius: 12, spreadRadius: 1),
+        ],
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(Icons.info_outline, color: _gold, size: 16),
-          const SizedBox(width: 8),
+          Container(
+            padding: const EdgeInsets.all(4),
+            decoration: BoxDecoration(
+              color: _gold.withAlpha(40),
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(Icons.info_outline, color: _gold, size: 16),
+          ),
+          const SizedBox(width: 10),
           Text(
-            'Aşağıdan kule seç → Yeşil alana yerleştir → Dalga başlat!',
-            style: TextStyle(color: _cream.withAlpha(200), fontSize: 11),
+            'Asagidan kule sec -> Yesil alana yerlestir -> Dalga baslat!',
+            style: TextStyle(color: _cream.withAlpha(210), fontSize: 11, letterSpacing: 0.3),
           ),
         ],
       ),
@@ -100,101 +146,191 @@ class _GameHudState extends State<GameHud> {
 
   Widget _buildTopBar() {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-      color: _darkBg.withAlpha(200),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [Color(0xDD0D0D15), Color(0xCC12121A)],
+        ),
+        border: const Border(
+          bottom: BorderSide(color: Color(0x55D4A843), width: 1),
+        ),
+        boxShadow: [
+          BoxShadow(color: Colors.black.withAlpha(80), blurRadius: 8, offset: const Offset(0, 2)),
+        ],
+      ),
       child: SafeArea(
         bottom: false,
-        child: Row(
-          children: [
-            // HP bar
-            _buildHpBar(),
-            const SizedBox(width: 16),
-            // Gold
-            Icon(Icons.monetization_on, color: _gold, size: 20),
-            const SizedBox(width: 4),
-            Text(
-              '${widget.gold}',
-              style: const TextStyle(color: _cream, fontSize: 16, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(width: 16),
-            // Wave counter
-            Icon(Icons.waves, color: _cream.withAlpha(180), size: 18),
-            const SizedBox(width: 4),
-            Text(
-              '${widget.currentWave}/${widget.totalWaves}',
-              style: const TextStyle(color: _cream, fontSize: 14),
-            ),
-            const SizedBox(width: 8),
-            // Tower slots
-            Icon(Icons.grid_view, color: _cream.withAlpha(180), size: 18),
-            const SizedBox(width: 4),
-            Text(
-              '${widget.towersPlaced}/${widget.towerSlots}',
-              style: const TextStyle(color: _cream, fontSize: 14),
-            ),
-            // Enemy count (during wave)
-            if (widget.isWaveActive && widget.enemiesAlive > 0) ...[
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+          child: Row(
+            children: [
+              _buildHpBar(),
+              const SizedBox(width: 12),
+              _buildGoldDisplay(),
+              const SizedBox(width: 10),
+              _buildWaveCounter(),
               const SizedBox(width: 8),
-              Icon(Icons.pest_control, color: Colors.red.withAlpha(180), size: 16),
+              _buildSlotsBadge(),
+              if (widget.isWaveActive && widget.waveEnemyTotal > 0) ...[
+                const SizedBox(width: 8),
+                _buildEnemyCounter(),
+              ],
+              const Spacer(),
+              if (widget.activeSynergies.isNotEmpty) ...[
+                _buildSynergyBadge(),
+                const SizedBox(width: 6),
+              ],
+              _buildAutoWaveButton(),
+              const SizedBox(width: 4),
+              _buildSpeedButton(),
+              const SizedBox(width: 6),
+              _buildPauseButton(),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildGoldDisplay() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [_bgDark.withAlpha(200), _bgDark.withAlpha(150)],
+        ),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: _gold.withAlpha(120), width: 1),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            decoration: BoxDecoration(
+              boxShadow: [
+                BoxShadow(color: _gold.withAlpha(80), blurRadius: 6, spreadRadius: 1),
+              ],
+            ),
+            child: const Icon(Icons.monetization_on, color: _gold, size: 18),
+          ),
+          const SizedBox(width: 5),
+          Text(
+            '${widget.gold}',
+            style: const TextStyle(
+              color: _gold,
+              fontSize: 15,
+              fontWeight: FontWeight.bold,
+              shadows: [Shadow(color: Color(0x88D4A843), blurRadius: 4)],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildWaveCounter() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            const Color(0xFF1A1A2E),
+            const Color(0xFF16213E),
+          ],
+        ),
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: _creamDim.withAlpha(80), width: 1),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(Icons.shield, color: _creamDim, size: 14),
+          const SizedBox(width: 4),
+          Text(
+            '${widget.currentWave}/${widget.totalWaves}',
+            style: const TextStyle(color: _cream, fontSize: 13, fontWeight: FontWeight.w600),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSlotsBadge() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      decoration: BoxDecoration(
+        color: _bgDark.withAlpha(160),
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: _creamDim.withAlpha(50)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.grid_view, color: _creamDim, size: 13),
+          const SizedBox(width: 3),
+          Text(
+            '${widget.towersPlaced}/${widget.towerSlots}',
+            style: const TextStyle(color: _cream, fontSize: 12),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildEnemyCounter() {
+    return AnimatedBuilder(
+      animation: _pulseController,
+      builder: (context, child) {
+        final opacity = 0.6 + 0.4 * _pulseController.value;
+        return Container(
+          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+          decoration: BoxDecoration(
+            color: Colors.red.withAlpha((40 * opacity).round()),
+            borderRadius: BorderRadius.circular(6),
+            border: Border.all(color: Colors.red.withAlpha((120 * opacity).round())),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.pest_control, color: Colors.red.withAlpha((200 * opacity).round()), size: 13),
               const SizedBox(width: 3),
               Text(
-                '${widget.enemiesAlive}',
-                style: TextStyle(color: Colors.red.withAlpha(200), fontSize: 13),
+                '${widget.enemiesAlive}/${widget.waveEnemyTotal}',
+                style: TextStyle(color: Colors.red.withAlpha(220), fontSize: 12, fontWeight: FontWeight.w600),
               ),
             ],
-            const Spacer(),
-            // Active synergies indicator
-            if (widget.activeSynergies.isNotEmpty)
-              Tooltip(
-                message: widget.activeSynergies.join('\n'),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                  decoration: BoxDecoration(
-                    color: _gold.withAlpha(60),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Icon(Icons.auto_awesome, color: _gold, size: 16),
-                      const SizedBox(width: 4),
-                      Text(
-                        '${widget.activeSynergies.length}',
-                        style: const TextStyle(color: _gold, fontSize: 14),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            const SizedBox(width: 8),
-            // Speed button
-            GestureDetector(
-              onTap: widget.onToggleSpeed,
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                decoration: BoxDecoration(
-                  color: widget.gameSpeed > 1 ? _gold.withAlpha(80) : Colors.transparent,
-                  borderRadius: BorderRadius.circular(4),
-                  border: Border.all(color: _cream.withAlpha(80)),
-                ),
-                child: Text(
-                  '${widget.gameSpeed.toStringAsFixed(0)}x',
-                  style: TextStyle(
-                    color: widget.gameSpeed > 1 ? _gold : _cream,
-                    fontSize: 12,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ),
-            ),
-            const SizedBox(width: 8),
-            // Pause button
-            IconButton(
-              onPressed: widget.onPause,
-              icon: const Icon(Icons.pause, color: _cream),
-              iconSize: 24,
-              padding: EdgeInsets.zero,
-              constraints: const BoxConstraints(),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildSynergyBadge() {
+    return Tooltip(
+      message: widget.activeSynergies.join('\n'),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            colors: [_gold.withAlpha(50), _gold.withAlpha(30)],
+          ),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: _gold.withAlpha(100)),
+          boxShadow: [
+            BoxShadow(color: _gold.withAlpha(20), blurRadius: 8),
+          ],
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.auto_awesome, color: _gold, size: 14),
+            const SizedBox(width: 4),
+            Text(
+              '${widget.activeSynergies.length}',
+              style: const TextStyle(color: _gold, fontSize: 13, fontWeight: FontWeight.bold),
             ),
           ],
         ),
@@ -202,32 +338,128 @@ class _GameHudState extends State<GameHud> {
     );
   }
 
+  Widget _buildAutoWaveButton() {
+    final active = widget.autoWave;
+    return GestureDetector(
+      onTap: widget.onToggleAutoWave,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        decoration: BoxDecoration(
+          gradient: active
+              ? const LinearGradient(colors: [Color(0x55D4A843), Color(0x33BA7517)])
+              : null,
+          color: active ? null : Colors.transparent,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: active ? _gold : _creamDim.withAlpha(60),
+            width: active ? 1.5 : 1,
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.fast_forward,
+              color: active ? _gold : _creamDim.withAlpha(140),
+              size: 14,
+            ),
+            const SizedBox(width: 3),
+            Text(
+              'Oto',
+              style: TextStyle(
+                color: active ? _gold : _creamDim.withAlpha(140),
+                fontSize: 10,
+                fontWeight: active ? FontWeight.bold : FontWeight.normal,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSpeedButton() {
+    final fast = widget.gameSpeed > 1;
+    return GestureDetector(
+      onTap: widget.onToggleSpeed,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        decoration: BoxDecoration(
+          gradient: fast
+              ? const LinearGradient(colors: [Color(0x55D4A843), Color(0x33BA7517)])
+              : null,
+          color: fast ? null : Colors.transparent,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: fast ? _gold : _creamDim.withAlpha(60),
+            width: fast ? 1.5 : 1,
+          ),
+        ),
+        child: Text(
+          '${widget.gameSpeed.toStringAsFixed(0)}x',
+          style: TextStyle(
+            color: fast ? _gold : _cream,
+            fontSize: 12,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPauseButton() {
+    return GestureDetector(
+      onTap: widget.onPause,
+      child: Container(
+        padding: const EdgeInsets.all(5),
+        decoration: BoxDecoration(
+          color: _bgDark.withAlpha(180),
+          shape: BoxShape.circle,
+          border: Border.all(color: _creamDim.withAlpha(80)),
+        ),
+        child: const Icon(Icons.pause, color: _cream, size: 20),
+      ),
+    );
+  }
+
   Widget _buildHpBar() {
     final ratio = widget.maxCastleHp > 0 ? widget.castleHp / widget.maxCastleHp : 0.0;
-    final barColor = ratio > 0.5
-        ? Color.lerp(Colors.yellow, Colors.green, (ratio - 0.5) * 2)!
-        : Color.lerp(Colors.red, Colors.yellow, ratio * 2)!;
+    final hasShield = widget.maxSecondaryShield > 0;
 
     return SizedBox(
-      width: 100,
+      width: 110,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
         children: [
-          Text(
-            '${widget.castleHp}/${widget.maxCastleHp}',
-            style: const TextStyle(color: _cream, fontSize: 10),
+          Row(
+            children: [
+              const Icon(Icons.favorite, color: Color(0xFFCC4444), size: 10),
+              const SizedBox(width: 3),
+              Text(
+                hasShield
+                    ? '${widget.castleHp}/${widget.maxCastleHp} +${widget.secondaryShield}'
+                    : '${widget.castleHp}/${widget.maxCastleHp}',
+                style: const TextStyle(color: _cream, fontSize: 10, fontWeight: FontWeight.w500),
+              ),
+            ],
           ),
-          const SizedBox(height: 2),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(3),
-            child: LinearProgressIndicator(
-              value: ratio,
-              backgroundColor: Colors.grey[800],
-              valueColor: AlwaysStoppedAnimation(barColor),
-              minHeight: 8,
+          const SizedBox(height: 3),
+          CustomPaint(
+            size: const Size(110, 10),
+            painter: _HpBarPainter(ratio: ratio, isFull: ratio >= 1.0),
+          ),
+          if (hasShield) ...[
+            const SizedBox(height: 2),
+            CustomPaint(
+              size: const Size(110, 5),
+              painter: _ShieldBarPainter(
+                ratio: widget.maxSecondaryShield > 0
+                    ? widget.secondaryShield / widget.maxSecondaryShield
+                    : 0.0,
+              ),
             ),
-          ),
+          ],
         ],
       ),
     );
@@ -237,63 +469,171 @@ class _GameHudState extends State<GameHud> {
     final placedTower = widget.selectedPlacedTower;
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      color: _darkBg.withAlpha(220),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [Color(0xCC12121A), Color(0xDD0D0D15)],
+        ),
+        border: const Border(
+          top: BorderSide(color: Color(0x44D4A843), width: 1),
+        ),
+        boxShadow: [
+          BoxShadow(color: Colors.black.withAlpha(80), blurRadius: 8, offset: const Offset(0, -2)),
+        ],
+      ),
       child: SafeArea(
         top: false,
-        child: Row(
-          children: [
-            // Tower info panel or tower grid
-            if (placedTower != null)
-              Expanded(child: _buildTowerInfoPanel(placedTower))
-            else
-              Expanded(child: _buildTowerGrid()),
-            const SizedBox(width: 8),
-            // Start wave / wave active indicator
-            if (!widget.isWaveActive)
-              ElevatedButton.icon(
-                onPressed: widget.onStartWave,
-                icon: const Icon(Icons.play_arrow, size: 20),
-                label: const Text('Dalga'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: _gold,
-                  foregroundColor: _darkBg,
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                ),
-              )
-            else
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                decoration: BoxDecoration(
-                  color: Colors.red.withAlpha(100),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: const Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(Icons.warning, color: Colors.red, size: 18),
-                    SizedBox(width: 4),
-                    Text('DALGA', style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold, fontSize: 12)),
-                  ],
-                ),
-              ),
-          ],
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+          child: Row(
+            children: [
+              if (placedTower != null)
+                Expanded(child: _buildTowerInfoPanel(placedTower))
+              else
+                Expanded(child: _buildTowerGrid()),
+              const SizedBox(width: 8),
+              if (!widget.isWaveActive)
+                _buildStartWaveButton()
+              else
+                _buildWaveActiveIndicator(),
+            ],
+          ),
         ),
       ),
+    );
+  }
+
+  Widget _buildStartWaveButton() {
+    return AnimatedBuilder(
+      animation: _pulseController,
+      builder: (context, child) {
+        final glowIntensity = 0.3 + 0.7 * _pulseController.value;
+        return GestureDetector(
+          onTap: widget.onStartWave,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [_gold, _goldDark],
+              ),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: const Color(0xFFE8C878), width: 1),
+              boxShadow: [
+                BoxShadow(
+                  color: _gold.withAlpha((60 * glowIntensity).round()),
+                  blurRadius: 12 * glowIntensity,
+                  spreadRadius: 2 * glowIntensity,
+                ),
+                BoxShadow(
+                  color: _goldDark.withAlpha((40 * glowIntensity).round()),
+                  blurRadius: 20 * glowIntensity,
+                  spreadRadius: 4 * glowIntensity,
+                ),
+              ],
+            ),
+            child: const Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.shield, color: _bgDark, size: 20),
+                SizedBox(width: 6),
+                Text(
+                  'Dalga',
+                  style: TextStyle(
+                    color: _bgDark,
+                    fontSize: 14,
+                    fontWeight: FontWeight.bold,
+                    letterSpacing: 1,
+                    shadows: [Shadow(color: Color(0x44FFFFFF), blurRadius: 2)],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildWaveActiveIndicator() {
+    return AnimatedBuilder(
+      animation: _pulseController,
+      builder: (context, child) {
+        final pulse = 0.6 + 0.4 * _pulseController.value;
+        return Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: [
+                Colors.red.withAlpha((60 * pulse).round()),
+                Colors.red.withAlpha((30 * pulse).round()),
+              ],
+            ),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: Colors.red.withAlpha((150 * pulse).round()), width: 1.5),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.red.withAlpha((30 * pulse).round()),
+                blurRadius: 10 * pulse,
+                spreadRadius: 1,
+              ),
+            ],
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.gavel, color: Colors.red.withAlpha((220 * pulse).round()), size: 18),
+              const SizedBox(width: 5),
+              Text(
+                'DALGA',
+                style: TextStyle(
+                  color: Colors.red.withAlpha(230),
+                  fontWeight: FontWeight.bold,
+                  fontSize: 12,
+                  letterSpacing: 1,
+                ),
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 
   Widget _buildTowerInfoPanel(Tower tower) {
     final stats = tower.stats;
     final tierName = stats.tierNames[tower.tier - 1];
+    final canTarget = tower.type != TowerType.spikeWall && tower.type != TowerType.support;
+    final tColor = _towerTypeColor(tower.type);
 
-    return SizedBox(
+    return Container(
       height: 80,
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [_bgPanel, _bgDark.withAlpha(220)],
+        ),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: tColor.withAlpha(100)),
+        boxShadow: [
+          BoxShadow(color: tColor.withAlpha(20), blurRadius: 8),
+        ],
+      ),
       child: Row(
         children: [
-          // Tower info
-          Icon(_towerIcon(tower.type), color: _cream, size: 28),
-          const SizedBox(width: 8),
+          Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              color: tColor.withAlpha(40),
+              shape: BoxShape.circle,
+              border: Border.all(color: tColor.withAlpha(120)),
+            ),
+            child: Icon(_towerIcon(tower.type), color: tColor, size: 22),
+          ),
+          const SizedBox(width: 10),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -301,57 +641,154 @@ class _GameHudState extends State<GameHud> {
               children: [
                 Text(
                   '$tierName (Lv.${tower.tier})',
-                  style: const TextStyle(color: _cream, fontSize: 13, fontWeight: FontWeight.bold),
+                  style: TextStyle(
+                    color: _cream,
+                    fontSize: 13,
+                    fontWeight: FontWeight.bold,
+                    shadows: [Shadow(color: tColor.withAlpha(80), blurRadius: 4)],
+                  ),
                 ),
+                const SizedBox(height: 2),
                 Text(
                   tower.type == TowerType.support
-                      ? 'Buff: +${(15 * tower.tier)}% hasar komşu kulelere'
+                      ? 'Buff: +${(15 * tower.tier)}% hasar komsu kulelere'
                       : 'Hasar: ${tower.currentDamage}  Menzil: ${tower.currentRange.toStringAsFixed(1)}',
                   style: TextStyle(color: _cream.withAlpha(180), fontSize: 10),
                 ),
                 Text(
                   'Kills: ${tower.kills}  Toplam: ${tower.totalDamageDealt}',
-                  style: TextStyle(color: _cream.withAlpha(120), fontSize: 9),
+                  style: TextStyle(color: _creamDim.withAlpha(160), fontSize: 9),
                 ),
               ],
             ),
           ),
-          // Upgrade button
-          if (tower.canUpgrade)
+          if (canTarget)
             Padding(
               padding: const EdgeInsets.only(right: 6),
-              child: ElevatedButton(
-                onPressed: widget.gold >= tower.upgradeCost ? widget.onUpgradeTower : null,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.green[700],
-                  foregroundColor: _cream,
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  minimumSize: Size.zero,
-                ),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Icon(Icons.arrow_upward, size: 16),
-                    Text('${tower.upgradeCost}g', style: const TextStyle(fontSize: 9)),
-                  ],
+              child: GestureDetector(
+                onTap: widget.onCycleTargeting,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 5),
+                  decoration: BoxDecoration(
+                    color: _bgDark,
+                    border: Border.all(color: _creamDim.withAlpha(80)),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(_targetingIcon(tower.targetingMode), color: _cream, size: 16),
+                      const SizedBox(height: 1),
+                      Text(
+                        _targetingLabel(tower.targetingMode),
+                        style: TextStyle(color: _creamDim.withAlpha(200), fontSize: 7),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),
-          // Sell button
-          ElevatedButton(
-            onPressed: widget.onSellTower,
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.red[700],
-              foregroundColor: _cream,
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-              minimumSize: Size.zero,
+          if (tower.canUpgrade)
+            Padding(
+              padding: const EdgeInsets.only(right: 6),
+              child: GestureDetector(
+                onTap: widget.gold >= tower.upgradeCost ? widget.onUpgradeTower : null,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  decoration: BoxDecoration(
+                    gradient: widget.gold >= tower.upgradeCost
+                        ? const LinearGradient(colors: [Color(0xFF2D7D2D), Color(0xFF1B5E1B)])
+                        : null,
+                    color: widget.gold >= tower.upgradeCost ? null : Colors.grey[800],
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(
+                      color: widget.gold >= tower.upgradeCost
+                          ? Colors.green.withAlpha(160)
+                          : Colors.grey.withAlpha(60),
+                    ),
+                  ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.arrow_upward,
+                        size: 16,
+                        color: widget.gold >= tower.upgradeCost ? _cream : Colors.grey,
+                      ),
+                      Text(
+                        '${tower.upgradeCost}g',
+                        style: TextStyle(
+                          fontSize: 9,
+                          color: widget.gold >= tower.upgradeCost ? _gold : Colors.grey,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
             ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Icon(Icons.sell, size: 16),
-                Text('+${tower.sellValue}g', style: const TextStyle(fontSize: 9)),
-              ],
+          GestureDetector(
+            onTap: widget.onSellTower,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(colors: [Color(0xFF8B2020), Color(0xFF6B1515)]),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.red.withAlpha(120)),
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.sell, size: 16, color: _cream),
+                  Text(
+                    '+${tower.sellValue}g',
+                    style: const TextStyle(fontSize: 9, color: _gold, fontWeight: FontWeight.bold),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSynergyHints(TowerType selected) {
+    final relevant = SynergyData.all.where((s) =>
+      s.requiredTowers.contains(selected)
+    ).toList();
+    if (relevant.isEmpty) return const SizedBox.shrink();
+
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 40, vertical: 2),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [_bgPanel, _bgDark.withAlpha(230)],
+        ),
+        border: Border.all(color: _gold.withAlpha(100)),
+        borderRadius: BorderRadius.circular(8),
+        boxShadow: [
+          BoxShadow(color: _gold.withAlpha(15), blurRadius: 8),
+        ],
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(Icons.auto_awesome, color: _gold, size: 12),
+          const SizedBox(width: 6),
+          Flexible(
+            child: Text(
+              relevant.map((s) {
+                final others = s.requiredTowers
+                    .where((t) => t != selected || s.requiredTowers.where((r) => r == t).length > 1)
+                    .toSet()
+                    .map((t) => TowerData.getStats(t).name.split(' ').first)
+                    .join('+');
+                return '${s.name} (${others.isNotEmpty ? "+$others" : "\u00d73"})';
+              }).join('  |  '),
+              style: TextStyle(color: _cream.withAlpha(200), fontSize: 9),
+              overflow: TextOverflow.ellipsis,
             ),
           ),
         ],
@@ -362,22 +799,18 @@ class _GameHudState extends State<GameHud> {
   Widget _buildTowerGrid() {
     final towers = widget.availableTowers;
     return SizedBox(
-      height: 80,
-      child: GridView.builder(
+      height: 72,
+      child: ListView.separated(
         scrollDirection: Axis.horizontal,
-        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-          crossAxisCount: 2,
-          mainAxisSpacing: 4,
-          crossAxisSpacing: 4,
-          childAspectRatio: 0.85,
-        ),
         itemCount: towers.length,
+        separatorBuilder: (_, __) => const SizedBox(width: 6),
         itemBuilder: (context, index) {
           final tower = towers[index];
           final stats = TowerData.getStats(tower);
           final isSelected = widget.selectedTower == tower;
           final canAfford = widget.gold >= stats.cost;
           final hasSlot = widget.towersPlaced < widget.towerSlots;
+          final tColor = _towerTypeColor(tower);
 
           return Tooltip(
             message: '${stats.name}\nHasar: ${stats.damage} | Menzil: ${stats.range} | Hiz: ${stats.fireRate}s\n${_towerAbility(tower)}',
@@ -387,32 +820,70 @@ class _GameHudState extends State<GameHud> {
                   widget.onTowerSelected(isSelected ? null : tower);
                 }
               },
-              child: Container(
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 200),
+                width: 62,
                 decoration: BoxDecoration(
-                  color: isSelected ? _gold.withAlpha(100) : _darkBg,
-                  border: Border.all(
-                    color: isSelected ? _gold : (canAfford ? _cream.withAlpha(80) : Colors.red.withAlpha(80)),
-                    width: isSelected ? 2 : 1,
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: isSelected
+                        ? [const Color(0xFF2A2520), const Color(0xFF1A1510)]
+                        : canAfford
+                            ? [const Color(0xFF18181F), const Color(0xFF0E0E14)]
+                            : [const Color(0xFF1A1215), const Color(0xFF0E0A0C)],
                   ),
-                  borderRadius: BorderRadius.circular(4),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border(
+                    left: BorderSide(color: canAfford ? tColor : Colors.grey[700]!, width: 3),
+                    top: BorderSide(
+                      color: isSelected ? _gold : (canAfford ? _creamDim.withAlpha(40) : Colors.red.withAlpha(30)),
+                      width: isSelected ? 1.5 : 0.5,
+                    ),
+                    right: BorderSide(
+                      color: isSelected ? _gold : (canAfford ? _creamDim.withAlpha(40) : Colors.red.withAlpha(30)),
+                      width: isSelected ? 1.5 : 0.5,
+                    ),
+                    bottom: BorderSide(
+                      color: isSelected ? _gold : (canAfford ? _creamDim.withAlpha(40) : Colors.red.withAlpha(30)),
+                      width: isSelected ? 1.5 : 0.5,
+                    ),
+                  ),
+                  boxShadow: isSelected
+                      ? [BoxShadow(color: _gold.withAlpha(50), blurRadius: 8, spreadRadius: 1)]
+                      : null,
                 ),
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
+                    const SizedBox(height: 4),
                     Icon(
                       _towerIcon(tower),
-                      color: canAfford ? _cream : Colors.grey,
+                      color: canAfford ? tColor : Colors.grey[600],
                       size: 18,
                     ),
-                    const SizedBox(height: 2),
+                    const SizedBox(height: 3),
                     Text(
-                      '${stats.cost}',
+                      stats.name.split(' ').first,
                       style: TextStyle(
-                        color: canAfford ? _gold : Colors.grey,
-                        fontSize: 10,
+                        color: canAfford ? _cream.withAlpha(200) : Colors.grey[600],
+                        fontSize: 8,
+                        height: 1.1,
+                        fontWeight: FontWeight.w500,
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 1),
+                    Text(
+                      '${stats.cost}g',
+                      style: TextStyle(
+                        color: canAfford ? _gold : Colors.grey[600],
+                        fontSize: 9,
                         fontWeight: FontWeight.bold,
+                        height: 1.1,
                       ),
                     ),
+                    const SizedBox(height: 2),
                   ],
                 ),
               ),
@@ -423,20 +894,53 @@ class _GameHudState extends State<GameHud> {
     );
   }
 
+  Color _towerTypeColor(TowerType type) {
+    switch (type) {
+      case TowerType.arrow: return const Color(0xFFCCCCCC);
+      case TowerType.ice: return const Color(0xFF22CCEE);
+      case TowerType.fire: return const Color(0xFFFF5511);
+      case TowerType.lightning: return const Color(0xFFFFDD00);
+      case TowerType.poison: return const Color(0xFF33FF33);
+      case TowerType.cannon: return const Color(0xFF8899AA);
+      case TowerType.spikeWall: return const Color(0xFF8B6535);
+      case TowerType.support: return const Color(0xFFDDCC00);
+      case TowerType.water: return const Color(0xFF4488FF);
+      case TowerType.wizard: return const Color(0xFFAA33DD);
+      case TowerType.dark: return const Color(0xFF8B00FF);
+      case TowerType.holy: return const Color(0xFFFFDD66);
+    }
+  }
+
   String _towerAbility(TowerType type) {
     switch (type) {
-      case TowerType.arrow: return 'Hızlı ateş';
-      case TowerType.ice: return 'Yavaşlatma efekti';
-      case TowerType.fire: return 'Yanma hasarı';
-      case TowerType.lightning: return 'Islak düşmanlara 2x hasar';
-      case TowerType.poison: return 'Zaman içinde zehir hasarı';
-      case TowerType.cannon: return 'Alan hasarı (AoE patlama)';
-      case TowerType.spikeWall: return 'Yol üzerine yerleşir, temas hasarı';
-      case TowerType.support: return 'Komşu kuleleri güçlendirir';
-      case TowerType.water: return 'Islak efekti (yıldırım ile combo)';
-      case TowerType.wizard: return 'Zincir hasar (çoklu hedef)';
-      case TowerType.dark: return 'Lanet: zırh azaltma';
-      case TowerType.holy: return 'Karanlık düşmanlara +%50 hasar';
+      case TowerType.arrow: return 'Hizli ates';
+      case TowerType.ice: return 'Yavaslatma efekti';
+      case TowerType.fire: return 'Yanma hasari';
+      case TowerType.lightning: return 'Islak dusmanlara 2x hasar';
+      case TowerType.poison: return 'Zaman icinde zehir hasari';
+      case TowerType.cannon: return 'Alan hasari (AoE patlama)';
+      case TowerType.spikeWall: return 'Yol uzerine yerlesir, temas hasari';
+      case TowerType.support: return 'Komsu kuleleri guclendirir';
+      case TowerType.water: return 'Islak efekti (yildirim ile combo)';
+      case TowerType.wizard: return 'Zincir hasar (coklu hedef)';
+      case TowerType.dark: return 'Lanet: zirh azaltma';
+      case TowerType.holy: return 'Karanlik dusmanlara +%50 hasar';
+    }
+  }
+
+  IconData _targetingIcon(TargetingMode mode) {
+    switch (mode) {
+      case TargetingMode.nearest: return Icons.near_me;
+      case TargetingMode.first: return Icons.first_page;
+      case TargetingMode.strongest: return Icons.fitness_center;
+    }
+  }
+
+  String _targetingLabel(TargetingMode mode) {
+    switch (mode) {
+      case TargetingMode.nearest: return 'Yakin';
+      case TargetingMode.first: return 'Ilk';
+      case TargetingMode.strongest: return 'Guclu';
     }
   }
 
@@ -456,4 +960,124 @@ class _GameHudState extends State<GameHud> {
       case TowerType.holy: return Icons.wb_sunny;
     }
   }
+}
+
+// Custom HP bar painter with gradient fill, rounded ends, inner shadow, and glow
+class _HpBarPainter extends CustomPainter {
+  final double ratio;
+  final bool isFull;
+
+  _HpBarPainter({required this.ratio, required this.isFull});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final h = size.height;
+    final w = size.width;
+    final radius = h / 2;
+
+    // Background with embossed border
+    final bgRect = RRect.fromRectAndRadius(Rect.fromLTWH(0, 0, w, h), Radius.circular(radius));
+    canvas.drawRRect(bgRect, Paint()..color = const Color(0xFF1A1A22));
+
+    // Border (embossed feel)
+    canvas.drawRRect(
+      bgRect,
+      Paint()
+        ..color = const Color(0xFF333340)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1.0,
+    );
+
+    if (ratio > 0) {
+      final fillW = w * ratio.clamp(0.0, 1.0);
+      final fillRect = RRect.fromRectAndRadius(Rect.fromLTWH(0, 0, fillW, h), Radius.circular(radius));
+
+      // Determine bar color based on ratio
+      Color startColor, endColor;
+      if (ratio > 0.5) {
+        startColor = Color.lerp(const Color(0xFFCCCC00), const Color(0xFF22AA22), (ratio - 0.5) * 2)!;
+        endColor = Color.lerp(const Color(0xFFAAAA00), const Color(0xFF118811), (ratio - 0.5) * 2)!;
+      } else {
+        startColor = Color.lerp(const Color(0xFFCC2222), const Color(0xFFCCCC00), ratio * 2)!;
+        endColor = Color.lerp(const Color(0xFFAA1111), const Color(0xFFAAAA00), ratio * 2)!;
+      }
+
+      // Gradient fill
+      final fillPaint = Paint()
+        ..shader = LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [startColor, endColor],
+        ).createShader(Rect.fromLTWH(0, 0, fillW, h));
+      canvas.drawRRect(fillRect, fillPaint);
+
+      // Inner highlight (top edge shine)
+      final highlightPaint = Paint()
+        ..shader = LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.center,
+          colors: [Colors.white.withAlpha(60), Colors.transparent],
+        ).createShader(Rect.fromLTWH(0, 0, fillW, h / 2));
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(Rect.fromLTWH(1, 1, fillW - 2, h / 2), Radius.circular(radius)),
+        highlightPaint,
+      );
+
+      // Glow when full
+      if (isFull) {
+        canvas.drawRRect(
+          bgRect,
+          Paint()
+            ..color = const Color(0xFF22AA22).withAlpha(40)
+            ..maskFilter = const MaskFilter.blur(BlurStyle.outer, 6),
+        );
+      }
+    }
+
+    // Inner shadow on top
+    canvas.drawRRect(
+      bgRect,
+      Paint()
+        ..shader = LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [Colors.black.withAlpha(50), Colors.transparent],
+        ).createShader(Rect.fromLTWH(0, 0, w, h * 0.4))
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1.5,
+    );
+  }
+
+  @override
+  bool shouldRepaint(_HpBarPainter old) => old.ratio != ratio || old.isFull != isFull;
+}
+
+// Shield bar painter
+class _ShieldBarPainter extends CustomPainter {
+  final double ratio;
+
+  _ShieldBarPainter({required this.ratio});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final h = size.height;
+    final w = size.width;
+    final radius = h / 2;
+
+    final bgRect = RRect.fromRectAndRadius(Rect.fromLTWH(0, 0, w, h), Radius.circular(radius));
+    canvas.drawRRect(bgRect, Paint()..color = const Color(0xFF0A0A14));
+
+    if (ratio > 0) {
+      final fillW = w * ratio.clamp(0.0, 1.0);
+      final fillRect = RRect.fromRectAndRadius(Rect.fromLTWH(0, 0, fillW, h), Radius.circular(radius));
+      final fillPaint = Paint()
+        ..shader = const LinearGradient(
+          colors: [Color(0xFF3366CC), Color(0xFF4488FF)],
+        ).createShader(Rect.fromLTWH(0, 0, fillW, h));
+      canvas.drawRRect(fillRect, fillPaint);
+    }
+  }
+
+  @override
+  bool shouldRepaint(_ShieldBarPainter old) => old.ratio != ratio;
 }

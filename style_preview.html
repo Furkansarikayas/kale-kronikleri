@@ -1,0 +1,1120 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<title>Kale Kronikleri - Görsel Stil Seçimi</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { background: #0a0a12; color: #e8dcc8; font-family: 'Segoe UI', sans-serif; overflow-x: hidden; }
+h1 { text-align: center; padding: 30px; font-size: 28px; color: #d4a843; letter-spacing: 3px; text-shadow: 0 0 20px rgba(212,168,67,0.3); }
+h2 { color: #d4a843; margin: 20px 0 10px; font-size: 20px; }
+.section { max-width: 1200px; margin: 0 auto 40px; padding: 0 20px; }
+.options { display: flex; gap: 24px; flex-wrap: wrap; justify-content: center; }
+.option { background: #12121a; border: 2px solid #333; border-radius: 12px; padding: 16px; cursor: pointer; transition: all 0.3s; }
+.option:hover { border-color: #d4a843; box-shadow: 0 0 20px rgba(212,168,67,0.2); }
+.option.selected { border-color: #d4a843; box-shadow: 0 0 30px rgba(212,168,67,0.4); background: #1a1a25; }
+.option canvas { display: block; border-radius: 8px; }
+.option .label { text-align: center; margin-top: 10px; font-weight: bold; font-size: 14px; }
+.option .desc { text-align: center; margin-top: 4px; font-size: 11px; color: #998; }
+.note { text-align: center; padding: 20px; color: #887; font-size: 13px; }
+.summary { text-align: center; padding: 30px; background: #15151f; border-top: 1px solid #d4a843; margin-top: 40px; }
+.summary h2 { margin-bottom: 15px; }
+#selected-summary { font-size: 16px; line-height: 1.8; }
+</style>
+</head>
+<body>
+
+<h1>KALE KRONiKLERi - Gorsel Stil Secimi</h1>
+<p class="note">Her kategoriden birini sec. Secimin bana soyle, ben de durmadan finale kadar gideyim.</p>
+
+<!-- TERRAIN STYLES -->
+<div class="section">
+<h2>1. Arazi / Terrain Stili</h2>
+<div class="options" id="terrain-options">
+<div class="option" data-choice="terrain-A" onclick="selectOption('terrain', this)">
+<canvas id="terrain-a" width="320" height="200"></canvas>
+<div class="label">A) Cizgi Film / Cartoon</div>
+<div class="desc">Parlak renkler, kalin kenarlar, temiz goruntu</div>
+</div>
+<div class="option" data-choice="terrain-B" onclick="selectOption('terrain', this)">
+<canvas id="terrain-b" width="320" height="200"></canvas>
+<div class="label">B) Piksel Sanat / Pixel Art</div>
+<div class="desc">Retro piksel stili, nostalji hissi</div>
+</div>
+<div class="option" data-choice="terrain-C" onclick="selectOption('terrain', this)">
+<canvas id="terrain-c" width="320" height="200"></canvas>
+<div class="label">C) Dogal / Organic</div>
+<div class="desc">Yumusak gecisler, dogal dokular</div>
+</div>
+</div>
+</div>
+
+<!-- TOWER STYLES -->
+<div class="section">
+<h2>2. Kule Stili</h2>
+<div class="options" id="tower-options">
+<div class="option" data-choice="tower-A" onclick="selectOption('tower', this)">
+<canvas id="tower-a" width="320" height="200"></canvas>
+<div class="label">A) Detayli Mimari</div>
+<div class="desc">Tas duvarlar, pencereler, bayraklar</div>
+</div>
+<div class="option" data-choice="tower-B" onclick="selectOption('tower', this)">
+<canvas id="tower-b" width="320" height="200"></canvas>
+<div class="label">B) Stilize / Minimal</div>
+<div class="desc">Temiz siluetler, parlak renkler</div>
+</div>
+<div class="option" data-choice="tower-C" onclick="selectOption('tower', this)">
+<canvas id="tower-c" width="320" height="200"></canvas>
+<div class="label">C) Fantasy / Isikli</div>
+<div class="desc">Parlayan efektler, buyulu auralar</div>
+</div>
+</div>
+</div>
+
+<!-- ENEMY STYLES -->
+<div class="section">
+<h2>3. Dusman Stili</h2>
+<div class="options" id="enemy-options">
+<div class="option" data-choice="enemy-A" onclick="selectOption('enemy', this)">
+<canvas id="enemy-a" width="320" height="200"></canvas>
+<div class="label">A) Karikatur Yaratiklar</div>
+<div class="desc">Sevimli ama tehlikeli, belirgin yuzler</div>
+</div>
+<div class="option" data-choice="enemy-B" onclick="selectOption('enemy', this)">
+<canvas id="enemy-b" width="320" height="200"></canvas>
+<div class="label">B) Piksel Karakterler</div>
+<div class="desc">Retro piksel savas birlikleri</div>
+</div>
+<div class="option" data-choice="enemy-C" onclick="selectOption('enemy', this)">
+<canvas id="enemy-c" width="320" height="200"></canvas>
+<div class="label">C) Karanlik Fantasy</div>
+<div class="desc">Gercekci oranlar, karanlik tema</div>
+</div>
+</div>
+</div>
+
+<!-- UI STYLES -->
+<div class="section">
+<h2>4. Arayuz / UI Stili</h2>
+<div class="options" id="ui-options">
+<div class="option" data-choice="ui-A" onclick="selectOption('ui', this)">
+<canvas id="ui-a" width="320" height="120"></canvas>
+<div class="label">A) Ortacag Ahsap</div>
+<div class="desc">Ahsap paneller, metal cerceve</div>
+</div>
+<div class="option" data-choice="ui-B" onclick="selectOption('ui', this)">
+<canvas id="ui-b" width="320" height="120"></canvas>
+<div class="label">B) Cam / Glassmorphism</div>
+<div class="desc">Seffaf paneller, modern his</div>
+</div>
+<div class="option" data-choice="ui-C" onclick="selectOption('ui', this)">
+<canvas id="ui-c" width="320" height="120"></canvas>
+<div class="label">C) Karanlik Elegans</div>
+<div class="desc">Altin detaylar, luks his</div>
+</div>
+</div>
+</div>
+
+<div class="summary">
+<h2>Secimlerin:</h2>
+<div id="selected-summary">Henuz secim yapilmadi. Yukaridaki seceneklere tikla.</div>
+</div>
+
+<script>
+const selections = {};
+
+function selectOption(category, el) {
+    // Deselect others in this category
+    el.parentNode.querySelectorAll('.option').forEach(o => o.classList.remove('selected'));
+    el.classList.add('selected');
+    selections[category] = el.querySelector('.label').textContent;
+    updateSummary();
+}
+
+function updateSummary() {
+    const cats = {terrain: 'Arazi', tower: 'Kule', enemy: 'Dusman', ui: 'Arayuz'};
+    let html = '';
+    for (const [k, label] of Object.entries(cats)) {
+        html += `<div><strong>${label}:</strong> ${selections[k] || '<em>secilmedi</em>'}</div>`;
+    }
+    document.getElementById('selected-summary').innerHTML = html;
+}
+
+// ===== DRAWING FUNCTIONS =====
+
+function drawCell(ctx, x, y, w, h, color) {
+    ctx.fillStyle = color;
+    ctx.fillRect(x, y, w, h);
+}
+
+// ------- TERRAIN A: Cartoon -------
+(function() {
+    const c = document.getElementById('terrain-a');
+    const ctx = c.getContext('2d');
+    const cw = 40;
+    // Background
+    ctx.fillStyle = '#0c1208';
+    ctx.fillRect(0, 0, 320, 200);
+
+    // Grid: 8x5
+    const map = [
+        [2,0,0,0,0,0,0,0],
+        [0,0,0,1,1,1,0,0],
+        [0,0,1,1,0,1,1,0],
+        [0,0,1,0,0,0,1,0],
+        [2,0,0,0,0,0,0,0],
+    ];
+
+    for (let r = 0; r < 5; r++) {
+        for (let cc = 0; cc < 8; cc++) {
+            const x = cc * cw;
+            const y = r * cw;
+            if (map[r][cc] === 0) {
+                // Grass - cartoon style: flat bright color with thick dark outline
+                const g = ctx.createRadialGradient(x+20, y+18, 0, x+20, y+20, 28);
+                g.addColorStop(0, '#4ade50');
+                g.addColorStop(1, '#2d8a30');
+                ctx.fillStyle = g;
+                ctx.fillRect(x, y, cw, cw);
+
+                // Thick dark outline
+                ctx.strokeStyle = '#1a5c1d';
+                ctx.lineWidth = 2;
+                ctx.strokeRect(x+1, y+1, cw-2, cw-2);
+
+                // Cartoon grass tufts - bold V shapes
+                ctx.strokeStyle = '#1d7020';
+                ctx.lineWidth = 2.5;
+                ctx.lineCap = 'round';
+                const gx = x + 8 + (cc*7+r*13)%20;
+                const gy = y + 25 + (cc*3+r*11)%10;
+                ctx.beginPath();
+                ctx.moveTo(gx-4, gy+4); ctx.lineTo(gx-1, gy-6); ctx.stroke();
+                ctx.beginPath();
+                ctx.moveTo(gx, gy+4); ctx.lineTo(gx+2, gy-7); ctx.stroke();
+                ctx.beginPath();
+                ctx.moveTo(gx+4, gy+4); ctx.lineTo(gx+5, gy-5); ctx.stroke();
+
+                // Flower on some cells
+                if ((cc+r*3)%5===0) {
+                    ctx.fillStyle = '#ff6688';
+                    ctx.beginPath(); ctx.arc(x+28, y+12, 3, 0, Math.PI*2); ctx.fill();
+                    ctx.fillStyle = '#ffee44';
+                    ctx.beginPath(); ctx.arc(x+28, y+12, 1.5, 0, Math.PI*2); ctx.fill();
+                }
+            } else if (map[r][cc] === 1) {
+                // Path - cartoon cobblestone
+                ctx.fillStyle = '#c9a86c';
+                ctx.fillRect(x, y, cw, cw);
+
+                // Bold outline
+                ctx.strokeStyle = '#8a7040';
+                ctx.lineWidth = 2;
+                ctx.strokeRect(x+1, y+1, cw-2, cw-2);
+
+                // Big cartoon stones
+                const stones = [{dx:8,dy:8,w:14,h:10},{dx:24,dy:6,w:12,h:11},{dx:10,dy:24,w:16,h:12},{dx:28,dy:26,w:10,h:10}];
+                stones.forEach(s => {
+                    ctx.fillStyle = '#dbb878';
+                    ctx.beginPath();
+                    ctx.roundRect(x+s.dx-s.w/2, y+s.dy-s.h/2, s.w, s.h, 3);
+                    ctx.fill();
+                    ctx.strokeStyle = '#9a8050';
+                    ctx.lineWidth = 1.5;
+                    ctx.stroke();
+                    // Highlight
+                    ctx.fillStyle = 'rgba(255,255,255,0.2)';
+                    ctx.beginPath();
+                    ctx.roundRect(x+s.dx-s.w/2+2, y+s.dy-s.h/2+1, s.w*0.5, s.h*0.4, 2);
+                    ctx.fill();
+                });
+            } else {
+                // Blocked - cartoon tree
+                ctx.fillStyle = '#2a3520';
+                ctx.fillRect(x, y, cw, cw);
+                ctx.strokeStyle = '#1a2510';
+                ctx.lineWidth = 2;
+                ctx.strokeRect(x+1, y+1, cw-2, cw-2);
+
+                // Tree trunk
+                ctx.fillStyle = '#7a5530';
+                ctx.fillRect(x+17, y+20, 6, 18);
+                ctx.strokeStyle = '#5a3a18';
+                ctx.lineWidth = 1.5;
+                ctx.strokeRect(x+17, y+20, 6, 18);
+
+                // Canopy - cartoon circles
+                ctx.fillStyle = '#2d8a30';
+                ctx.beginPath(); ctx.arc(x+20, y+14, 12, 0, Math.PI*2); ctx.fill();
+                ctx.fillStyle = '#38a83c';
+                ctx.beginPath(); ctx.arc(x+16, y+16, 8, 0, Math.PI*2); ctx.fill();
+                ctx.beginPath(); ctx.arc(x+24, y+16, 8, 0, Math.PI*2); ctx.fill();
+                ctx.fillStyle = '#45c048';
+                ctx.beginPath(); ctx.arc(x+20, y+11, 7, 0, Math.PI*2); ctx.fill();
+                // Outline
+                ctx.strokeStyle = '#1a6020';
+                ctx.lineWidth = 2;
+                ctx.beginPath(); ctx.arc(x+20, y+14, 12, 0, Math.PI*2); ctx.stroke();
+            }
+        }
+    }
+})();
+
+// ------- TERRAIN B: Pixel Art -------
+(function() {
+    const c = document.getElementById('terrain-b');
+    const ctx = c.getContext('2d');
+    ctx.imageSmoothingEnabled = false;
+    const ps = 4; // pixel size
+    const cw = 40;
+
+    ctx.fillStyle = '#0c1208';
+    ctx.fillRect(0, 0, 320, 200);
+
+    const map = [
+        [2,0,0,0,0,0,0,0],
+        [0,0,0,1,1,1,0,0],
+        [0,0,1,1,0,1,1,0],
+        [0,0,1,0,0,0,1,0],
+        [2,0,0,0,0,0,0,0],
+    ];
+
+    const grassColors = ['#3e8948', '#4da64e', '#3e8948', '#2c6e2f', '#55c055'];
+    const pathColors = ['#c9a86c', '#b8955a', '#d4b87a', '#a88548'];
+
+    function drawPixel(x, y, color) {
+        ctx.fillStyle = color;
+        ctx.fillRect(x, y, ps, ps);
+    }
+
+    for (let r = 0; r < 5; r++) {
+        for (let cc = 0; cc < 8; cc++) {
+            const x = cc * cw;
+            const y = r * cw;
+            if (map[r][cc] === 0) {
+                // Pixel grass
+                for (let py = 0; py < cw; py += ps) {
+                    for (let px = 0; px < cw; px += ps) {
+                        const ci = ((px/ps + py/ps + cc*3 + r*7) % grassColors.length);
+                        drawPixel(x+px, y+py, grassColors[ci]);
+                    }
+                }
+                // Pixel grass detail
+                if ((cc+r)%2===0) {
+                    drawPixel(x+12, y+16, '#2c6e2f');
+                    drawPixel(x+12, y+12, '#55c055');
+                    drawPixel(x+16, y+12, '#55c055');
+                    drawPixel(x+8, y+20, '#2c6e2f');
+                }
+                // Pixel flower
+                if ((cc*5+r*3)%7===0) {
+                    drawPixel(x+24, y+8, '#ff5577');
+                    drawPixel(x+20, y+12, '#ff5577');
+                    drawPixel(x+28, y+12, '#ff5577');
+                    drawPixel(x+24, y+12, '#ffee44');
+                }
+            } else if (map[r][cc] === 1) {
+                // Pixel path
+                for (let py = 0; py < cw; py += ps) {
+                    for (let px = 0; px < cw; px += ps) {
+                        const ci = ((px/ps*3 + py/ps*5 + cc*11 + r*7) % pathColors.length);
+                        drawPixel(x+px, y+py, pathColors[ci]);
+                    }
+                }
+                // Border pixels
+                for (let i = 0; i < cw; i += ps) {
+                    drawPixel(x+i, y, '#8a6e40');
+                    drawPixel(x+i, y+cw-ps, '#8a6e40');
+                    drawPixel(x, y+i, '#8a6e40');
+                    drawPixel(x+cw-ps, y+i, '#8a6e40');
+                }
+            } else {
+                // Pixel blocked/tree
+                for (let py = 0; py < cw; py += ps) {
+                    for (let px = 0; px < cw; px += ps) {
+                        drawPixel(x+px, y+py, (px/ps+py/ps)%3===0 ? '#2a3a1e' : '#223018');
+                    }
+                }
+                // Pixel tree trunk
+                for (let py = 20; py < 36; py += ps) {
+                    drawPixel(x+16, y+py, '#7a5530');
+                    drawPixel(x+20, y+py, '#6a4520');
+                }
+                // Pixel tree canopy
+                const canopy = [
+                    [12,8],[16,8],[20,8],[24,8],
+                    [8,12],[12,12],[16,12],[20,12],[24,12],[28,12],
+                    [8,16],[12,16],[16,16],[20,16],[24,16],[28,16],
+                    [12,20],[16,20],[20,20],[24,20],
+                ];
+                canopy.forEach(([px,py]) => {
+                    drawPixel(x+px, y+py, py<=12 ? '#45c048' : '#3e8948');
+                });
+            }
+        }
+    }
+})();
+
+// ------- TERRAIN C: Organic -------
+(function() {
+    const c = document.getElementById('terrain-c');
+    const ctx = c.getContext('2d');
+    const cw = 40;
+
+    ctx.fillStyle = '#0c1208';
+    ctx.fillRect(0, 0, 320, 200);
+
+    const map = [
+        [2,0,0,0,0,0,0,0],
+        [0,0,0,1,1,1,0,0],
+        [0,0,1,1,0,1,1,0],
+        [0,0,1,0,0,0,1,0],
+        [2,0,0,0,0,0,0,0],
+    ];
+
+    // First pass: draw all grass as one continuous layer
+    for (let r = 0; r < 5; r++) {
+        for (let cc = 0; cc < 8; cc++) {
+            const x = cc * cw;
+            const y = r * cw;
+            // Everything gets grass first
+            const g = ctx.createRadialGradient(x+20, y+18, 0, x+20, y+20, 35);
+            g.addColorStop(0, `hsl(${120 + (cc*7+r*3)%20}, 75%, ${38 + (cc+r)%8}%)`);
+            g.addColorStop(1, `hsl(${125 + (cc*3+r*11)%15}, 65%, ${28 + (cc+r*2)%6}%)`);
+            ctx.fillStyle = g;
+            ctx.fillRect(x, y, cw, cw);
+        }
+    }
+
+    // Second pass: draw path as continuous road with organic edges
+    // Find path cells and draw connected road
+    ctx.save();
+    for (let r = 0; r < 5; r++) {
+        for (let cc = 0; cc < 8; cc++) {
+            if (map[r][cc] !== 1) continue;
+            const x = cc * cw;
+            const y = r * cw;
+
+            // Check neighbors
+            const hasTop = r > 0 && map[r-1][cc] === 1;
+            const hasBot = r < 4 && map[r+1][cc] === 1;
+            const hasLeft = cc > 0 && map[r][cc-1] === 1;
+            const hasRight = cc < 7 && map[r][cc+1] === 1;
+
+            // Draw path with inset where no path neighbor
+            const inset = 3;
+            const left = hasLeft ? x : x + inset;
+            const right = hasRight ? x + cw : x + cw - inset;
+            const top = hasTop ? y : y + inset;
+            const bottom = hasBot ? y + cw : y + cw - inset;
+            const rad = 6;
+
+            // Rounded path shape
+            ctx.beginPath();
+            ctx.moveTo(left + (hasLeft||hasTop ? 0 : rad), top);
+            ctx.lineTo(right - (hasRight||hasTop ? 0 : rad), top);
+            if (!hasRight && !hasTop) ctx.quadraticCurveTo(right, top, right, top + rad);
+            ctx.lineTo(right, bottom - (hasRight||hasBot ? 0 : rad));
+            if (!hasRight && !hasBot) ctx.quadraticCurveTo(right, bottom, right - rad, bottom);
+            ctx.lineTo(left + (hasLeft||hasBot ? 0 : rad), bottom);
+            if (!hasLeft && !hasBot) ctx.quadraticCurveTo(left, bottom, left, bottom - rad);
+            ctx.lineTo(left, top + (hasLeft||hasTop ? 0 : rad));
+            if (!hasLeft && !hasTop) ctx.quadraticCurveTo(left, top, left + rad, top);
+            ctx.closePath();
+
+            // Path fill with warm gradient
+            const pg = ctx.createLinearGradient(left, top, right, bottom);
+            pg.addColorStop(0, '#c4a068');
+            pg.addColorStop(0.5, '#b89458');
+            pg.addColorStop(1, '#a88548');
+            ctx.fillStyle = pg;
+            ctx.fill();
+
+            // Soft border
+            ctx.strokeStyle = '#7a6038';
+            ctx.lineWidth = 1.5;
+            ctx.stroke();
+
+            // Stones on the path
+            ctx.fillStyle = '#d4b878';
+            for (let i = 0; i < 3; i++) {
+                const sx = x + 8 + ((cc*13+i*17+r*7)%24);
+                const sy = y + 6 + ((r*11+i*19+cc*3)%26);
+                const sw = 8 + (cc+i)%5;
+                const sh = 6 + (r+i)%4;
+                ctx.beginPath();
+                ctx.roundRect(sx-sw/2, sy-sh/2, sw, sh, 2);
+                ctx.fill();
+            }
+        }
+    }
+    ctx.restore();
+
+    // Third pass: grass details on grass cells
+    for (let r = 0; r < 5; r++) {
+        for (let cc = 0; cc < 8; cc++) {
+            if (map[r][cc] !== 0) continue;
+            const x = cc * cw;
+            const y = r * cw;
+
+            // Grass blades
+            ctx.strokeStyle = `hsl(${120+(cc*3)%20}, 70%, ${35+(r*7)%12}%)`;
+            ctx.lineWidth = 1.5;
+            ctx.lineCap = 'round';
+            for (let i = 0; i < 4; i++) {
+                const gx = x + 5 + ((cc*11+i*17+r*3)%30);
+                const gy = y + 20 + ((r*7+i*13+cc*5)%18);
+                ctx.beginPath();
+                ctx.moveTo(gx, gy+5);
+                ctx.quadraticCurveTo(gx+(i%2?3:-3), gy-2, gx+(i%2?2:-2), gy-8);
+                ctx.stroke();
+            }
+
+            // Soft flower
+            if ((cc*7+r*3)%5===0) {
+                const fx = x + 10 + (cc*13)%20;
+                const fy = y + 8 + (r*11)%15;
+                ctx.fillStyle = ['#ff6688','#ffaa44','#aa88ff','#ff88cc'][(cc+r)%4];
+                ctx.globalAlpha = 0.8;
+                ctx.beginPath(); ctx.arc(fx, fy, 3, 0, Math.PI*2); ctx.fill();
+                ctx.fillStyle = '#ffee44';
+                ctx.beginPath(); ctx.arc(fx, fy, 1.5, 0, Math.PI*2); ctx.fill();
+                ctx.globalAlpha = 1;
+            }
+
+            // Edge grass tufts extending over path
+            const checkPath = (dr, dc) => {
+                const nr = r+dr, nc = cc+dc;
+                return nr>=0 && nr<5 && nc>=0 && nc<8 && map[nr][nc]===1;
+            };
+            ctx.strokeStyle = '#3a9a40';
+            ctx.lineWidth = 1.8;
+            if (checkPath(1,0)) { // path below
+                for (let i=0;i<3;i++) {
+                    const gx = x+8+i*12;
+                    ctx.beginPath();
+                    ctx.moveTo(gx, y+cw-1);
+                    ctx.quadraticCurveTo(gx+2, y+cw+4, gx+1, y+cw+7);
+                    ctx.stroke();
+                }
+            }
+            if (checkPath(-1,0)) { // path above
+                for (let i=0;i<3;i++) {
+                    const gx = x+8+i*12;
+                    ctx.beginPath();
+                    ctx.moveTo(gx, y+1);
+                    ctx.quadraticCurveTo(gx-2, y-4, gx-1, y-7);
+                    ctx.stroke();
+                }
+            }
+            if (checkPath(0,1)) { // path right
+                for (let i=0;i<2;i++) {
+                    const gy = y+10+i*16;
+                    ctx.beginPath();
+                    ctx.moveTo(x+cw-1, gy);
+                    ctx.quadraticCurveTo(x+cw+4, gy+2, x+cw+6, gy+1);
+                    ctx.stroke();
+                }
+            }
+            if (checkPath(0,-1)) { // path left
+                for (let i=0;i<2;i++) {
+                    const gy = y+10+i*16;
+                    ctx.beginPath();
+                    ctx.moveTo(x+1, gy);
+                    ctx.quadraticCurveTo(x-4, gy-2, x-6, gy-1);
+                    ctx.stroke();
+                }
+            }
+        }
+    }
+
+    // Blocked cells
+    for (let r = 0; r < 5; r++) {
+        for (let cc = 0; cc < 8; cc++) {
+            if (map[r][cc] !== 2) continue;
+            const x = cc * cw;
+            const y = r * cw;
+            ctx.fillStyle = 'rgba(15,20,10,0.7)';
+            ctx.fillRect(x, y, cw, cw);
+            // Organic tree
+            ctx.fillStyle = '#5a3a18';
+            ctx.beginPath();
+            ctx.moveTo(x+17, y+38); ctx.lineTo(x+19, y+15); ctx.lineTo(x+23, y+15); ctx.lineTo(x+25, y+38);
+            ctx.fill();
+            ctx.fillStyle = '#2d8a30';
+            ctx.beginPath(); ctx.arc(x+21, y+12, 11, 0, Math.PI*2); ctx.fill();
+            ctx.fillStyle = '#3aaa3e';
+            ctx.beginPath(); ctx.arc(x+18, y+14, 7, 0, Math.PI*2); ctx.fill();
+            ctx.beginPath(); ctx.arc(x+24, y+14, 7, 0, Math.PI*2); ctx.fill();
+            ctx.fillStyle = '#48c04c';
+            ctx.beginPath(); ctx.arc(x+21, y+9, 6, 0, Math.PI*2); ctx.fill();
+        }
+    }
+})();
+
+// ------- TOWER STYLES -------
+function drawTowers(canvasId, style) {
+    const c = document.getElementById(canvasId);
+    const ctx = c.getContext('2d');
+
+    // Background
+    const bg = ctx.createLinearGradient(0, 0, 0, 200);
+    bg.addColorStop(0, '#1a2a15');
+    bg.addColorStop(1, '#0c1208');
+    ctx.fillStyle = bg;
+    ctx.fillRect(0, 0, 320, 200);
+
+    const types = [
+        {name:'Ok', color:'#cc8844', icon:'bow'},
+        {name:'Buz', color:'#22ccee', icon:'ice'},
+        {name:'Ates', color:'#ff5511', icon:'fire'},
+        {name:'Yildirim', color:'#ffdd00', icon:'bolt'},
+        {name:'Zehir', color:'#33ff33', icon:'poison'},
+    ];
+
+    types.forEach((t, i) => {
+        const cx = 35 + i * 60;
+        const cy = 80;
+        const r = 20;
+
+        if (style === 'detailed') {
+            // Stone base
+            ctx.fillStyle = '#555';
+            ctx.beginPath(); ctx.ellipse(cx, cy+22, 22, 8, 0, 0, Math.PI*2); ctx.fill();
+
+            // Tower body with bricks
+            const bodyG = ctx.createLinearGradient(cx-r, 0, cx+r, 0);
+            bodyG.addColorStop(0, t.color);
+            bodyG.addColorStop(0.3, lighten(t.color, 0.2));
+            bodyG.addColorStop(0.7, t.color);
+            bodyG.addColorStop(1, darken(t.color, 0.3));
+            ctx.fillStyle = bodyG;
+            ctx.beginPath();
+            ctx.roundRect(cx-r*0.7, cy-r*1.1, r*1.4, r*2.0, 3);
+            ctx.fill();
+
+            // Brick lines
+            ctx.strokeStyle = 'rgba(0,0,0,0.15)';
+            ctx.lineWidth = 0.5;
+            for (let by = cy-r*0.9; by < cy+r*0.7; by += 5) {
+                ctx.beginPath(); ctx.moveTo(cx-r*0.6, by); ctx.lineTo(cx+r*0.6, by); ctx.stroke();
+            }
+
+            // Crenellations
+            for (let bx = cx-r*0.65; bx < cx+r*0.5; bx += 7) {
+                ctx.fillStyle = darken(t.color, 0.15);
+                ctx.fillRect(bx, cy-r*1.3, 5, 5);
+            }
+
+            // Window
+            ctx.fillStyle = 'rgba(255,200,100,0.4)';
+            ctx.beginPath();
+            ctx.roundRect(cx-3, cy-5, 6, 8, [3,3,0,0]);
+            ctx.fill();
+
+            // Flag
+            ctx.strokeStyle = '#aaa';
+            ctx.lineWidth = 1.5;
+            ctx.beginPath(); ctx.moveTo(cx, cy-r*1.3); ctx.lineTo(cx, cy-r*1.8); ctx.stroke();
+            ctx.fillStyle = '#cc0000';
+            ctx.beginPath();
+            ctx.moveTo(cx, cy-r*1.8); ctx.lineTo(cx+8, cy-r*1.6); ctx.lineTo(cx, cy-r*1.4);
+            ctx.fill();
+
+        } else if (style === 'minimal') {
+            // Clean geometric tower
+            ctx.shadowColor = t.color;
+            ctx.shadowBlur = 10;
+
+            // Base circle
+            ctx.fillStyle = darken(t.color, 0.4);
+            ctx.beginPath(); ctx.arc(cx, cy+15, 18, 0, Math.PI*2); ctx.fill();
+
+            // Main shape - hexagon
+            ctx.fillStyle = t.color;
+            ctx.beginPath();
+            for (let a = 0; a < 6; a++) {
+                const angle = a * Math.PI/3 - Math.PI/6;
+                const px = cx + 16 * Math.cos(angle);
+                const py = cy + 16 * Math.sin(angle);
+                a === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py);
+            }
+            ctx.closePath();
+            ctx.fill();
+
+            // Inner circle with icon
+            ctx.fillStyle = lighten(t.color, 0.3);
+            ctx.beginPath(); ctx.arc(cx, cy, 8, 0, Math.PI*2); ctx.fill();
+
+            ctx.shadowBlur = 0;
+
+            // Icon (simplified)
+            ctx.fillStyle = '#fff';
+            ctx.font = 'bold 10px sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText(t.name[0], cx, cy+4);
+
+        } else if (style === 'fantasy') {
+            // Glowing fantasy tower
+            // Outer glow
+            const glowG = ctx.createRadialGradient(cx, cy, 0, cx, cy, 30);
+            glowG.addColorStop(0, t.color + '55');
+            glowG.addColorStop(0.5, t.color + '22');
+            glowG.addColorStop(1, 'transparent');
+            ctx.fillStyle = glowG;
+            ctx.beginPath(); ctx.arc(cx, cy, 30, 0, Math.PI*2); ctx.fill();
+
+            // Crystal/orb base
+            ctx.fillStyle = darken(t.color, 0.5);
+            ctx.beginPath();
+            ctx.roundRect(cx-12, cy-18, 24, 36, 4);
+            ctx.fill();
+
+            // Inner energy
+            const innerG = ctx.createRadialGradient(cx-3, cy-3, 0, cx, cy, 15);
+            innerG.addColorStop(0, '#fff');
+            innerG.addColorStop(0.3, lighten(t.color, 0.5));
+            innerG.addColorStop(0.7, t.color);
+            innerG.addColorStop(1, darken(t.color, 0.3));
+            ctx.fillStyle = innerG;
+            ctx.beginPath(); ctx.arc(cx, cy, 11, 0, Math.PI*2); ctx.fill();
+
+            // Sparkle orbits
+            ctx.strokeStyle = t.color + '88';
+            ctx.lineWidth = 1;
+            ctx.setLineDash([2, 3]);
+            ctx.beginPath(); ctx.arc(cx, cy, 18, 0, Math.PI*2); ctx.stroke();
+            ctx.setLineDash([]);
+
+            // Sparkle dots
+            for (let a = 0; a < 4; a++) {
+                const angle = a * Math.PI/2 + (i * 0.5);
+                ctx.fillStyle = '#fff';
+                ctx.beginPath();
+                ctx.arc(cx + 18*Math.cos(angle), cy + 18*Math.sin(angle), 2, 0, Math.PI*2);
+                ctx.fill();
+            }
+        }
+
+        // Label
+        ctx.fillStyle = '#e8dcc8';
+        ctx.font = '10px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText(t.name, cx, cy + 45);
+    });
+}
+
+drawTowers('tower-a', 'detailed');
+drawTowers('tower-b', 'minimal');
+drawTowers('tower-c', 'fantasy');
+
+// ------- ENEMY STYLES -------
+function drawEnemies(canvasId, style) {
+    const c = document.getElementById(canvasId);
+    const ctx = c.getContext('2d');
+
+    const bg = ctx.createLinearGradient(0, 0, 0, 200);
+    bg.addColorStop(0, '#1a1520');
+    bg.addColorStop(1, '#0a0812');
+    ctx.fillStyle = bg;
+    ctx.fillRect(0, 0, 320, 200);
+
+    const enemies = [
+        {name:'Asker', color:'#ee3333'},
+        {name:'Goblin', color:'#44dd22'},
+        {name:'Zirhli', color:'#aabbcc'},
+        {name:'Sovalye', color:'#6633aa'},
+        {name:'Boss', color:'#cc2200', boss:true},
+    ];
+
+    enemies.forEach((e, i) => {
+        const cx = 35 + i * 60;
+        const cy = 85;
+        const r = e.boss ? 20 : 14;
+
+        if (style === 'cartoon') {
+            // Shadow
+            ctx.fillStyle = 'rgba(0,0,0,0.3)';
+            ctx.beginPath(); ctx.ellipse(cx, cy+r+5, r+2, 4, 0, 0, Math.PI*2); ctx.fill();
+
+            // Body - round with face
+            const bodyG = ctx.createRadialGradient(cx-3, cy-3, 0, cx, cy, r*1.5);
+            bodyG.addColorStop(0, lighten(e.color, 0.4));
+            bodyG.addColorStop(0.5, e.color);
+            bodyG.addColorStop(1, darken(e.color, 0.3));
+            ctx.fillStyle = bodyG;
+            ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI*2); ctx.fill();
+
+            // Thick outline
+            ctx.strokeStyle = darken(e.color, 0.4);
+            ctx.lineWidth = 2;
+            ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI*2); ctx.stroke();
+
+            // Eyes - cartoon style
+            ctx.fillStyle = '#fff';
+            ctx.beginPath(); ctx.arc(cx-r*0.3, cy-r*0.15, r*0.25, 0, Math.PI*2); ctx.fill();
+            ctx.beginPath(); ctx.arc(cx+r*0.3, cy-r*0.15, r*0.25, 0, Math.PI*2); ctx.fill();
+            ctx.fillStyle = '#000';
+            ctx.beginPath(); ctx.arc(cx-r*0.25, cy-r*0.15, r*0.12, 0, Math.PI*2); ctx.fill();
+            ctx.beginPath(); ctx.arc(cx+r*0.25, cy-r*0.15, r*0.12, 0, Math.PI*2); ctx.fill();
+
+            // Mouth
+            ctx.strokeStyle = darken(e.color, 0.5);
+            ctx.lineWidth = 1.5;
+            ctx.beginPath();
+            ctx.arc(cx, cy+r*0.15, r*0.3, 0.1, Math.PI-0.1);
+            ctx.stroke();
+
+            if (e.boss) {
+                // Crown
+                ctx.fillStyle = '#ffd700';
+                ctx.beginPath();
+                ctx.moveTo(cx-10, cy-r+2);
+                ctx.lineTo(cx-10, cy-r-6);
+                ctx.lineTo(cx-5, cy-r-2);
+                ctx.lineTo(cx, cy-r-8);
+                ctx.lineTo(cx+5, cy-r-2);
+                ctx.lineTo(cx+10, cy-r-6);
+                ctx.lineTo(cx+10, cy-r+2);
+                ctx.closePath();
+                ctx.fill();
+                ctx.strokeStyle = '#cc9900';
+                ctx.lineWidth = 1;
+                ctx.stroke();
+            }
+
+        } else if (style === 'pixel') {
+            ctx.imageSmoothingEnabled = false;
+            const ps = 3;
+            const baseX = cx - 12;
+            const baseY = cy - 12;
+
+            // Pixel body
+            const pixels = [
+                [0,0,1,1,1,1,0,0],
+                [0,1,1,1,1,1,1,0],
+                [1,1,0,1,1,0,1,1],
+                [1,1,1,1,1,1,1,1],
+                [1,1,1,1,1,1,1,1],
+                [0,1,0,1,1,0,1,0],
+                [0,1,1,0,0,1,1,0],
+                [0,0,1,0,0,1,0,0],
+            ];
+
+            pixels.forEach((row, py) => {
+                row.forEach((val, px) => {
+                    if (val) {
+                        const isEye = py===2 && (px===2 || px===5);
+                        ctx.fillStyle = isEye ? '#fff' : e.color;
+                        ctx.fillRect(baseX + px*ps, baseY + py*ps, ps, ps);
+                    }
+                });
+            });
+
+            if (e.boss) {
+                // Crown pixels
+                const crown = [[1,0],[2,0],[3,0],[4,0],[5,0],[6,0],[1,1],[3,1],[4,1],[6,1]];
+                crown.forEach(([px,py]) => {
+                    ctx.fillStyle = '#ffd700';
+                    ctx.fillRect(baseX+px*ps, baseY-2*ps+py*ps, ps, ps);
+                });
+            }
+            ctx.imageSmoothingEnabled = true;
+
+        } else if (style === 'dark') {
+            // Dark aura
+            const auraG = ctx.createRadialGradient(cx, cy, r*0.5, cx, cy, r*2.5);
+            auraG.addColorStop(0, e.color + '44');
+            auraG.addColorStop(1, 'transparent');
+            ctx.fillStyle = auraG;
+            ctx.beginPath(); ctx.arc(cx, cy, r*2.5, 0, Math.PI*2); ctx.fill();
+
+            // Shadow
+            ctx.fillStyle = 'rgba(0,0,0,0.5)';
+            ctx.beginPath(); ctx.ellipse(cx, cy+r+4, r+3, 3, 0, 0, Math.PI*2); ctx.fill();
+
+            // Body with dark gradient
+            const bodyG = ctx.createRadialGradient(cx-r*0.2, cy-r*0.3, 0, cx, cy, r*1.4);
+            bodyG.addColorStop(0, lighten(e.color, 0.2));
+            bodyG.addColorStop(0.6, e.color);
+            bodyG.addColorStop(1, darken(e.color, 0.5));
+
+            // Angular shape
+            ctx.fillStyle = bodyG;
+            ctx.beginPath();
+            ctx.moveTo(cx, cy-r*1.2);
+            ctx.lineTo(cx+r*0.9, cy-r*0.3);
+            ctx.lineTo(cx+r, cy+r*0.5);
+            ctx.lineTo(cx+r*0.4, cy+r);
+            ctx.lineTo(cx-r*0.4, cy+r);
+            ctx.lineTo(cx-r, cy+r*0.5);
+            ctx.lineTo(cx-r*0.9, cy-r*0.3);
+            ctx.closePath();
+            ctx.fill();
+
+            // Glowing eyes
+            ctx.fillStyle = e.boss ? '#ff4400' : '#ff0000';
+            ctx.shadowColor = e.boss ? '#ff4400' : '#ff0000';
+            ctx.shadowBlur = 6;
+            ctx.beginPath(); ctx.arc(cx-r*0.25, cy-r*0.2, 2, 0, Math.PI*2); ctx.fill();
+            ctx.beginPath(); ctx.arc(cx+r*0.25, cy-r*0.2, 2, 0, Math.PI*2); ctx.fill();
+            ctx.shadowBlur = 0;
+
+            if (e.boss) {
+                ctx.fillStyle = '#ffd700';
+                ctx.shadowColor = '#ffd700';
+                ctx.shadowBlur = 4;
+                // Horns
+                ctx.beginPath();
+                ctx.moveTo(cx-r*0.5, cy-r*0.8);
+                ctx.lineTo(cx-r*0.8, cy-r*1.6);
+                ctx.lineTo(cx-r*0.2, cy-r*0.8);
+                ctx.fill();
+                ctx.beginPath();
+                ctx.moveTo(cx+r*0.5, cy-r*0.8);
+                ctx.lineTo(cx+r*0.8, cy-r*1.6);
+                ctx.lineTo(cx+r*0.2, cy-r*0.8);
+                ctx.fill();
+                ctx.shadowBlur = 0;
+            }
+        }
+
+        // HP bar
+        ctx.fillStyle = 'rgba(0,0,0,0.6)';
+        ctx.fillRect(cx-r-2, cy-r-12, (r+2)*2, 4);
+        ctx.fillStyle = '#22cc22';
+        ctx.fillRect(cx-r-2, cy-r-12, (r+2)*2*0.7, 4);
+
+        ctx.fillStyle = '#e8dcc8';
+        ctx.font = '9px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText(e.name, cx, cy + r + 18);
+    });
+}
+
+drawEnemies('enemy-a', 'cartoon');
+drawEnemies('enemy-b', 'pixel');
+drawEnemies('enemy-c', 'dark');
+
+// ------- UI STYLES -------
+function drawUI(canvasId, style) {
+    const c = document.getElementById(canvasId);
+    const ctx = c.getContext('2d');
+
+    if (style === 'wood') {
+        // Wood panel background
+        const woodG = ctx.createLinearGradient(0, 0, 0, 120);
+        woodG.addColorStop(0, '#5a3a18');
+        woodG.addColorStop(0.3, '#7a5530');
+        woodG.addColorStop(0.7, '#6a4528');
+        woodG.addColorStop(1, '#4a2a10');
+        ctx.fillStyle = woodG;
+        ctx.beginPath();
+        ctx.roundRect(5, 5, 310, 110, 8);
+        ctx.fill();
+
+        // Wood grain
+        ctx.strokeStyle = 'rgba(0,0,0,0.1)';
+        ctx.lineWidth = 0.5;
+        for (let y = 10; y < 110; y += 6) {
+            ctx.beginPath();
+            ctx.moveTo(8, y);
+            ctx.quadraticCurveTo(160, y + Math.sin(y/10)*3, 312, y);
+            ctx.stroke();
+        }
+
+        // Metal frame/border
+        ctx.strokeStyle = '#8a8070';
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.roundRect(5, 5, 310, 110, 8);
+        ctx.stroke();
+
+        // Metal rivets
+        for (let x of [18, 302]) {
+            for (let y of [18, 102]) {
+                ctx.fillStyle = '#aaa';
+                ctx.beginPath(); ctx.arc(x, y, 4, 0, Math.PI*2); ctx.fill();
+                ctx.fillStyle = 'rgba(255,255,255,0.3)';
+                ctx.beginPath(); ctx.arc(x-1, y-1, 2, 0, Math.PI*2); ctx.fill();
+            }
+        }
+
+        // Tower cards in wood style
+        for (let i = 0; i < 4; i++) {
+            const x = 30 + i * 60;
+            ctx.fillStyle = 'rgba(0,0,0,0.3)';
+            ctx.beginPath(); ctx.roundRect(x, 25, 50, 65, 4); ctx.fill();
+            ctx.strokeStyle = '#8a7050';
+            ctx.lineWidth = 1.5;
+            ctx.stroke();
+
+            ctx.fillStyle = ['#cc8844','#22ccee','#ff5511','#ffdd00'][i];
+            ctx.beginPath(); ctx.arc(x+25, 48, 10, 0, Math.PI*2); ctx.fill();
+
+            ctx.fillStyle = '#e8dcc8';
+            ctx.font = '9px sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText(['Ok','Buz','Ates','Yildirim'][i], x+25, 72);
+            ctx.fillStyle = '#d4a843';
+            ctx.fillText(['25g','30g','35g','40g'][i], x+25, 83);
+        }
+
+        // Dalga button - wood
+        ctx.fillStyle = '#8a6820';
+        ctx.beginPath(); ctx.roundRect(262, 35, 50, 45, 6); ctx.fill();
+        ctx.strokeStyle = '#aa8830';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+        ctx.fillStyle = '#e8dcc8';
+        ctx.font = 'bold 11px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('Dalga', 287, 62);
+
+    } else if (style === 'glass') {
+        // Glass morphism background
+        ctx.fillStyle = 'rgba(20, 20, 35, 0.6)';
+        ctx.beginPath(); ctx.roundRect(5, 5, 310, 110, 12); ctx.fill();
+
+        // Frosted border
+        ctx.strokeStyle = 'rgba(255,255,255,0.15)';
+        ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.roundRect(5, 5, 310, 110, 12); ctx.stroke();
+
+        // Inner highlight
+        ctx.strokeStyle = 'rgba(255,255,255,0.08)';
+        ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.roundRect(6, 6, 308, 50, [12,12,0,0]); ctx.stroke();
+
+        // Tower cards - glass style
+        for (let i = 0; i < 4; i++) {
+            const x = 30 + i * 60;
+            ctx.fillStyle = 'rgba(255,255,255,0.08)';
+            ctx.beginPath(); ctx.roundRect(x, 25, 50, 65, 8); ctx.fill();
+            ctx.strokeStyle = 'rgba(255,255,255,0.12)';
+            ctx.lineWidth = 1;
+            ctx.stroke();
+
+            const color = ['#cc8844','#22ccee','#ff5511','#ffdd00'][i];
+            // Left border accent
+            ctx.fillStyle = color;
+            ctx.fillRect(x, 33, 3, 49);
+
+            ctx.fillStyle = color;
+            ctx.beginPath(); ctx.arc(x+25, 48, 10, 0, Math.PI*2); ctx.fill();
+
+            ctx.fillStyle = '#e8dcc8';
+            ctx.font = '9px sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText(['Ok','Buz','Ates','Yildirim'][i], x+25, 72);
+            ctx.fillStyle = '#d4a843';
+            ctx.fillText(['25g','30g','35g','40g'][i], x+25, 83);
+        }
+
+        // Dalga button - glass
+        ctx.fillStyle = 'rgba(212,168,67,0.25)';
+        ctx.beginPath(); ctx.roundRect(262, 35, 50, 45, 10); ctx.fill();
+        ctx.strokeStyle = 'rgba(212,168,67,0.5)';
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+        ctx.fillStyle = '#d4a843';
+        ctx.font = 'bold 11px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('Dalga', 287, 62);
+
+    } else if (style === 'dark') {
+        // Dark elegance
+        const darkG = ctx.createLinearGradient(0, 0, 0, 120);
+        darkG.addColorStop(0, '#0d0d15');
+        darkG.addColorStop(1, '#12121a');
+        ctx.fillStyle = darkG;
+        ctx.beginPath(); ctx.roundRect(5, 5, 310, 110, 8); ctx.fill();
+
+        // Gold border line
+        ctx.strokeStyle = '#d4a843';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(8, 115); ctx.lineTo(312, 115);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(8, 5); ctx.lineTo(312, 5);
+        ctx.stroke();
+
+        // Tower cards - dark elegant
+        for (let i = 0; i < 4; i++) {
+            const x = 30 + i * 60;
+            const color = ['#cc8844','#22ccee','#ff5511','#ffdd00'][i];
+
+            const cardG = ctx.createLinearGradient(x, 25, x, 90);
+            cardG.addColorStop(0, '#1a1a22');
+            cardG.addColorStop(1, '#0e0e14');
+            ctx.fillStyle = cardG;
+            ctx.beginPath(); ctx.roundRect(x, 25, 50, 65, 6); ctx.fill();
+
+            // Color accent left border
+            ctx.fillStyle = color;
+            ctx.beginPath(); ctx.roundRect(x, 25, 3, 65, [6,0,0,6]); ctx.fill();
+
+            // Subtle border
+            ctx.strokeStyle = 'rgba(212,168,67,0.2)';
+            ctx.lineWidth = 0.5;
+            ctx.beginPath(); ctx.roundRect(x, 25, 50, 65, 6); ctx.stroke();
+
+            ctx.fillStyle = color;
+            ctx.beginPath(); ctx.arc(x+27, 48, 10, 0, Math.PI*2); ctx.fill();
+
+            ctx.fillStyle = '#e8dcc8';
+            ctx.font = '9px sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText(['Ok','Buz','Ates','Yildirim'][i], x+27, 72);
+            ctx.fillStyle = '#d4a843';
+            ctx.fillText(['25g','30g','35g','40g'][i], x+27, 83);
+        }
+
+        // Dalga button - dark gold
+        const btnG = ctx.createLinearGradient(262, 35, 262, 80);
+        btnG.addColorStop(0, '#d4a843');
+        btnG.addColorStop(1, '#ba7517');
+        ctx.fillStyle = btnG;
+        ctx.beginPath(); ctx.roundRect(262, 35, 50, 45, 8); ctx.fill();
+
+        // Glow
+        ctx.shadowColor = '#d4a843';
+        ctx.shadowBlur = 10;
+        ctx.beginPath(); ctx.roundRect(262, 35, 50, 45, 8); ctx.fill();
+        ctx.shadowBlur = 0;
+
+        ctx.fillStyle = '#0d0d15';
+        ctx.font = 'bold 11px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('Dalga', 287, 62);
+    }
+}
+
+drawUI('ui-a', 'wood');
+drawUI('ui-b', 'glass');
+drawUI('ui-c', 'dark');
+
+// Helper functions
+function lighten(hex, amount) {
+    const r = parseInt(hex.slice(1,3), 16);
+    const g = parseInt(hex.slice(3,5), 16);
+    const b = parseInt(hex.slice(5,7), 16);
+    return `rgb(${Math.min(255, r + (255-r)*amount)}, ${Math.min(255, g + (255-g)*amount)}, ${Math.min(255, b + (255-b)*amount)})`;
+}
+
+function darken(hex, amount) {
+    let color = hex;
+    if (color.startsWith('rgb')) {
+        const m = color.match(/(\d+)/g);
+        return `rgb(${Math.round(m[0]*(1-amount))}, ${Math.round(m[1]*(1-amount))}, ${Math.round(m[2]*(1-amount))})`;
+    }
+    const r = parseInt(color.slice(1,3), 16);
+    const g = parseInt(color.slice(3,5), 16);
+    const b = parseInt(color.slice(5,7), 16);
+    return `rgb(${Math.round(r*(1-amount))}, ${Math.round(g*(1-amount))}, ${Math.round(b*(1-amount))})`;
+}
+</script>
+
+</body>
+</html>

@@ -99,36 +99,41 @@ class _RunSetupState extends State<RunSetup> {
       children: [
         const Text('Zorluk', style: TextStyle(color: _gold, fontSize: 18, fontWeight: FontWeight.bold)),
         const SizedBox(height: 12),
-        ...widget.unlockedDifficulties.map((d) => Padding(
-          padding: const EdgeInsets.only(bottom: 8),
-          child: GestureDetector(
-            onTap: () => setState(() => _difficulty = d),
-            child: Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: _difficulty == d ? _gold.withAlpha(40) : Colors.transparent,
-                border: Border.all(color: _difficulty == d ? _gold : _cream.withAlpha(40)),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    d.name.toUpperCase(),
-                    style: TextStyle(
-                      color: _difficulty == d ? _gold : _cream,
-                      fontWeight: FontWeight.bold,
-                    ),
+        Expanded(
+          child: ListView(
+            children: widget.unlockedDifficulties.map((d) => Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: GestureDetector(
+                onTap: () => setState(() => _difficulty = d),
+                child: Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: _difficulty == d ? _gold.withAlpha(40) : Colors.transparent,
+                    border: Border.all(color: _difficulty == d ? _gold : _cream.withAlpha(40)),
+                    borderRadius: BorderRadius.circular(8),
                   ),
-                  Text(
-                    '${d.totalWaves} dalga | HP x${d.hpMultiplier} | Ruh x${d.spiritMultiplier}',
-                    style: TextStyle(color: _cream.withAlpha(150), fontSize: 11),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        d.name.toUpperCase(),
+                        style: TextStyle(
+                          color: _difficulty == d ? _gold : _cream,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 13,
+                        ),
+                      ),
+                      Text(
+                        '${d.totalWaves} dalga | HP x${d.hpMultiplier} | Ruh x${d.spiritMultiplier}',
+                        style: TextStyle(color: _cream.withAlpha(150), fontSize: 10),
+                      ),
+                    ],
                   ),
-                ],
+                ),
               ),
-            ),
+            )).toList(),
           ),
-        )),
+        ),
       ],
     );
   }

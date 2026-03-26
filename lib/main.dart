@@ -16,15 +16,22 @@ import 'screens/game_hud.dart';
 import 'screens/wave_break.dart';
 import 'screens/pause_overlay.dart';
 import 'screens/settings_screen.dart';
+import 'screens/bestiary_screen.dart';
+import 'screens/synergy_guide.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await SystemChrome.setPreferredOrientations([
-    DeviceOrientation.landscapeLeft,
-    DeviceOrientation.landscapeRight,
-  ]);
-  await SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
+  // Orientation is enforced by AndroidManifest sensorLandscape
+  // System UI mode set after first frame to avoid emulator rendering issues
   runApp(const KaleKronikleriApp());
+  // Defer system chrome changes to avoid zero-size init
+  WidgetsBinding.instance.addPostFrameCallback((_) {
+    SystemChrome.setPreferredOrientations([
+      DeviceOrientation.landscapeLeft,
+      DeviceOrientation.landscapeRight,
+    ]);
+    SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
+  });
 }
 
 class KaleKronikleriApp extends StatelessWidget {
@@ -42,7 +49,7 @@ class KaleKronikleriApp extends StatelessWidget {
   }
 }
 
-enum AppScreen { mainMenu, runSetup, game, meta, death, settings }
+enum AppScreen { mainMenu, runSetup, game, meta, death, settings, bestiary, synergyGuide }
 
 class AppShell extends StatefulWidget {
   const AppShell({super.key});
@@ -70,7 +77,7 @@ class _AppShellState extends State<AppShell> {
   }
 
   // Debug: set to false before release
-  static const _debugAutoStart = false;
+  static const _debugAutoStart = true;
 
   Future<void> _loadSave() async {
     debugPrint('KaleKronikleri: Loading save...');
@@ -168,9 +175,16 @@ class _AppShellState extends State<AppShell> {
         );
 
       case AppScreen.runSetup:
-        final choices = ArtifactData.rollChoices(seed: DateTime.now().millisecondsSinceEpoch);
+        final kesif = _saveManager!.metaKesif;
+        final efsane = _saveManager!.metaEfsane;
+        final improved = kesif >= 5; // Bilge Göz: better artifact quality
+        final extraChoice = efsane >= 5; // Kader Yazıcı: +1 artifact choice
+        final choices = ArtifactData.rollChoices(
+          seed: DateTime.now().millisecondsSinceEpoch,
+          improved: improved,
+        );
         return RunSetup(
-          artifactChoices: choices,
+          artifactChoices: extraChoice ? [...choices, ...ArtifactData.rollChoices(seed: DateTime.now().millisecondsSinceEpoch + 1, improved: improved)] : choices,
           maxArtifacts: 3,
           selectedDifficulty: DifficultyTier.apprentice,
           unlockedDifficulties: _unlockedDifficulties(),
@@ -214,15 +228,27 @@ class _AppShellState extends State<AppShell> {
         return DeathScreen(
           isVictory: _lastVictory,
           wavesCompleted: _lastWaves,
-          totalWaves: _game?.difficulty.totalWaves ?? 20,
+          totalWaves: _game?.waveSystem.totalWaves ?? 20,
           spiritEarned: _lastSpiritEarned,
           totalSpirit: _saveManager!.stoneSpirit,
           towersPlaced: _lastTowersPlaced,
           enemiesKilled: _lastEnemiesKilled,
           totalDamageDealt: _game?.totalDamageDealt ?? 0,
           difficultyName: _game?.difficulty.name ?? '',
+          activeSynergies: _game?.activeSynergyNames ?? [],
           onContinue: _goToRunSetup,
           onMainMenu: _goToMainMenu,
+        );
+
+      case AppScreen.bestiary:
+        return BestiaryScreen(
+          onBack: () => setState(() => _screen = AppScreen.game),
+        );
+
+      case AppScreen.synergyGuide:
+        return SynergyGuide(
+          onBack: () => setState(() => _screen = AppScreen.game),
+          discoveredSynergies: _game?.activeSynergyNames ?? [],
         );
     }
   }
@@ -241,7 +267,7 @@ class _AppShellState extends State<AppShell> {
           maxCastleHp: game.castle.maxHp,
           gold: game.economy.gold,
           currentWave: game.waveSystem.currentWave,
-          totalWaves: game.difficulty.totalWaves,
+          totalWaves: game.waveSystem.totalWaves,
           availableTowers: game.availableTowers,
           selectedTower: game.selectedTowerType,
           isWaveActive: game.phase == GamePhase.waveActive,
@@ -275,16 +301,30 @@ class _AppShellState extends State<AppShell> {
             setState(() {});
           },
           gameSpeed: game.gameSpeed,
+          secondaryShield: game.secondaryShield,
+          maxSecondaryShield: game.maxSecondaryShield,
+          showSynergyHints: game.showSynergyHints,
+          autoWave: game.autoWave,
+          onToggleAutoWave: () {
+            game.toggleAutoWave();
+            setState(() {});
+          },
+          onCycleTargeting: () {
+            game.cycleSelectedTowerTargeting();
+            setState(() {});
+          },
+          waveEnemyTotal: game.waveEnemyTotal,
         ),
         // Wave break overlay
         if (game.isReady && game.phase == GamePhase.waveBreak)
           WaveBreak(
             nextWave: game.waveSystem.currentWave + 1,
-            totalWaves: game.difficulty.totalWaves,
+            totalWaves: game.waveSystem.totalWaves,
             gold: game.economy.gold,
             timeRemaining: game.breakTimeRemaining,
             wavePreview: game.nextWavePreview,
             onStartNow: () => game.startNextWave(),
+            showEnemyWeakness: game.showEnemyWeakness,
           ),
         // Pause overlay
         if (game.isReady && game.phase == GamePhase.paused)
@@ -292,6 +332,12 @@ class _AppShellState extends State<AppShell> {
             onResume: () {
               game.togglePause();
               setState(() {});
+            },
+            onBestiary: () {
+              setState(() => _screen = AppScreen.bestiary);
+            },
+            onSynergyGuide: () {
+              setState(() => _screen = AppScreen.synergyGuide);
             },
             onMainMenu: () {
               _game = null;

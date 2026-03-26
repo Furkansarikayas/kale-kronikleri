@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+import 'dart:ui' as ui;
 import 'package:flame/components.dart';
 import 'package:flutter/material.dart';
 
@@ -6,7 +8,14 @@ class Projectile extends CircleComponent {
   final double speed;
   final int damage;
   final double splashRadius;
+  final Color trailColor;
+  final Color _baseColor;
   bool _hit = false;
+  double _animTimer = 0;
+
+  // Trail positions for visual effect
+  final List<Vector2> _trail = [];
+  static const int _maxTrailLength = 8;
 
   Projectile({
     required Vector2 startPos,
@@ -15,10 +24,12 @@ class Projectile extends CircleComponent {
     this.speed = 300.0,
     this.splashRadius = 0.0,
     Color color = const Color(0xFFFFFFFF),
-  }) : super(
+  }) : trailColor = color.withAlpha(100),
+       _baseColor = color,
+       super(
     position: startPos.clone(),
     radius: 3,
-    paint: Paint()..color = color,
+    paint: Paint()..color = Colors.transparent,
     anchor: Anchor.center,
   );
 
@@ -28,6 +39,12 @@ class Projectile extends CircleComponent {
   void update(double dt) {
     super.update(dt);
     if (_hit) return;
+
+    _animTimer += dt;
+
+    // Store trail position
+    _trail.add(position.clone());
+    if (_trail.length > _maxTrailLength) _trail.removeAt(0);
 
     final direction = target - position;
     final distance = direction.length;
@@ -42,5 +59,81 @@ class Projectile extends CircleComponent {
     position += direction * speed * dt;
   }
 
+  @override
+  void render(Canvas canvas) {
+    // Glow behind projectile
+    canvas.drawCircle(
+      Offset.zero, radius * 2.5,
+      Paint()..color = _baseColor.withAlpha(25),
+    );
+
+    // Draw trail with gradient fade
+    for (int i = 0; i < _trail.length; i++) {
+      final t = i / _maxTrailLength;
+      final trailPos = _trail[i] - position;
+      final r = radius * t * 0.8;
+      if (r < 0.3) continue;
+
+      // Trail segment with gradient
+      final alpha = (t * 0.6 * 255).round().clamp(0, 255);
+      canvas.drawCircle(
+        Offset(trailPos.x, trailPos.y),
+        r,
+        Paint()..color = trailColor.withAlpha(alpha),
+      );
+    }
+
+    // Outer glow ring
+    canvas.drawCircle(
+      Offset.zero, radius * 1.5,
+      Paint()..color = _baseColor.withAlpha(40),
+    );
+
+    // Main projectile body with gradient
+    final grad = ui.Gradient.radial(
+      Offset(-radius * 0.3, -radius * 0.3), radius * 1.2,
+      [_lighten(_baseColor, 0.5), _baseColor, _darken(_baseColor, 0.3)],
+      [0.0, 0.5, 1.0],
+    );
+    canvas.drawCircle(Offset.zero, radius, Paint()..shader = grad);
+
+    // Bright core
+    canvas.drawCircle(
+      Offset(-radius * 0.2, -radius * 0.2), radius * 0.4,
+      Paint()..color = const Color(0x88FFFFFF),
+    );
+
+    // Animated sparkle
+    final sparkleAngle = _animTimer * 10;
+    final sparkleR = radius * 0.3;
+    for (int i = 0; i < 3; i++) {
+      final angle = sparkleAngle + i * math.pi * 2 / 3;
+      final sx = math.cos(angle) * radius * 0.6;
+      final sy = math.sin(angle) * radius * 0.6;
+      canvas.drawCircle(
+        Offset(sx, sy), sparkleR,
+        Paint()..color = const Color(0x44FFFFFF),
+      );
+    }
+  }
+
   void markHit() => _hit = true;
+
+  static Color _lighten(Color c, double amount) {
+    return Color.fromARGB(
+      c.alpha,
+      (c.red + (255 - c.red) * amount).round().clamp(0, 255),
+      (c.green + (255 - c.green) * amount).round().clamp(0, 255),
+      (c.blue + (255 - c.blue) * amount).round().clamp(0, 255),
+    );
+  }
+
+  static Color _darken(Color c, double amount) {
+    return Color.fromARGB(
+      c.alpha,
+      (c.red * (1 - amount)).round().clamp(0, 255),
+      (c.green * (1 - amount)).round().clamp(0, 255),
+      (c.blue * (1 - amount)).round().clamp(0, 255),
+    );
+  }
 }

@@ -3,11 +3,15 @@ import 'package:flutter/material.dart';
 class PauseOverlay extends StatelessWidget {
   final VoidCallback onResume;
   final VoidCallback onMainMenu;
+  final VoidCallback? onBestiary;
+  final VoidCallback? onSynergyGuide;
 
   const PauseOverlay({
     super.key,
     required this.onResume,
     required this.onMainMenu,
+    this.onBestiary,
+    this.onSynergyGuide,
   });
 
   static const _gold = Color(0xFFBA7517);
@@ -49,6 +53,40 @@ class PauseOverlay extends StatelessWidget {
                 ),
                 child: const Text('DEVAM ET', style: TextStyle(fontWeight: FontWeight.bold)),
               ),
+              if (onBestiary != null || onSynergyGuide != null) ...[
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    if (onBestiary != null)
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: onBestiary,
+                          icon: const Icon(Icons.menu_book, size: 16),
+                          label: const Text('DUSMANLAR', style: TextStyle(fontSize: 11)),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: _gold,
+                            side: BorderSide(color: _gold.withAlpha(120)),
+                            minimumSize: const Size(0, 40),
+                          ),
+                        ),
+                      ),
+                    if (onBestiary != null && onSynergyGuide != null) const SizedBox(width: 8),
+                    if (onSynergyGuide != null)
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: onSynergyGuide,
+                          icon: const Icon(Icons.auto_awesome, size: 16),
+                          label: const Text('SINERJILER', style: TextStyle(fontSize: 11)),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: _gold,
+                            side: BorderSide(color: _gold.withAlpha(120)),
+                            minimumSize: const Size(0, 40),
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+              ],
               const SizedBox(height: 12),
               OutlinedButton(
                 onPressed: onMainMenu,
