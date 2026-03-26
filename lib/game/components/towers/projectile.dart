@@ -15,7 +15,7 @@ class Projectile extends CircleComponent {
 
   // Trail positions for visual effect
   final List<Vector2> _trail = [];
-  static const int _maxTrailLength = 8;
+  static const int _maxTrailLength = 12;
 
   Projectile({
     required Vector2 startPos,
@@ -67,21 +67,8 @@ class Projectile extends CircleComponent {
       Paint()..color = _baseColor.withAlpha(25),
     );
 
-    // Draw trail with gradient fade
-    for (int i = 0; i < _trail.length; i++) {
-      final t = i / _maxTrailLength;
-      final trailPos = _trail[i] - position;
-      final r = radius * t * 0.8;
-      if (r < 0.3) continue;
-
-      // Trail segment with gradient
-      final alpha = (t * 0.6 * 255).round().clamp(0, 255);
-      canvas.drawCircle(
-        Offset(trailPos.x, trailPos.y),
-        r,
-        Paint()..color = trailColor.withAlpha(alpha),
-      );
-    }
+    // Draw enhanced trail with glow + core layers
+    _renderTrail(canvas);
 
     // Outer glow ring
     canvas.drawCircle(
@@ -114,6 +101,31 @@ class Projectile extends CircleComponent {
         Offset(sx, sy), sparkleR,
         Paint()..color = const Color(0x44FFFFFF),
       );
+    }
+  }
+
+  void _renderTrail(Canvas canvas) {
+    if (_trail.length < 2) return;
+    for (int i = 0; i < _trail.length - 1; i++) {
+      final progress = i / _trail.length;
+      final alpha = (1.0 - progress) * 0.6;
+      final width = (1.0 - progress) * 3.0 + 0.5;
+
+      final p1 = _trail[i] - position;
+      final p2 = _trail[i + 1] - position;
+
+      // Glow layer
+      canvas.drawLine(p1.toOffset(), p2.toOffset(), Paint()
+        ..color = trailColor.withValues(alpha: alpha * 0.3)
+        ..strokeWidth = width * 3
+        ..strokeCap = StrokeCap.round
+        ..maskFilter = MaskFilter.blur(BlurStyle.normal, width * 2));
+
+      // Core layer
+      canvas.drawLine(p1.toOffset(), p2.toOffset(), Paint()
+        ..color = trailColor.withValues(alpha: alpha)
+        ..strokeWidth = width
+        ..strokeCap = StrokeCap.round);
     }
   }
 

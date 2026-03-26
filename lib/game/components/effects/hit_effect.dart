@@ -145,10 +145,22 @@ class HitEffect extends PositionComponent {
     return HitEffect(
       pos: pos,
       color: color,
-      count: 14,
+      count: 20,
       speed: 80,
       size: 3.0,
-      maxLife: 0.55,
+      maxLife: 0.7,
+    );
+  }
+
+  /// Boss death — even bigger and longer burst
+  factory HitEffect.bossDeath({required Vector2 pos, Color color = const Color(0xFFFF0000)}) {
+    return HitEffect(
+      pos: pos,
+      color: color,
+      count: 30,
+      speed: 120,
+      size: 4.5,
+      maxLife: 0.8,
     );
   }
 
@@ -175,17 +187,29 @@ class HitEffect extends PositionComponent {
   void render(Canvas canvas) {
     final t = (_life / maxLife).clamp(0.0, 1.0);
 
-    // Explosion shockwave ring
+    // Explosion shockwave ring with glow
     if (_isExplosion && t > 0.3) {
       final ringT = 1.0 - t;
       final ringRadius = ringT * 30;
-      final ringAlpha = ((t - 0.3) / 0.7 * 100).round().clamp(0, 255);
+      final ringAlpha = ((t - 0.3) / 0.7 * 180).round().clamp(0, 255);
+
+      // Outer glow ring
+      canvas.drawCircle(
+        Offset.zero, ringRadius,
+        Paint()
+          ..color = Color.fromARGB((ringAlpha * 0.4).round().clamp(0, 255), 255, 180, 50)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 6.0 * t
+          ..maskFilter = MaskFilter.blur(BlurStyle.normal, 4.0 * t),
+      );
+
+      // Core shockwave ring
       canvas.drawCircle(
         Offset.zero, ringRadius,
         Paint()
           ..color = Color.fromARGB(ringAlpha, 255, 150, 0)
           ..style = PaintingStyle.stroke
-          ..strokeWidth = 2.0 * t,
+          ..strokeWidth = 2.5 * t,
       );
     }
 

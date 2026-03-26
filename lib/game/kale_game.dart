@@ -168,8 +168,8 @@ class KaleGame extends FlameGame {
   Future<void> onLoad() async {
     await super.onLoad();
 
-    // Initialize sprite cache before creating any game components
-    await SpriteCache.instance.initialize();
+    // Initialize sprite cache with biome colors before creating any game components
+    await SpriteCache.instance.initialize(biome: difficulty.biome);
 
     // Fixed resolution: world is exactly _gameWidth x _gameHeight
     camera.viewfinder.anchor = Anchor.topLeft;
@@ -1355,6 +1355,7 @@ class KaleGame extends FlameGame {
   int get maxSecondaryShield => _maxSecondaryShield;
 
   void _showDamageText(Vector2 pos, int damage) {
+    final isCritical = damage >= 30;
     final color = damage >= 30
         ? const Color(0xFFFF4444)
         : damage >= 15
@@ -1365,6 +1366,7 @@ class KaleGame extends FlameGame {
       pos: pos + Vector2(0, -10),
       color: color,
       fontSize: damage >= 30 ? 14 : 10,
+      isCritical: isCritical,
     ));
   }
 
