@@ -3,6 +3,7 @@ import 'package:flame/components.dart';
 import 'package:flutter/material.dart';
 import '../../data/tower_data.dart';
 import '../../data/game_config.dart';
+import '../effects/synergy_particles.dart';
 import '../rendering/tower_sprites.dart';
 import 'projectile.dart';
 
@@ -30,6 +31,8 @@ class Tower extends RectangleComponent {
   int kills = 0;
   int totalDamageDealt = 0;
   TargetingMode targetingMode = TargetingMode.nearest;
+
+  SynergyParticles? _synergyParticles;
 
   // Animation state
   double _animTimer = 0;
@@ -73,12 +76,26 @@ class Tower extends RectangleComponent {
     _synergyDamageMultiplier = damageMultiplier;
     _synergyRangeBonus = rangeBonus;
     _synergyFireRateMultiplier = fireRateMultiplier;
+
+    final hasSynergy = _synergyDamageMultiplier > 1.0 || _synergyRangeBonus > 0 || _synergyFireRateMultiplier < 1.0;
+    if (hasSynergy && _synergyParticles == null) {
+      _synergyParticles = SynergyParticles(cellSize: cellSize);
+      add(_synergyParticles!);
+    } else if (!hasSynergy && _synergyParticles != null) {
+      _synergyParticles!.removeFromParent();
+      _synergyParticles = null;
+    }
   }
 
   void clearSynergyBonus() {
     _synergyDamageMultiplier = 1.0;
     _synergyRangeBonus = 0.0;
     _synergyFireRateMultiplier = 1.0;
+
+    if (_synergyParticles != null) {
+      _synergyParticles!.removeFromParent();
+      _synergyParticles = null;
+    }
   }
 
   @override
