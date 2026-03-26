@@ -3,6 +3,7 @@ import 'dart:ui' as ui;
 import 'package:flame/cache.dart';
 import 'package:flame/components.dart';
 import 'package:flame/flame.dart';
+import 'package:flame/sprite.dart';
 import 'package:flutter/foundation.dart';
 
 import '../../rendering/sprite_cache.dart';
@@ -241,7 +242,7 @@ class SpriteManager {
   /// Creates a 1x1 transparent placeholder image.
   Future<ui.Image> _createPlaceholderImage() async {
     final recorder = ui.PictureRecorder();
-    Canvas(recorder); // draw nothing — transparent
+    ui.Canvas(recorder); // draw nothing — transparent
     final picture = recorder.endRecording();
     final image = await picture.toImage(1, 1);
     picture.dispose();
