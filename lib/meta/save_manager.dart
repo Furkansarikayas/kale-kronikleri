@@ -54,4 +54,7 @@ class SaveManager {
   bool get musicEnabled => _prefs.getBool('music_enabled') ?? true;
   Future<void> setSoundEnabled(bool v) async => _prefs.setBool('sound_enabled', v);
   Future<void> setMusicEnabled(bool v) async => _prefs.setBool('music_enabled', v);
+
+  bool get screenShakeEnabled => _prefs.getBool('screen_shake_enabled') ?? true;
+  Future<void> setScreenShakeEnabled(bool v) async => _prefs.setBool('screen_shake_enabled', v);
 }

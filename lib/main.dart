@@ -113,6 +113,7 @@ class _AppShellState extends State<AppShell> {
         'efsane': _saveManager!.metaEfsane,
       },
       mutations: weeklyMutations,
+      initialScreenShakeEnabled: _saveManager!.screenShakeEnabled,
     );
 
     game.onStateChanged = () {
@@ -219,8 +220,13 @@ class _AppShellState extends State<AppShell> {
         return SettingsScreen(
           soundEnabled: _saveManager!.soundEnabled,
           musicEnabled: _saveManager!.musicEnabled,
+          screenShakeEnabled: _saveManager!.screenShakeEnabled,
           onSoundChanged: (v) => _saveManager!.setSoundEnabled(v),
           onMusicChanged: (v) => _saveManager!.setMusicEnabled(v),
+          onScreenShakeChanged: (v) {
+            _saveManager!.setScreenShakeEnabled(v);
+            _game?.screenShake.enabled = v;
+          },
           onBack: _goToMainMenu,
         );
 

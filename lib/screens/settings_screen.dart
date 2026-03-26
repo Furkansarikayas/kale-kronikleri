@@ -3,8 +3,10 @@ import 'package:flutter/material.dart';
 class SettingsScreen extends StatefulWidget {
   final bool soundEnabled;
   final bool musicEnabled;
+  final bool screenShakeEnabled;
   final ValueChanged<bool> onSoundChanged;
   final ValueChanged<bool> onMusicChanged;
+  final ValueChanged<bool> onScreenShakeChanged;
   final VoidCallback onBack;
   final VoidCallback? onResetProgress;
 
@@ -12,11 +14,16 @@ class SettingsScreen extends StatefulWidget {
     super.key,
     required this.soundEnabled,
     required this.musicEnabled,
+    this.screenShakeEnabled = true,
     required this.onSoundChanged,
     required this.onMusicChanged,
+    this.onScreenShakeChanged = _defaultBoolCallback,
     required this.onBack,
     this.onResetProgress,
   });
+
+  static void _defaultBoolCallback(bool _) {}
+
 
   @override
   State<SettingsScreen> createState() => _SettingsScreenState();
@@ -29,12 +36,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   late bool _sound;
   late bool _music;
+  late bool _screenShake;
 
   @override
   void initState() {
     super.initState();
     _sound = widget.soundEnabled;
     _music = widget.musicEnabled;
+    _screenShake = widget.screenShakeEnabled;
   }
 
   @override
@@ -73,6 +82,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 onChanged: (v) {
                   setState(() => _music = v);
                   widget.onMusicChanged(v);
+                },
+              ),
+              const SizedBox(height: 12),
+              _buildToggle(
+                icon: Icons.vibration,
+                label: 'Ekran Sarsıntısı',
+                value: _screenShake,
+                onChanged: (v) {
+                  setState(() => _screenShake = v);
+                  widget.onScreenShakeChanged(v);
                 },
               ),
               const SizedBox(height: 24),
