@@ -2,6 +2,7 @@ import 'dart:ui' as ui;
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import '../components/map/biome_data.dart';
 
 /// High-quality smooth sprite generator and cache.
 ///
@@ -16,6 +17,8 @@ class SpriteCache {
   bool _initialized = false;
   bool get isInitialized => _initialized;
 
+  BiomeData _currentBiome = BiomeData.forest;
+
   static const int spriteSize = 128;
   static const double _s = 128.0;
 
@@ -23,8 +26,15 @@ class SpriteCache {
   // Initialization
   // ---------------------------------------------------------------------------
 
-  Future<void> initialize() async {
-    if (_initialized) return;
+  Future<void> initialize({BiomeData? biome}) async {
+    _currentBiome = biome ?? BiomeData.forest;
+
+    // Clear existing cache when re-initializing with a new biome
+    for (final img in _cache.values) {
+      img.dispose();
+    }
+    _cache.clear();
+    _initialized = false;
 
     for (int v = 0; v < 6; v++) {
       _cache['grass_$v'] = await _renderTile((c) => _paintGrass(c, v));
@@ -121,16 +131,19 @@ class SpriteCache {
     final rng = math.Random(variant * 997 + 42);
     final seed = variant * 31 + 7;
 
-    // Base gradient — vibrant green with warm lighting
+    // Base gradient — biome ground colors
     final baseGrad = ui.Gradient.linear(
       const Offset(0, 0),
       Offset(_s, _s),
-      [const Color(0xFF3A9828), const Color(0xFF45A530), const Color(0xFF389025)],
+      [_currentBiome.groundBase, _currentBiome.groundAccent, _currentBiome.groundBase],
       [0.0, 0.5, 1.0],
     );
     c.drawRect(Rect.fromLTWH(0, 0, _s, _s), Paint()..shader = baseGrad);
 
     // Organic noise texture — overlapping soft circles for natural look
+    final darkGround = Color.lerp(_currentBiome.groundBase, const Color(0xFF000000), 0.3)!;
+    final midGround = _currentBiome.groundAccent;
+    final lightGround = Color.lerp(_currentBiome.groundAccent, const Color(0xFFFFFFFF), 0.15)!;
     for (int i = 0; i < 220; i++) {
       final px = rng.nextDouble() * _s;
       final py = rng.nextDouble() * _s;
@@ -139,11 +152,11 @@ class SpriteCache {
 
       Color col;
       if (n < 0.3) {
-        col = Color.fromARGB((25 + rng.nextInt(20)).clamp(0, 255), 25, 100, 15);
+        col = darkGround.withAlpha((25 + rng.nextInt(20)).clamp(0, 255));
       } else if (n < 0.55) {
-        col = Color.fromARGB((25 + rng.nextInt(15)).clamp(0, 255), 70, 160, 40);
+        col = midGround.withAlpha((25 + rng.nextInt(15)).clamp(0, 255));
       } else {
-        col = Color.fromARGB((22 + rng.nextInt(15)).clamp(0, 255), 100, 200, 60);
+        col = lightGround.withAlpha((22 + rng.nextInt(15)).clamp(0, 255));
       }
       c.drawCircle(Offset(px, py), r, Paint()..color = col);
     }
@@ -154,7 +167,11 @@ class SpriteCache {
       final by = rng.nextDouble() * _s;
       final h = 4.0 + rng.nextDouble() * 10.0;
       final lean = (rng.nextDouble() - 0.5) * 6;
-      final green = (100 + rng.nextInt(80)).clamp(0, 255);
+      final bladeColor = Color.lerp(
+        _currentBiome.groundBase,
+        _currentBiome.groundAccent,
+        rng.nextDouble(),
+      )!.withAlpha(120);
 
       final path = Path()
         ..moveTo(bx, by)
@@ -162,7 +179,7 @@ class SpriteCache {
       c.drawPath(
         path,
         Paint()
-          ..color = Color.fromARGB(120, 30, green, 15)
+          ..color = bladeColor
           ..style = PaintingStyle.stroke
           ..strokeWidth = 1.2
           ..strokeCap = StrokeCap.round,
@@ -263,19 +280,20 @@ class SpriteCache {
   void _paintPath(Canvas c, int variant) {
     final rng = math.Random(variant * 1301 + 77);
 
-    // Warm earth base
+    // Warm earth base — biome path color
     c.drawRect(Rect.fromLTWH(0, 0, _s, _s),
-        Paint()..color = const Color(0xFF6B5B3B));
+        Paint()..color = _currentBiome.pathBase);
 
     // Cobblestone pattern with smooth rounded rects
     _drawSmoothCobbles(c, variant, rng);
 
     // Subtle wear/dirt overlay
+    final dirtColor = Color.lerp(_currentBiome.pathBase, const Color(0xFF000000), 0.2)!;
     for (int i = 0; i < 40; i++) {
       final px = rng.nextDouble() * _s;
       final py = rng.nextDouble() * _s;
       c.drawCircle(Offset(px, py), 1.5 + rng.nextDouble() * 3,
-          Paint()..color = Color.fromARGB(15 + rng.nextInt(15), 50, 40, 25));
+          Paint()..color = dirtColor.withAlpha(15 + rng.nextInt(15)));
     }
 
     // Top-down lighting
@@ -293,11 +311,11 @@ class SpriteCache {
 
   void _drawSmoothCobbles(Canvas c, int variant, math.Random rng) {
     final stoneColors = [
-      const Color(0xFF9A8A6A),
-      const Color(0xFFAA9A7A),
-      const Color(0xFFB8A880),
-      const Color(0xFFA09070),
-      const Color(0xFFCCBB98),
+      Color.lerp(_currentBiome.pathAccent, const Color(0xFFFFFFFF), 0.15)!,
+      Color.lerp(_currentBiome.pathAccent, const Color(0xFFFFFFFF), 0.25)!,
+      Color.lerp(_currentBiome.pathAccent, const Color(0xFFFFFFFF), 0.30)!,
+      Color.lerp(_currentBiome.pathAccent, const Color(0xFFFFFFFF), 0.20)!,
+      Color.lerp(_currentBiome.pathAccent, const Color(0xFFFFFFFF), 0.40)!,
     ];
 
     double y = -2.0;
@@ -354,7 +372,7 @@ class SpriteCache {
         Offset(0, y + stoneH),
         Offset(_s, y + stoneH),
         Paint()
-          ..color = const Color(0xFF4A3A22)
+          ..color = Color.lerp(_currentBiome.pathBase, const Color(0xFF000000), 0.3)!
           ..strokeWidth = 2.0,
       );
       // Vertical mortar lines
@@ -367,7 +385,7 @@ class SpriteCache {
           Offset(x + stoneW, y),
           Offset(x + stoneW, y + stoneH),
           Paint()
-            ..color = const Color(0xFF4A3A22)
+            ..color = Color.lerp(_currentBiome.pathBase, const Color(0xFF000000), 0.3)!
             ..strokeWidth = 1.8,
         );
         x += stoneW;
@@ -440,12 +458,16 @@ class SpriteCache {
       edgeDist = edgeDist.clamp(0.0, 1.0);
 
       final r = 2.0 + rng.nextDouble() * 5.0;
-      final green = (80 + (edgeDist * 80).round()).clamp(0, 255);
       final alpha = (80 + edgeDist * 120).round().clamp(0, 255);
+      final edgeColor = Color.lerp(
+        _currentBiome.groundBase,
+        _currentBiome.groundAccent,
+        edgeDist,
+      )!.withAlpha(alpha);
       c.drawCircle(
         Offset(px, py),
         r,
-        Paint()..color = Color.fromARGB(alpha, 30, green, 15),
+        Paint()..color = edgeColor,
       );
     }
 
@@ -475,12 +497,17 @@ class SpriteCache {
       }
       final h = 4.0 + rng.nextDouble() * 8;
       final lean = (rng.nextDouble() - 0.5) * 5;
+      final edgeBladeColor = Color.lerp(
+        _currentBiome.groundBase,
+        _currentBiome.groundAccent,
+        rng.nextDouble(),
+      )!.withAlpha(150);
       c.drawPath(
         Path()
           ..moveTo(bx, by)
           ..quadraticBezierTo(bx + lean * 0.5, by - h * 0.6, bx + lean, by - h),
         Paint()
-          ..color = Color.fromARGB(150, 40, 130 + rng.nextInt(50), 20)
+          ..color = edgeBladeColor
           ..style = PaintingStyle.stroke
           ..strokeWidth = 1.3
           ..strokeCap = StrokeCap.round,
@@ -496,10 +523,15 @@ class SpriteCache {
     final rng = math.Random(variant * 503 + 31);
     final seed = variant * 41 + 3;
 
-    // Forest base gradient — slightly lighter for visibility
+    // Forest base gradient — biome decoration colors
+    final blockedBase = _currentBiome.decorationColors.isNotEmpty
+        ? _currentBiome.decorationColors[0]
+        : _currentBiome.groundBase;
+    final blockedDark = Color.lerp(blockedBase, const Color(0xFF000000), 0.3)!;
+    final blockedDarker = Color.lerp(blockedBase, const Color(0xFF000000), 0.5)!;
     final baseGrad = ui.Gradient.radial(
       Offset(_s * 0.5, _s * 0.5), _s * 0.8,
-      [const Color(0xFF254520), const Color(0xFF1E3818), const Color(0xFF152A12)],
+      [blockedBase, blockedDark, blockedDarker],
       [0.0, 0.6, 1.0],
     );
     c.drawRect(Rect.fromLTWH(0, 0, _s, _s), Paint()..shader = baseGrad);
@@ -578,12 +610,18 @@ class SpriteCache {
         ..lineTo(cx + layerW, layerY)
         ..close();
 
+      final canopyBase = _currentBiome.decorationColors.isNotEmpty
+          ? _currentBiome.decorationColors[0]
+          : _currentBiome.groundBase;
+      final canopyLight = _currentBiome.decorationColors.length > 2
+          ? _currentBiome.decorationColors[2]
+          : _currentBiome.groundAccent;
       final canopyGrad = ui.Gradient.linear(
         Offset(cx - layerW, layerY), Offset(cx + layerW, layerY),
         [
-          const Color(0xFF1E6518),
-          const Color(0xFF2E8825),
-          const Color(0xFF1E6518),
+          canopyBase,
+          canopyLight,
+          canopyBase,
         ],
         [0.0, 0.5, 1.0],
       );
@@ -591,7 +629,7 @@ class SpriteCache {
 
       // Edge highlight
       c.drawPath(canopy, Paint()
-        ..color = const Color(0xFF48AA38)
+        ..color = Color.lerp(canopyLight, const Color(0xFFFFFFFF), 0.2)!
         ..style = PaintingStyle.stroke
         ..strokeWidth = 1.0);
 
@@ -619,24 +657,36 @@ class SpriteCache {
       );
 
       // Bush body
+      final bushLight = _currentBiome.decorationColors.length > 2
+          ? _currentBiome.decorationColors[2]
+          : _currentBiome.groundAccent;
+      final bushMid = _currentBiome.decorationColors.isNotEmpty
+          ? _currentBiome.decorationColors[0]
+          : _currentBiome.groundBase;
+      final bushDark = _currentBiome.decorationColors.length > 1
+          ? _currentBiome.decorationColors[1]
+          : Color.lerp(_currentBiome.groundBase, const Color(0xFF000000), 0.2)!;
       final bushGrad = ui.Gradient.radial(
         Offset(bx - br * 0.2, by - br * 0.2), br * 1.2,
-        [const Color(0xFF358828), const Color(0xFF256A1E), const Color(0xFF1A4A14)],
+        [bushLight, bushMid, bushDark],
         [0.0, 0.5, 1.0],
       );
       c.drawCircle(Offset(bx, by), br, Paint()..shader = bushGrad);
 
       // Highlight
       c.drawCircle(Offset(bx - br * 0.25, by - br * 0.3), br * 0.35,
-          Paint()..color = const Color(0x2548883A));
+          Paint()..color = bushLight.withAlpha(0x25));
 
       // Leaf texture bumps
+      final leafColor = _currentBiome.decorationColors.isNotEmpty
+          ? _currentBiome.decorationColors[0]
+          : _currentBiome.groundAccent;
       for (int i = 0; i < 5; i++) {
         final lx = bx + (rng.nextDouble() - 0.5) * br * 1.2;
         final ly = by + (rng.nextDouble() - 0.5) * br * 1.2;
         if (math.sqrt(math.pow(lx - bx, 2) + math.pow(ly - by, 2)) < br * 0.9) {
           c.drawCircle(Offset(lx, ly), 2 + rng.nextDouble() * 3,
-              Paint()..color = Color.fromARGB(30, 50, 100 + rng.nextInt(50), 30));
+              Paint()..color = leafColor.withAlpha(30));
         }
       }
     }

@@ -304,9 +304,9 @@ class GridCell extends RectangleComponent {
       Offset(s * 0.5, s * 0.5),
       s * 0.65,
       [
-        const Color(0x5500FF44),
-        const Color(0x3300CC33),
-        const Color(0x1100AA22),
+        const Color(0x3300FF44),
+        const Color(0x2200CC33),
+        const Color(0x0A00AA22),
         const Color(0x00008800),
       ],
       [0.0, 0.4, 0.7, 1.0],
@@ -315,22 +315,16 @@ class GridCell extends RectangleComponent {
 
     canvas.drawCircle(
       Offset(s * 0.5, s * 0.5), s * 0.3,
-      Paint()..color = const Color(0x2200FF66),
+      Paint()..color = const Color(0x1800FF66),
     );
 
+    // Subtle border for highlighted cell
     canvas.drawRect(
       Rect.fromLTWH(1, 1, s - 2, s - 2),
       Paint()
-        ..color = const Color(0xAA00FF44)
+        ..color = const Color(0x3300FF44)
         ..style = PaintingStyle.stroke
-        ..strokeWidth = 1.8,
-    );
-    canvas.drawRect(
-      rect,
-      Paint()
-        ..color = const Color(0x3300FF33)
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 2.5,
+        ..strokeWidth = 1.0,
     );
   }
 
