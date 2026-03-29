@@ -3,6 +3,7 @@ import 'package:flame/components.dart';
 import 'package:flutter/material.dart';
 import '../../data/tower_data.dart';
 import '../../data/game_config.dart';
+import '../../data/t4_branch_data.dart';
 import '../effects/synergy_particles.dart';
 import '../rendering/tower_sprites.dart';
 import 'projectile.dart';
@@ -14,6 +15,19 @@ class Tower extends RectangleComponent {
   int _tier = 1;
   int _totalSpent = 0;
   double _cooldown = 0;
+
+  // T4 branching
+  T4BranchPath t4Branch = T4BranchPath.none;
+  double _t4DmgMult = 1.0;
+  double _t4RangeMult = 1.0;
+  double _t4FireRateMult = 1.0;
+
+  // Disable timer (dragon breath / curse)
+  double disableTimer = 0;
+  bool get isDisabled => disableTimer > 0;
+
+  // Curse debuff
+  double curseDebuffMult = 1.0; // 0.7 when cursed
   double _synergyDamageMultiplier = 1.0;
   double _synergyRangeBonus = 0.0;
   double _synergyFireRateMultiplier = 1.0;
@@ -28,6 +42,7 @@ class Tower extends RectangleComponent {
   double supportRangeMultiplier = 1.0;
   double kaleRuhuMultiplier = 1.0;
   bool showRange = false;
+  bool synergyFreezeOnHit = false;
   int kills = 0;
   int totalDamageDealt = 0;
   TargetingMode targetingMode = TargetingMode.nearest;
@@ -55,13 +70,14 @@ class Tower extends RectangleComponent {
   int get tier => _tier;
   int get totalSpent => _totalSpent;
 
-  int get currentDamage => (stats.damageAtTier(_tier) * _synergyDamageMultiplier * artifactDamageMultiplier * supportDamageMultiplier * kaleRuhuMultiplier).round();
-  double get currentRange => (stats.rangeAtTier(_tier) + _synergyRangeBonus) * artifactRangeMultiplier * supportRangeMultiplier;
-  double get currentFireRate => stats.fireRate * _synergyFireRateMultiplier * artifactFireRateMultiplier;
+  int get currentDamage => (stats.damageAtTier(_tier) * _synergyDamageMultiplier * artifactDamageMultiplier * supportDamageMultiplier * kaleRuhuMultiplier * _t4DmgMult * curseDebuffMult).round();
+  double get currentRange => (stats.rangeAtTier(_tier) + _synergyRangeBonus) * artifactRangeMultiplier * supportRangeMultiplier * _t4RangeMult;
+  double get currentFireRate => stats.fireRate * _synergyFireRateMultiplier * artifactFireRateMultiplier * _t4FireRateMult;
 
   int get sellValue => (totalSpent * GameConfig.sellRefundRatio).round();
 
   bool get canUpgrade => _tier < 4;
+  bool get needsT4Choice => _tier == 3; // at tier 3, next upgrade is T4 branch
   int get upgradeCost => stats.upgradeCost(_tier + 1);
 
   bool upgrade() {
@@ -70,6 +86,31 @@ class Tower extends RectangleComponent {
     _tier++;
     _totalSpent += cost;
     return true;
+  }
+
+  bool upgradeToT4(T4BranchPath path, int cost) {
+    if (_tier != 3 || t4Branch != T4BranchPath.none) return false;
+    _tier = 4;
+    t4Branch = path;
+    _totalSpent += cost;
+    // Apply branch stat multipliers
+    final branch = T4BranchData.getBranch(type);
+    if (path == T4BranchPath.pathA) {
+      _t4DmgMult = branch.dmgMultA;
+      _t4RangeMult = branch.rangeMultA;
+      _t4FireRateMult = branch.fireRateMultA;
+    } else {
+      _t4DmgMult = branch.dmgMultB;
+      _t4RangeMult = branch.rangeMultB;
+      _t4FireRateMult = branch.fireRateMultB;
+    }
+    return true;
+  }
+
+  String get t4Name {
+    if (t4Branch == T4BranchPath.none) return stats.tierNames[3];
+    final branch = T4BranchData.getBranch(type);
+    return t4Branch == T4BranchPath.pathA ? branch.nameA : branch.nameB;
   }
 
   void applySynergyBonus({double damageMultiplier = 1.0, double rangeBonus = 0.0, double fireRateMultiplier = 1.0}) {
@@ -91,6 +132,7 @@ class Tower extends RectangleComponent {
     _synergyDamageMultiplier = 1.0;
     _synergyRangeBonus = 0.0;
     _synergyFireRateMultiplier = 1.0;
+    synergyFreezeOnHit = false;
 
     if (_synergyParticles != null) {
       _synergyParticles!.removeFromParent();
@@ -102,10 +144,11 @@ class Tower extends RectangleComponent {
   void update(double dt) {
     super.update(dt);
     if (_cooldown > 0) _cooldown -= dt;
+    if (disableTimer > 0) disableTimer -= dt;
     _animTimer += dt;
   }
 
-  bool canFire() => _cooldown <= 0 && type != TowerType.spikeWall && type != TowerType.support;
+  bool canFire() => _cooldown <= 0 && !isDisabled && type != TowerType.spikeWall && type != TowerType.support;
 
   Projectile? tryFire(Vector2 targetPos) {
     if (!canFire()) return null;
@@ -127,7 +170,7 @@ class Tower extends RectangleComponent {
   @override
   void render(Canvas canvas) {
     // 1. Draw cached sprite
-    final spriteImage = TowerSpriteGenerator.instance.getSprite(type, _tier);
+    final spriteImage = TowerSpriteGenerator.instance.getSprite(type, _tier, t4Branch);
     if (spriteImage != null) {
       final src = Rect.fromLTWH(0, 0, spriteImage.width.toDouble(), spriteImage.height.toDouble());
       // Draw slightly above and larger than cell for visual impact
@@ -136,7 +179,7 @@ class Tower extends RectangleComponent {
     }
 
     // 2. Synergy glow overlay (dynamic, stays as Canvas)
-    if (_synergyDamageMultiplier > 1.0 || _synergyRangeBonus > 0 || _synergyFireRateMultiplier < 1.0) {
+    if (_synergyDamageMultiplier > 1.0 || _synergyRangeBonus > 0 || _synergyFireRateMultiplier < 1.0 || synergyFreezeOnHit) {
       final glowAlpha = (0.3 + 0.2 * math.sin(_animTimer * 3)).clamp(0.0, 1.0);
       final glowPaint = Paint()
         ..color = Color.fromRGBO(255, 215, 0, glowAlpha)
@@ -179,6 +222,20 @@ class Tower extends RectangleComponent {
         ..color = const Color(0x4DFFFFFF)
         ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6);
       canvas.drawCircle(Offset(cellSize / 2, cellSize * 0.1), cellSize * 0.12, flashPaint);
+    }
+
+    // 6. Disable overlay (dragon breath / curse)
+    if (isDisabled) {
+      canvas.drawRect(
+        Rect.fromLTWH(-cellSize * 0.15, -cellSize * 0.45, cellSize * 1.3, cellSize * 1.45),
+        Paint()..color = const Color(0x66FF0000),
+      );
+    }
+
+    // 7. Curse debuff indicator
+    if (curseDebuffMult < 1.0) {
+      canvas.drawCircle(Offset(cellSize / 2, -cellSize * 0.3), 4,
+        Paint()..color = const Color(0xFFAA00AA));
     }
   }
 

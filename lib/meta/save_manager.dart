@@ -1,4 +1,5 @@
 import 'package:shared_preferences/shared_preferences.dart';
+import 'achievements.dart';
 
 class SaveManager {
   final SharedPreferences _prefs;
@@ -23,12 +24,12 @@ class SaveManager {
   int get metaKale => _prefs.getInt('meta_kale') ?? 0;
   int get metaEfsane => _prefs.getInt('meta_efsane') ?? 0;
 
-  int _getMetaLevel(String tree) => _prefs.getInt('meta_$tree') ?? 0;
+  int getMetaLevel(String tree) => _prefs.getInt('meta_$tree') ?? 0;
 
   Future<bool> unlockMetaNode(String tree, {required int cost}) async {
     if (stoneSpirit < cost) return false;
     await _prefs.setInt('stone_spirit', stoneSpirit - cost);
-    await _prefs.setInt('meta_$tree', _getMetaLevel(tree) + 1);
+    await _prefs.setInt('meta_$tree', getMetaLevel(tree) + 1);
     return true;
   }
 
@@ -57,4 +58,31 @@ class SaveManager {
 
   bool get screenShakeEnabled => _prefs.getBool('screen_shake_enabled') ?? true;
   Future<void> setScreenShakeEnabled(bool v) async => _prefs.setBool('screen_shake_enabled', v);
+
+  // --- Achievement tracking stats ---
+
+  int get totalTowersPlaced => _prefs.getInt('total_towers_placed') ?? 0;
+  Future<void> addTowersPlaced(int count) async => _prefs.setInt('total_towers_placed', totalTowersPlaced + count);
+
+  int get totalSpiritEarned => _prefs.getInt('total_spirit_earned') ?? 0;
+  Future<void> addSpiritEarned(int amount) async => _prefs.setInt('total_spirit_earned', totalSpiritEarned + amount);
+
+  int get totalBossKills => _prefs.getInt('total_boss_kills') ?? 0;
+  Future<void> addBossKills(int count) async => _prefs.setInt('total_boss_kills', totalBossKills + count);
+
+  int get bestPerfectWaves => _prefs.getInt('best_perfect_waves') ?? 0;
+  Future<void> updateBestPerfectWaves(int count) async {
+    if (count > bestPerfectWaves) await _prefs.setInt('best_perfect_waves', count);
+  }
+
+  // --- Achievement unlocks ---
+
+  bool isAchievementUnlocked(AchievementId id) =>
+      _prefs.getBool('achievement_${id.name}') ?? false;
+
+  Future<void> unlockAchievement(AchievementId id) async =>
+      _prefs.setBool('achievement_${id.name}', true);
+
+  List<AchievementId> get unlockedAchievements =>
+      AchievementId.values.where((id) => isAchievementUnlocked(id)).toList();
 }

@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../../data/enemy_data.dart';
 import '../../data/game_config.dart';
 import '../../systems/pathfinding.dart';
+import '../../systems/elite_system.dart';
 import '../rendering/enemy_sprites.dart';
 import 'status_effect.dart';
 
@@ -19,6 +20,18 @@ class Enemy extends RectangleComponent {
   bool _reachedCastle = false;
   bool _isDead = false;
   final List<StatusEffect> _effects = [];
+
+  // Elite system
+  bool isElite = false;
+  EliteModifier? eliteModifier;
+
+  // Boss ability tracking
+  double bossAbilityTimer = 0;
+  bool abilitiesDisabled = false; // EMP effect
+
+  // Unique ID for combo system tracking
+  static int _nextId = 0;
+  final int enemyId = _nextId++;
 
   // Burrower mechanic
   bool _isBurrowed = false;
@@ -52,7 +65,7 @@ class Enemy extends RectangleComponent {
   int get maxHp => baseStats.hp;
   bool get isDead => _isDead;
   bool get reachedCastle => _reachedCastle;
-  int get goldReward => baseStats.goldReward;
+  int get goldReward => baseStats.goldReward * (isElite ? 2 : 1);
   int get castleDamage => baseStats.castleDamage;
   List<StatusEffect> get activeEffects => _effects;
   List<GridPos> get remainingPath => path.sublist(_pathIndex);
@@ -62,7 +75,8 @@ class Enemy extends RectangleComponent {
     for (final e in _effects) {
       if (e.type == StatusType.slow) speed *= (1 - e.slowFactor);
     }
-    return speed.clamp(0.1, 10.0);
+    // Allow full freeze (speed 0) when slowFactor is 1.0
+    return speed.clamp(0.0, 10.0);
   }
 
   int get currentArmor {
@@ -181,7 +195,13 @@ class Enemy extends RectangleComponent {
       final scale = isBoss ? 1.5 : 0.7;
       final drawSize = cellSize * scale;
       final offset = (cellSize - drawSize) / 2;
-      final dst = Rect.fromLTWH(offset, offset - drawSize * 0.1, drawSize, drawSize);
+
+      // Walk animation: bob (up/down) + tilt (left/right lean)
+      final walkPhase = _animTimer * 8; // walk speed
+      final bobY = math.sin(walkPhase) * 1.5; // subtle vertical bob
+      final tilt = math.sin(walkPhase) * 0.04; // subtle lean ~2.3 degrees
+
+      final dst = Rect.fromLTWH(offset, offset - drawSize * 0.1 + bobY, drawSize, drawSize);
 
       // Direction-based flip
       canvas.save();
@@ -194,9 +214,21 @@ class Enemy extends RectangleComponent {
         canvas.scale(-1, 1);
       }
 
+      // Apply tilt rotation around character center
+      final centerX = offset + drawSize / 2;
+      final centerY = offset - drawSize * 0.1 + bobY + drawSize / 2;
+      canvas.translate(centerX, centerY);
+      canvas.rotate(tilt);
+      canvas.translate(-centerX, -centerY);
+
       final paint = Paint()..filterQuality = FilterQuality.medium;
       canvas.drawImageRect(spriteSheet, src, dst, paint);
       canvas.restore();
+    }
+
+    // Elite glow overlay
+    if (isElite) {
+      _renderEliteGlow(canvas);
     }
 
     // Status effect visual overlays (Canvas - dynamic)
@@ -225,6 +257,32 @@ class Enemy extends RectangleComponent {
       final py = center.dy + r * 0.2 - math.sin(_animTimer * 5 + i) * r * 0.3;
       canvas.drawCircle(Offset(px, py), 1.5, Paint()..color = const Color(0x88775522));
     }
+  }
+
+  void _renderEliteGlow(Canvas canvas) {
+    final center = Offset(cellSize / 2, cellSize / 2);
+    final glowAlpha = (0.25 + 0.15 * math.sin(_animTimer * 4)).clamp(0.0, 1.0);
+    Color glowColor;
+    switch (eliteModifier) {
+      case EliteModifier.fast: glowColor = const Color(0xFFFF8800); break;
+      case EliteModifier.armored: glowColor = const Color(0xFF8899BB); break;
+      case EliteModifier.regenerating: glowColor = const Color(0xFF00FF44); break;
+      case EliteModifier.splitting: glowColor = const Color(0xFFFF44FF); break;
+      case null: glowColor = const Color(0xFFFFAA00); break;
+    }
+    canvas.drawCircle(center, cellSize * 0.5,
+      Paint()
+        ..color = glowColor.withAlpha((glowAlpha * 255).round())
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6));
+    // Small crown icon indicator
+    final crownPath = Path()
+      ..moveTo(center.dx - 5, center.dy - cellSize * 0.5)
+      ..lineTo(center.dx - 3, center.dy - cellSize * 0.5 - 4)
+      ..lineTo(center.dx, center.dy - cellSize * 0.5 - 2)
+      ..lineTo(center.dx + 3, center.dy - cellSize * 0.5 - 4)
+      ..lineTo(center.dx + 5, center.dy - cellSize * 0.5)
+      ..close();
+    canvas.drawPath(crownPath, Paint()..color = const Color(0xFFFFD700));
   }
 
   void _renderStatusEffects(Canvas canvas) {

@@ -58,18 +58,24 @@ class _MainMenuState extends State<MainMenu> with SingleTickerProviderStateMixin
       body: Stack(
         children: [
           // Background gradient
-          Container(
-            decoration: const BoxDecoration(
-              gradient: RadialGradient(
-                center: Alignment(0, -0.3),
-                radius: 1.2,
-                colors: [
-                  Color(0xFF151525),
-                  Color(0xFF0D0D18),
-                  Color(0xFF08080E),
-                ],
-                stops: [0.0, 0.5, 1.0],
+          Positioned.fill(
+            child: Container(
+              decoration: const BoxDecoration(
+                gradient: RadialGradient(
+                  center: Alignment(0.3, 0.2),
+                  radius: 1.2,
+                  colors: [Color(0xFF2A1F3D), Color(0xFF18122B), Color(0xFF0D0D15)],
+                  stops: [0.0, 0.5, 1.0],
+                ),
               ),
+            ),
+          ),
+          // Background castle image - full opacity, image is already dark
+          Positioned.fill(
+            child: Image.asset(
+              'assets/images/ui/menu_bg.png',
+              fit: BoxFit.cover,
+              errorBuilder: (_, __, ___) => const SizedBox.shrink(),
             ),
           ),
           // Shimmer particles overlay
@@ -93,39 +99,26 @@ class _MainMenuState extends State<MainMenu> with SingleTickerProviderStateMixin
                     children: [
                       // Castle with golden glow
                       _buildCastleLogo(),
-                      const SizedBox(height: 16),
+                      const SizedBox(height: 4),
                       // Title
                       _buildTitle(),
-                      const SizedBox(height: 4),
+                      const SizedBox(height: 1),
                       // Subtitle
                       Text(
-                        'Castle Chronicles',
+                        'Kale Kronikleri',
                         style: TextStyle(
                           color: _cream.withAlpha(140),
-                          fontSize: 14,
+                          fontSize: 13,
                           fontStyle: FontStyle.italic,
                           letterSpacing: 2,
                         ),
                       ),
-                      const SizedBox(height: 32),
+                      const SizedBox(height: 8),
                       // Buttons
                       _buildButtons(),
-                      const SizedBox(height: 24),
+                      const SizedBox(height: 6),
                       // Stats bar
                       _buildStatsBar(),
-                      const SizedBox(height: 20),
-                      // Decorative divider
-                      _buildDecorativeDivider(),
-                      const SizedBox(height: 8),
-                      // Version
-                      Text(
-                        'v0.1.0',
-                        style: TextStyle(
-                          color: _creamDim.withAlpha(80),
-                          fontSize: 10,
-                          letterSpacing: 2,
-                        ),
-                      ),
                     ],
                   ),
                 ),
@@ -153,9 +146,15 @@ class _MainMenuState extends State<MainMenu> with SingleTickerProviderStateMixin
           ),
         ],
       ),
-      child: CustomPaint(
-        size: const Size(140, 70),
-        painter: _CastleSilhouettePainter(),
+      child: Image.asset(
+        'assets/images/ui/castle_logo.png',
+        width: 110,
+        height: 110,
+        fit: BoxFit.contain,
+        errorBuilder: (_, __, ___) => CustomPaint(
+          size: const Size(140, 70),
+          painter: _CastleSilhouettePainter(),
+        ),
       ),
     );
   }
@@ -183,75 +182,60 @@ class _MainMenuState extends State<MainMenu> with SingleTickerProviderStateMixin
   }
 
   Widget _buildButtons() {
-    return Wrap(
-      alignment: WrapAlignment.center,
-      spacing: 14,
-      runSpacing: 10,
+    return Column(
       children: [
         _PremiumMenuButton(
           label: 'OYNA',
           icon: Icons.play_arrow,
+          imageAsset: 'assets/images/ui/btn_oyna.png',
           onPressed: widget.onPlay,
+          widthFactor: 0.52,
+          heightFactor: 0.17,
         ),
-        _PremiumMenuButton(
-          label: 'META AGACI',
-          icon: Icons.account_tree,
-          onPressed: widget.onMeta,
+        const SizedBox(height: 6),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            _PremiumMenuButton(
+              label: 'META AĞACI',
+              icon: Icons.account_tree,
+              imageAsset: 'assets/images/ui/btn_meta.png',
+              onPressed: widget.onMeta,
+              widthFactor: 0.40,
+              heightFactor: 0.14,
+            ),
+            const SizedBox(width: 14),
+            if (widget.onSettings != null)
+              _PremiumMenuButton(
+                label: 'AYARLAR',
+                icon: Icons.settings,
+                imageAsset: 'assets/images/ui/btn_ayarlar.png',
+                onPressed: widget.onSettings!,
+                widthFactor: 0.40,
+                heightFactor: 0.14,
+              ),
+          ],
         ),
-        if (widget.onSettings != null)
-          _PremiumMenuButton(
-            label: 'AYARLAR',
-            icon: Icons.settings,
-            onPressed: widget.onSettings!,
-          ),
       ],
     );
   }
 
   Widget _buildStatsBar() {
     return Wrap(
-      spacing: 10,
+      spacing: 12,
       runSpacing: 8,
       alignment: WrapAlignment.center,
       children: [
-        _PremiumStatChip(icon: Icons.diamond, label: 'Tas Ruhu', value: '${widget.stoneSpirit}'),
-        _PremiumStatChip(icon: Icons.loop, label: 'Kosu', value: '${widget.totalRuns}'),
+        _PremiumStatChip(imageAsset: 'assets/images/ui/stat_spirit.png', icon: Icons.diamond, label: 'Taş Ruhu', value: '${widget.stoneSpirit}'),
+        _PremiumStatChip(imageAsset: 'assets/images/ui/stat_runs.png', icon: Icons.loop, label: 'Koşu', value: '${widget.totalRuns}'),
         if (widget.bestWave > 0)
-          _PremiumStatChip(icon: Icons.waves, label: 'En Iyi Dalga', value: '${widget.bestWave}'),
+          _PremiumStatChip(imageAsset: 'assets/images/ui/stat_wave.png', icon: Icons.waves, label: 'En İyi Dalga', value: '${widget.bestWave}'),
         if (widget.totalKills > 0)
-          _PremiumStatChip(icon: Icons.dangerous, label: 'Toplam Oldurulen', value: '${widget.totalKills}'),
+          _PremiumStatChip(imageAsset: 'assets/images/ui/stat_kills.png', icon: Icons.dangerous, label: 'Toplam Öldürülen', value: '${widget.totalKills}'),
       ],
     );
   }
 
-  Widget _buildDecorativeDivider() {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        Container(
-          width: 40,
-          height: 1,
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              colors: [Colors.transparent, _gold.withAlpha(80)],
-            ),
-          ),
-        ),
-        const SizedBox(width: 8),
-        Icon(Icons.star, color: _gold.withAlpha(60), size: 10),
-        const SizedBox(width: 8),
-        Container(
-          width: 40,
-          height: 1,
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              colors: [_gold.withAlpha(80), Colors.transparent],
-            ),
-          ),
-        ),
-      ],
-    );
-  }
 }
 
 class _CastleSilhouettePainter extends CustomPainter {
@@ -351,6 +335,7 @@ class _ShimmerParticlePainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
+    if (size.width <= 0 || size.height <= 0) return;
     final rng = math.Random(42);
     const count = 30;
     for (int i = 0; i < count; i++) {
@@ -382,31 +367,39 @@ class _PremiumStatChip extends StatelessWidget {
   final IconData icon;
   final String label;
   final String value;
+  final String? imageAsset;
 
-  const _PremiumStatChip({required this.icon, required this.label, required this.value});
+  const _PremiumStatChip({required this.icon, required this.label, required this.value, this.imageAsset});
 
   @override
   Widget build(BuildContext context) {
-    return GlassPanel(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      borderRadius: 8,
-      borderColor: const Color(0x33D4A843),
-      blur: 8,
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
+    final h = MediaQuery.of(context).size.height;
+    return SizedBox(
+      width: h * 0.35,
+      height: h * 0.10,
+      child: Stack(
+        fit: StackFit.expand,
         children: [
-          Icon(icon, color: const Color(0xFFD4A843), size: 13),
-          const SizedBox(width: 5),
-          Text(
-            '$label: ',
-            style: const TextStyle(color: Color(0xAAB8AE98), fontSize: 11),
-          ),
-          Text(
-            value,
-            style: const TextStyle(
-              color: Color(0xFFF0E6D0),
-              fontSize: 11,
-              fontWeight: FontWeight.bold,
+          if (imageAsset != null)
+            Image.asset(
+              imageAsset!,
+              fit: BoxFit.fill,
+              errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+            ),
+          Center(
+            child: Padding(
+              padding: const EdgeInsets.only(left: 24),
+              child: Text(
+                '$label: $value',
+                style: TextStyle(
+                  color: const Color(0xFFF0E6D0),
+                  fontSize: 13,
+                  fontWeight: FontWeight.bold,
+                  shadows: [
+                    Shadow(color: Colors.black.withAlpha(180), blurRadius: 3, offset: const Offset(0, 1)),
+                  ],
+                ),
+              ),
             ),
           ),
         ],
@@ -418,12 +411,18 @@ class _PremiumStatChip extends StatelessWidget {
 class _PremiumMenuButton extends StatefulWidget {
   final String label;
   final IconData icon;
+  final String? imageAsset;
   final VoidCallback onPressed;
+  final double? widthFactor;
+  final double? heightFactor;
 
   const _PremiumMenuButton({
     required this.label,
     required this.icon,
+    this.imageAsset,
     required this.onPressed,
+    this.widthFactor,
+    this.heightFactor,
   });
 
   @override
@@ -432,6 +431,8 @@ class _PremiumMenuButton extends StatefulWidget {
 
 class _PremiumMenuButtonState extends State<_PremiumMenuButton> {
   bool _pressed = false;
+
+  static const _gold = Color(0xFFD4A843);
 
   @override
   Widget build(BuildContext context) {
@@ -442,90 +443,48 @@ class _PremiumMenuButtonState extends State<_PremiumMenuButton> {
         widget.onPressed();
       },
       onTapCancel: () => setState(() => _pressed = false),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(12),
-        child: BackdropFilter(
-          filter: ui.ImageFilter.blur(sigmaX: 6, sigmaY: 6),
-          child: AnimatedContainer(
+      child: AnimatedScale(
+        scale: _pressed ? 0.95 : 1.0,
         duration: const Duration(milliseconds: 100),
-        width: 170,
-        height: 48,
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: _pressed
-                ? [const Color(0xFF8A5510), const Color(0xFF6A4010)]
-                : [const Color(0xFFD4A843), const Color(0xFFBA7517)],
-          ),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-            color: _pressed ? const Color(0xFFAA8030) : const Color(0xFFE8C878),
-            width: 1,
-          ),
-          boxShadow: _pressed
-              ? []
-              : [
-                  BoxShadow(
-                    color: const Color(0xFFD4A843).withAlpha(40),
-                    blurRadius: 12,
-                    spreadRadius: 2,
-                    offset: const Offset(0, 2),
+        child: AnimatedOpacity(
+          opacity: _pressed ? 0.8 : 1.0,
+          duration: const Duration(milliseconds: 100),
+          child: Container(
+            width: MediaQuery.of(context).size.height * (widget.widthFactor ?? 0.52),
+            height: MediaQuery.of(context).size.height * (widget.heightFactor ?? 0.18),
+            decoration: BoxDecoration(
+              boxShadow: _pressed
+                  ? []
+                  : [
+                      BoxShadow(color: _gold.withAlpha(40), blurRadius: 16, spreadRadius: 2, offset: const Offset(0, 4)),
+                      BoxShadow(color: Colors.black.withAlpha(100), blurRadius: 10, offset: const Offset(0, 3)),
+                    ],
+            ),
+            child: Image.asset(
+              widget.imageAsset ?? 'assets/images/ui/button_normal.png',
+              fit: BoxFit.fill,
+              errorBuilder: (_, __, ___) => Container(
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    colors: [Color(0xFFD4A843), Color(0xFFBA7517)],
                   ),
-                  BoxShadow(
-                    color: const Color(0xFFBA7517).withAlpha(20),
-                    blurRadius: 20,
-                    spreadRadius: 4,
-                  ),
-                ],
-        ),
-        child: Stack(
-          children: [
-            // Top edge inner highlight
-            if (!_pressed)
-              Positioned(
-                top: 1,
-                left: 12,
-                right: 12,
-                child: Container(
-                  height: 1,
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      colors: [
-                        Colors.transparent,
-                        Colors.white.withAlpha(60),
-                        Colors.transparent,
-                      ],
-                    ),
-                    borderRadius: BorderRadius.circular(1),
-                  ),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: const Color(0xFFE8C878)),
                 ),
-              ),
-            // Button content
-            Center(
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(widget.icon, size: 20, color: const Color(0xFF0D0D15)),
-                  const SizedBox(width: 8),
-                  Text(
+                child: Center(
+                  child: Text(
                     widget.label,
                     style: const TextStyle(
                       color: Color(0xFF0D0D15),
                       fontSize: 14,
                       fontWeight: FontWeight.bold,
                       letterSpacing: 2,
-                      shadows: [
-                        Shadow(color: Color(0x33FFFFFF), blurRadius: 2),
-                      ],
                     ),
                   ),
-                ],
+                ),
               ),
             ),
-          ],
-        ),
-      ),
+          ),
         ),
       ),
     );

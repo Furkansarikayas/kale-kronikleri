@@ -73,7 +73,7 @@ class SynergyGuide extends StatelessWidget {
                           borderRadius: BorderRadius.circular(4),
                         ),
                         child: Text(
-                          'UCLU',
+                          'ÜÇLÜ',
                           style: TextStyle(color: Colors.purple.shade200, fontSize: 8, fontWeight: FontWeight.bold),
                         ),
                       ),
@@ -112,8 +112,8 @@ class SynergyGuide extends StatelessWidget {
                 const SizedBox(height: 2),
                 Text(
                   synergy.isTriple
-                      ? 'Uc kuleyi yan yana yerlestir (8 yonlu komsuluk)'
-                      : 'Iki kuleyi yan yana yerlestir (8 yonlu komsuluk)',
+                      ? 'Üç kuleyi yan yana yerleştir (8 yönlü komşuluk)'
+                      : 'İki kuleyi yan yana yerleştir (8 yönlü komşuluk)',
                   style: TextStyle(color: _cream.withAlpha(60), fontSize: 9, fontStyle: FontStyle.italic),
                 ),
               ],

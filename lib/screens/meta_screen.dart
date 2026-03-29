@@ -38,7 +38,7 @@ class _MetaScreenState extends State<MetaScreen> {
           onPressed: widget.onBack,
           icon: const Icon(Icons.arrow_back, color: _cream),
         ),
-        title: const Text('Meta Agaci', style: TextStyle(color: _gold)),
+        title: const Text('Meta Ağacı', style: TextStyle(color: _gold)),
         actions: [
           Padding(
             padding: const EdgeInsets.only(right: 16),
@@ -64,7 +64,15 @@ class _MetaScreenState extends State<MetaScreen> {
                 return ListTile(
                   selected: isSelected,
                   selectedTileColor: _gold.withAlpha(30),
-                  leading: Icon(_treeIcon(tree.id), color: isSelected ? _gold : _cream.withAlpha(120), size: 20),
+                  leading: SizedBox(
+                    width: 24,
+                    height: 24,
+                    child: Image.asset(
+                      'assets/images/ui/meta_${tree.id}_1.png',
+                      fit: BoxFit.contain,
+                      errorBuilder: (_, __, ___) => Icon(_treeIcon(tree.id), color: isSelected ? _gold : _cream.withAlpha(120), size: 20),
+                    ),
+                  ),
                   title: Text(
                     tree.name,
                     style: TextStyle(
@@ -98,6 +106,29 @@ class _MetaScreenState extends State<MetaScreen> {
       case 'efsane': return Icons.auto_awesome;
       default: return Icons.star;
     }
+  }
+
+  Widget _nodeIcon(String treeId, int nodeIndex) {
+    final path = 'assets/images/ui/meta_${treeId}_${nodeIndex + 1}.png';
+    return Image.asset(
+      path,
+      width: 32,
+      height: 32,
+      fit: BoxFit.contain,
+      errorBuilder: (_, __, ___) => Container(
+        width: 32,
+        height: 32,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          color: Colors.grey[800],
+        ),
+        alignment: Alignment.center,
+        child: Text(
+          '${nodeIndex + 1}',
+          style: const TextStyle(color: _cream, fontWeight: FontWeight.bold),
+        ),
+      ),
+    );
   }
 
   Widget _buildNodeList() {
@@ -137,21 +168,18 @@ class _MetaScreenState extends State<MetaScreen> {
           ),
           child: Row(
             children: [
-              // Node number
-              Container(
-                width: 32,
-                height: 32,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: isUnlocked ? _gold : Colors.grey[800],
-                ),
-                alignment: Alignment.center,
-                child: Text(
-                  '${index + 1}',
-                  style: TextStyle(
-                    color: isUnlocked ? _darkBg : _cream,
-                    fontWeight: FontWeight.bold,
-                  ),
+              // Node icon
+              ClipOval(
+                child: ColorFiltered(
+                  colorFilter: isUnlocked
+                      ? const ColorFilter.mode(Colors.transparent, BlendMode.dst)
+                      : const ColorFilter.matrix(<double>[
+                          0.2126, 0.7152, 0.0722, 0, 0,
+                          0.2126, 0.7152, 0.0722, 0, 0,
+                          0.2126, 0.7152, 0.0722, 0, 0,
+                          0,      0,      0,      0.5, 0,
+                        ]),
+                  child: _nodeIcon(_selectedTreeId, index),
                 ),
               ),
               const SizedBox(width: 12),
@@ -174,7 +202,7 @@ class _MetaScreenState extends State<MetaScreen> {
                     ),
                     if (!isUnlocked)
                       Text(
-                        '${node.cost} Ruh${node.runGate > 0 ? ' | ${node.runGate} kosu gerekli' : ''}',
+                        '${node.cost} Ruh${node.runGate > 0 ? ' | ${node.runGate} koşu gerekli' : ''}',
                         style: TextStyle(
                           color: canUnlock ? _gold : Colors.grey,
                           fontSize: 11,
@@ -194,7 +222,7 @@ class _MetaScreenState extends State<MetaScreen> {
                     foregroundColor: _darkBg,
                     disabledBackgroundColor: Colors.grey[800],
                   ),
-                  child: const Text('AC', style: TextStyle(fontWeight: FontWeight.bold)),
+                  child: const Text('AÇ', style: TextStyle(fontWeight: FontWeight.bold)),
                 ),
               if (isUnlocked)
                 const Icon(Icons.check_circle, color: _gold, size: 24),

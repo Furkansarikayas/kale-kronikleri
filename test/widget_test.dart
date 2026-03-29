@@ -89,5 +89,29 @@ void main() {
       map.generate(seed: 42);
       expect(map.enemyPath.isNotEmpty, true);
     });
+
+    test('multiple spawn points generate distinct paths', () {
+      final map = GameMap(cellSize: 40.0);
+      map.generate(seed: 42, spawnCount: 2);
+      expect(map.spawnPoints.length, 2);
+      expect(map.enemyPaths.length, 2);
+      // Spawn points should be in different rows
+      expect(map.spawnPoints[0].row != map.spawnPoints[1].row, true);
+      // Both paths should reach the castle (non-empty)
+      for (final path in map.enemyPaths) {
+        expect(path.isNotEmpty, true);
+        expect(path.last, map.castleEntry);
+      }
+    });
+
+    test('3 spawn points are spread across map height', () {
+      final map = GameMap(cellSize: 40.0);
+      map.generate(seed: 42, spawnCount: 3);
+      expect(map.spawnPoints.length, 3);
+      expect(map.enemyPaths.length, 3);
+      // All spawn points in different rows
+      final rows = map.spawnPoints.map((s) => s.row).toSet();
+      expect(rows.length, 3);
+    });
   });
 }

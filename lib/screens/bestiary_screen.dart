@@ -21,7 +21,7 @@ class BestiaryScreen extends StatelessWidget {
           onPressed: onBack,
           icon: const Icon(Icons.arrow_back, color: _cream),
         ),
-        title: const Text('Dusman Ansiklopedisi', style: TextStyle(color: _gold, fontSize: 16)),
+        title: const Text('Düşman Ansiklopedisi', style: TextStyle(color: _gold, fontSize: 16)),
       ),
       body: ListView.builder(
         padding: const EdgeInsets.all(12),
@@ -93,7 +93,7 @@ class BestiaryScreen extends StatelessWidget {
                         const SizedBox(height: 4),
                         Row(
                           children: [
-                            Text('Zayiflik: ', style: TextStyle(color: _cream.withAlpha(100), fontSize: 9)),
+                            Text('Zayıflık: ', style: TextStyle(color: _cream.withAlpha(100), fontSize: 9)),
                             ...weaknesses.map((t) => Padding(
                               padding: const EdgeInsets.only(right: 4),
                               child: Row(
@@ -142,14 +142,14 @@ class BestiaryScreen extends StatelessWidget {
 
   String? _specialAbility(EnemyType type) {
     switch (type) {
-      case EnemyType.cavalry: return 'Cok hizli hareket eder';
-      case EnemyType.undead: return 'Oldugunde 3 kucuk undead\'e bolunur';
-      case EnemyType.healer: return 'Yakindaki dusmanlara +5 HP iyilestirme';
-      case EnemyType.burrower: return 'Yerin altina girerek kuleleri atlar';
+      case EnemyType.cavalry: return 'Çok hızlı hareket eder';
+      case EnemyType.undead: return 'Öldüğünde 3 küçük undead\'e bölünür';
+      case EnemyType.healer: return 'Yakındaki düşmanlara +5 HP İyileştirme';
+      case EnemyType.burrower: return 'Yerin altına girerek kuleleri atlar';
       case EnemyType.troll: return 'Saniyede 3 HP yenilenir';
-      case EnemyType.darkKnight: return 'Yakindaki dusmanlara +5 bonus zirh';
-      case EnemyType.shadowLord: return 'Boss - Yuksek HP, guclu saldiri';
-      case EnemyType.dragonEmperor: return 'Son Boss - En guclu dusman';
+      case EnemyType.darkKnight: return 'Yakındaki düşmanlara +5 bonus zırh';
+      case EnemyType.shadowLord: return 'Boss - Yüksek HP, güçlü saldırı';
+      case EnemyType.dragonEmperor: return 'Son Boss - En güçlü düşman';
       default: return null;
     }
   }

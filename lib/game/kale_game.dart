@@ -17,6 +17,7 @@ import 'components/enemies/status_effect.dart';
 import 'components/floating_text.dart';
 import 'components/effects/hit_effect.dart';
 import 'components/effects/screen_shake.dart';
+import 'components/effects/spell_overlay.dart';
 import 'data/enemy_data.dart';
 import 'data/game_config.dart';
 import 'data/tower_data.dart';
@@ -25,6 +26,13 @@ import 'systems/economy_system.dart';
 import 'systems/wave_system.dart';
 import 'systems/synergy_system.dart';
 import 'systems/mutation_system.dart';
+import 'systems/elite_system.dart';
+import 'systems/combo_system.dart';
+import 'systems/spell_system.dart';
+import 'systems/event_system.dart';
+import 'systems/audio_system.dart';
+import 'systems/tutorial_system.dart';
+import 'data/t4_branch_data.dart';
 import '../meta/artifact_system.dart';
 import 'rendering/sprite_cache.dart';
 import 'components/rendering/castle_sprites.dart';
@@ -34,9 +42,12 @@ import 'components/rendering/enemy_sprites.dart';
 enum GamePhase { prep, waveActive, waveBreak, paused, gameOver }
 
 class KaleGame extends FlameGame {
-  static const double fixedCellSize = 40.0;
+  static const double fixedCellSize = 64.0;
   static final double _gameWidth = GameConfig.gridColumns * fixedCellSize;
   static final double _gameHeight = GameConfig.gridRows * fixedCellSize;
+  // Extra sky strip above the grid for parallax sky/stars/moon visibility
+  static const double _skyExtension = 90.0;
+  static final double _viewportHeight = _gameHeight + _skyExtension;
 
   late GameMap gameMap;
   late Castle castle;
@@ -75,6 +86,16 @@ class KaleGame extends FlameGame {
   int get enemiesKilled => _enemiesKilled;
   int get enemiesAlive => _enemies.where((e) => !e.isDead && !e.reachedCastle).length;
 
+  // Achievement tracking
+  int _bossesKilled = 0;
+  int get bossesKilled => _bossesKilled;
+  int _totalTowersPlacedThisRun = 0;
+  int get totalTowersPlacedThisRun => _totalTowersPlacedThisRun;
+  int _consecutivePerfectWaves = 0;
+  int _bestPerfectWaves = 0;
+  int get bestPerfectWaves => _bestPerfectWaves;
+  bool _damageTakenThisWave = false;
+
   // Wave spawning
   List<WaveEntry> _pendingSpawns = [];
   double _spawnTimer = 0;
@@ -82,6 +103,20 @@ class KaleGame extends FlameGame {
   double _currentSpawnDelay = 0.8;
   int _waveEnemyTotal = 0;
   int get waveEnemyTotal => _waveEnemyTotal;
+
+  // Wave path pattern — controls which paths enemies use each wave
+  WavePathPattern _wavePathPattern = WavePathPattern.spread;
+  int _focusedPathIndex = 0; // for focused/pincer patterns
+  int _waveSpawnCounter = 0; // tracks spawn index for round-robin
+  WavePathPattern get wavePathPattern => _wavePathPattern;
+  int get focusedPathIndex => _focusedPathIndex;
+
+  /// Preview of what path pattern the next wave will use.
+  WavePathPattern get nextWavePathPattern {
+    final nextWave = waveSystem.currentWave + 1;
+    final pathRng = math.Random(mapSeed + nextWave);
+    return WavePathSelector.selectPattern(nextWave, gameMap.enemyPaths.length, pathRng);
+  }
 
   // Wave break
   double _breakTimer = 0;
@@ -97,6 +132,8 @@ class KaleGame extends FlameGame {
   bool _buzulCagiActive = false;
   bool _ultimateSynergyActive = false;
   double _ultimateSynergyTimer = 0;
+  double _dengePatlamasiTimer = 0;
+  bool _buzHapsiActive = false;
 
   // Castle AoE meta
   double _castleAoeTimer = 0;
@@ -122,6 +159,45 @@ class KaleGame extends FlameGame {
   int get totalDamageDealt => _totalDamageDealt;
   int _goldStolen = 0;
   int get goldStolen => _goldStolen;
+
+  // New systems
+  late ComboSystem comboSystem;
+  late SpellSystem spellSystem;
+  final TutorialSystem tutorialSystem = TutorialSystem();
+
+  // Elite enemy RNG
+  late math.Random _eliteRng;
+
+  // Boss ability tracking
+  final Map<Enemy, double> _bossAbilityTimers = {};
+
+  // T4 branch selection
+  Tower? _pendingT4Tower;
+  Tower? get pendingT4Tower => _pendingT4Tower;
+
+  // Spell system state
+  List<SpellType> get availableSpells => spellSystem.availableSpells(waveSystem.currentWave);
+  bool canCastSpell(SpellType type) => spellSystem.canCast(type) && _phase == GamePhase.waveActive;
+  double spellCooldown(SpellType type) => spellSystem.getCooldown(type);
+  double spellMaxCooldown(SpellType type) => spellSystem.getMaxCooldown(type);
+
+  // Wave events
+  WaveEventDef? _currentEvent;
+  WaveEventDef? get currentEvent => _currentEvent;
+  bool _merchantAvailable = false;
+  bool get merchantAvailable => _merchantAvailable;
+
+  // Tower curse tracking (event)
+  final Map<Tower, int> _cursedTowerWaves = {};
+
+  // Endless mode
+  bool _endlessMode = false;
+  bool get endlessMode => _endlessMode;
+  double _endlessScaling = 1.0;
+  int _endlessHighWave = 0;
+  int get endlessHighWave => _endlessHighWave;
+  bool _showEndlessPrompt = false;
+  bool get showEndlessPrompt => _showEndlessPrompt;
 
   // Auto-wave toggle
   bool _autoWave = false;
@@ -160,7 +236,7 @@ class KaleGame extends FlameGame {
   }) : super(
     camera: CameraComponent.withFixedResolution(
       width: _gameWidth,
-      height: _gameHeight,
+      height: _viewportHeight,
     ),
   );
 
@@ -176,9 +252,12 @@ class KaleGame extends FlameGame {
     await CastleSpriteGenerator.instance.initialize();
     await TowerSpriteGenerator.instance.initialize();
     await EnemySpriteGenerator.instance.initialize();
+    await AudioSystem.instance.initialize();
 
-    // Fixed resolution: world is exactly _gameWidth x _gameHeight
+    // Fixed resolution: viewport shows sky strip above the grid
     camera.viewfinder.anchor = Anchor.topLeft;
+    // Shift the camera up so sky is visible above the grid (y = -_skyExtension)
+    camera.viewfinder.position = Vector2(0, -_skyExtension);
     cellSize = fixedCellSize;
 
     // Screen shake effect
@@ -186,14 +265,19 @@ class KaleGame extends FlameGame {
     add(screenShake);
 
     // Multiple spawn paths based on difficulty
-    final spawnCount = difficulty == DifficultyTier.apprentice ? 1
-        : difficulty == DifficultyTier.knight ? 1
-        : 2; // lord+ get 2 spawn points
+    final spawnCount = difficulty == DifficultyTier.apprentice ? 2
+        : difficulty == DifficultyTier.knight ? 2
+        : difficulty == DifficultyTier.lord ? 3
+        : 3; // king/legend get 3 spawn points
     gameMap = GameMap(cellSize: cellSize);
     gameMap.generate(seed: mapSeed, spawnCount: spawnCount);
     world.add(ParallaxBackground(biome: difficulty.biome));
     world.add(gameMap);
-    world.add(AtmosphereOverlay());
+    final atmosphere = AtmosphereOverlay(
+      biomeType: difficulty.biome.type,
+      biomeFogTint: difficulty.biome.fogColor,
+    );
+    world.add(atmosphere);
 
     castle = Castle(cellSize: cellSize);
     world.add(castle);
@@ -203,8 +287,11 @@ class KaleGame extends FlameGame {
 
     economy = EconomySystem();
     economy.difficultyMultiplier = difficulty.spiritMultiplier;
-    waveSystem = WaveSystem(difficulty: difficulty);
+    waveSystem = WaveSystem(difficulty: difficulty, mapSeed: mapSeed);
     synergySystem = SynergySystem();
+    comboSystem = ComboSystem();
+    spellSystem = SpellSystem();
+    _eliteRng = math.Random(mapSeed);
 
     // Apply mutation effects to wave prep time
     _mutationWavePrepMult = MutationSystem.wavePrepMultiplier(mutations);
@@ -216,6 +303,7 @@ class KaleGame extends FlameGame {
 
     _phase = GamePhase.prep;
     _isReady = true;
+    tutorialSystem.tryShow(TutorialTrigger.gameStart);
     onStateChanged?.call(); // notify Flutter to show HUD
   }
 
@@ -364,10 +452,13 @@ class KaleGame extends FlameGame {
       tower.artifactDamageMultiplier = _artifactLightningDamageMultiplier;
     }
     _towers.add(tower);
+    _totalTowersPlacedThisRun++;
     _towerPositions[(col: col, row: row)] = type;
     world.add(tower);
 
     _recalculateSynergies();
+    AudioSystem.instance.play(GameSound.towerPlace);
+    if (_towers.length == 1) tutorialSystem.tryShow(TutorialTrigger.firstTowerPlaced);
     onStateChanged?.call();
     return true;
   }
@@ -380,17 +471,24 @@ class KaleGame extends FlameGame {
     tower.removeFromParent();
 
     _recalculateSynergies();
+    AudioSystem.instance.play(GameSound.towerSell);
     onStateChanged?.call();
     return refund;
   }
 
   bool upgradeTower(Tower tower) {
     if (!tower.canUpgrade) return false;
+    // T4 needs branch selection via UI
+    if (tower.needsT4Choice) {
+      requestT4Upgrade(tower);
+      return false; // don't deduct yet, wait for branch selection
+    }
     final cost = (_metaUpgradeCostReduction > 0)
         ? (tower.upgradeCost * (1.0 - _metaUpgradeCostReduction)).round()
         : tower.upgradeCost;
     if (!economy.trySpend(cost)) return false;
     tower.upgrade();
+    AudioSystem.instance.play(GameSound.towerUpgrade);
     onStateChanged?.call();
     return true;
   }
@@ -447,11 +545,12 @@ class KaleGame extends FlameGame {
           case 5: // Yanık Asit: 1.5x damage
             tower.applySynergyBonus(damageMultiplier: 1.0 + 0.5 * synergyMult);
             break;
-          case 6: // Denge Patlaması: 2x damage
-            tower.applySynergyBonus(damageMultiplier: 1.0 + 1.0 * synergyMult);
+          case 6: // Denge Patlaması: AoE burst every 5s + 1.5x damage
+            tower.applySynergyBonus(damageMultiplier: 1.0 + 0.5 * synergyMult);
             break;
-          case 7: // Buz Hapsi: slower fire but more range
-            tower.applySynergyBonus(rangeBonus: 1.0 * synergyMult, fireRateMultiplier: 0.7);
+          case 7: // Buz Hapsi: 3s full freeze on hit
+            tower.applySynergyBonus(rangeBonus: 0.5 * synergyMult);
+            tower.synergyFreezeOnHit = true;
             break;
           case 8: // Cehennem Hattı: 1.8x damage
             tower.applySynergyBonus(damageMultiplier: 1.0 + 0.8 * synergyMult);
@@ -474,6 +573,7 @@ class KaleGame extends FlameGame {
     // Track synergy effects
     _buzulCagiActive = active.any((s) => s.id == 9);
     _ultimateSynergyActive = _metaUltimateSynergy && active.any((s) => s.id == 11);
+    _buzHapsiActive = active.any((s) => s.id == 7);
 
     // Track synergy discovery
     if (active.isNotEmpty) {
@@ -500,6 +600,11 @@ class KaleGame extends FlameGame {
         }
       }
     }
+    // Cap support multipliers to prevent excessive stacking
+    for (final tower in _towers) {
+      tower.supportDamageMultiplier = tower.supportDamageMultiplier.clamp(0.0, 2.0);
+      tower.supportRangeMultiplier = tower.supportRangeMultiplier.clamp(0.0, 2.0);
+    }
   }
 
   // --- Wave Control ---
@@ -514,15 +619,29 @@ class KaleGame extends FlameGame {
     _spawnTimer = 0;
     _currentSpawnDelay = _pendingSpawns.isNotEmpty ? _pendingSpawns[0].spawnDelay : 0.8;
     _waveEnemyTotal = _pendingSpawns.fold(0, (sum, e) => sum + e.count);
+    _damageTakenThisWave = false;
+    // Select path pattern for this wave
+    final pathRng = math.Random(mapSeed + waveSystem.currentWave);
+    _wavePathPattern = WavePathSelector.selectPattern(
+      waveSystem.currentWave, gameMap.enemyPaths.length, pathRng,
+    );
+    _focusedPathIndex = pathRng.nextInt(gameMap.enemyPaths.length.clamp(1, 99));
+    _waveSpawnCounter = 0;
     _phase = GamePhase.waveActive;
+    AudioSystem.instance.play(GameSound.waveStart);
+    if (waveSystem.currentWave == 1) tutorialSystem.tryShow(TutorialTrigger.firstWaveStart);
     onStateChanged?.call();
   }
 
   void _spawnEnemy(EnemyType type) {
     if (gameMap.enemyPaths.isEmpty) return; // safety
-    // Pick a random path from available paths
+    // Pick path based on wave pattern
     final paths = gameMap.enemyPaths;
-    final path = paths[math.Random().nextInt(paths.length)];
+    final pathIdx = WavePathSelector.pickPath(
+      _wavePathPattern, _waveSpawnCounter, paths.length, _focusedPathIndex,
+    );
+    _waveSpawnCounter++;
+    final path = paths[pathIdx];
     final enemy = EnemyFactory.create(
       type: type,
       path: path,
@@ -542,6 +661,26 @@ class KaleGame extends FlameGame {
     if (hasArtifact(5) && waveSystem.currentWave == 1) {
       enemy.applyEffect(StatusEffect.slow(factor: 0.5, duration: 999.0));
     }
+    // Elite system: 15% chance for non-boss enemies
+    if (EliteSystem.shouldBeElite(type, _eliteRng)) {
+      enemy.isElite = true;
+      enemy.eliteModifier = EliteSystem.rollModifier(_eliteRng);
+      AudioSystem.instance.play(GameSound.eliteSpawn);
+      tutorialSystem.tryShow(TutorialTrigger.eliteAppeared);
+      switch (enemy.eliteModifier!) {
+        case EliteModifier.fast:
+          enemy.applyEffect(StatusEffect.slow(factor: -0.5, duration: 999999.0));
+          break;
+        case EliteModifier.armored:
+          enemy.addBonusArmor(10);
+          break;
+        case EliteModifier.regenerating:
+          break; // handled in update loop
+        case EliteModifier.splitting:
+          break; // handled in _processEnemies
+      }
+    }
+
     _enemies.add(enemy);
     world.add(enemy);
   }
@@ -558,9 +697,20 @@ class KaleGame extends FlameGame {
     dt *= _gameSpeed;
 
     if (_phase == GamePhase.waveBreak) {
+      if (_showEndlessPrompt) return; // wait for player decision
       final oldSec = _breakTimer.ceil();
       _breakTimer -= dt;
       if (_breakTimer <= 0) {
+        // Handle ambush event before starting next wave
+        if (_currentEvent?.type == WaveEventType.ambush) {
+          _currentEvent = null;
+          final ambushRng = math.Random(mapSeed + waveSystem.currentWave * 7);
+          final ambushCount = 3 + ambushRng.nextInt(4); // 3-6
+          final types = [EnemyType.soldier, EnemyType.cavalry, EnemyType.goblin];
+          for (int i = 0; i < ambushCount; i++) {
+            _spawnEnemy(types[ambushRng.nextInt(types.length)]);
+          }
+        }
         startNextWave();
       } else if (_breakTimer.ceil() != oldSec) {
         onStateChanged?.call();
@@ -580,11 +730,36 @@ class KaleGame extends FlameGame {
     _updateHealerEnemies(dt);
 
     // Troll regeneration: heals 3 HP/sec
+    // Elite regenerating: also heals 3 HP/sec
     for (final enemy in _enemies) {
       if (enemy.isDead || enemy.reachedCastle) continue;
       if (enemy.type == EnemyType.troll && enemy.hp < enemy.maxHp) {
         enemy.heal((3 * dt).ceil());
       }
+      if (enemy.isElite && enemy.eliteModifier == EliteModifier.regenerating && enemy.hp < enemy.maxHp) {
+        enemy.heal((3 * dt).ceil());
+      }
+    }
+
+    // Boss special abilities
+    _updateBossAbilities(dt);
+
+    // Combo system tick
+    comboSystem.update(dt);
+
+    // Spell cooldowns
+    spellSystem.update(dt);
+    tutorialSystem.update(dt);
+
+    // Contextual tutorial checks
+    if (_phase == GamePhase.waveActive && castle.hp < castle.maxHp * 0.3) {
+      tutorialSystem.tryShow(TutorialTrigger.lowHp);
+    }
+    if (spellSystem.availableSpells(waveSystem.currentWave).isNotEmpty) {
+      tutorialSystem.tryShow(TutorialTrigger.spellUnlocked);
+    }
+    if (_towers.any((t) => t.needsT4Choice)) {
+      tutorialSystem.tryShow(TutorialTrigger.t4Available);
     }
 
     // DarkKnight aura: nearby allies get +5 armor (applied as bonus armor if not already)
@@ -656,9 +831,225 @@ class KaleGame extends FlameGame {
         castle.heal(castle.maxHp ~/ 2);
       } else {
         _phase = GamePhase.gameOver;
+        AudioSystem.instance.play(GameSound.defeat);
         onGameOver?.call(false);
       }
     }
+  }
+
+  // --- Boss Special Abilities ---
+  void _updateBossAbilities(double dt) {
+    for (final enemy in _enemies) {
+      if (enemy.isDead || enemy.reachedCastle) continue;
+      if (!enemy.baseStats.isBoss) continue;
+      if (enemy.abilitiesDisabled) continue;
+
+      enemy.bossAbilityTimer += dt;
+      if (enemy.bossAbilityTimer < 5.0) continue;
+      enemy.bossAbilityTimer = 0;
+
+      if (enemy.type == EnemyType.shadowLord) {
+        _shadowLordAbility(enemy);
+      } else if (enemy.type == EnemyType.dragonEmperor) {
+        _dragonEmperorAbility(enemy);
+      }
+    }
+  }
+
+  void _shadowLordAbility(Enemy shadowLord) {
+    // Teleport: advance 3 cells on path
+    final remaining = shadowLord.remainingPath;
+    if (remaining.length > 4) {
+      // Spawn 2 soldiers at shadow lord's position
+      for (int i = 0; i < 2; i++) {
+        final soldierPath = shadowLord.remainingPath;
+        if (soldierPath.length > 1) {
+          final soldier = EnemyFactory.create(
+            type: EnemyType.soldier,
+            path: soldierPath,
+            cellSize: cellSize,
+            difficulty: difficulty,
+          );
+          _enemies.add(soldier);
+          world.add(soldier);
+        }
+      }
+      // Visual effect
+      world.add(HitEffect(pos: shadowLord.position, color: const Color(0xFF8800AA), count: 8, speed: 50));
+      world.add(FloatingText(
+        text: 'IŞINLANMA!',
+        pos: shadowLord.position + Vector2(0, -20),
+        color: const Color(0xFFAA00FF),
+        fontSize: 11,
+      ));
+    }
+  }
+
+  void _dragonEmperorAbility(Enemy dragon) {
+    // Breath attack: disable towers in a 4-cell line toward castle
+    final castleCenter = castle.position + castle.size / 2;
+    final dragonPos = dragon.position;
+    final direction = (castleCenter - dragonPos).normalized();
+
+    for (final tower in _towers) {
+      if (tower.type == TowerType.spikeWall) continue;
+      final towerCenter = tower.position + tower.size / 2;
+      // Check if tower is roughly in the breath line (within 2 cells wide, 4 cells ahead)
+      final toTower = towerCenter - dragonPos;
+      final projDist = toTower.dot(direction);
+      if (projDist < 0 || projDist > cellSize * 4) continue;
+      final perpDist = (toTower - direction * projDist).length;
+      if (perpDist <= cellSize * 2) {
+        tower.disableTimer = 3.0;
+        world.add(HitEffect.fire(pos: towerCenter));
+      }
+    }
+    world.add(FloatingText(
+      text: 'NEFES SALDIRISI!',
+      pos: dragonPos + Vector2(0, -25),
+      color: const Color(0xFFFF4400),
+      fontSize: 12,
+    ));
+  }
+
+  // --- Castle Spells ---
+  void castSpell(SpellType spell) {
+    if (!canCastSpell(spell)) return;
+    spellSystem.cast(spell);
+
+    // Audio per spell type
+    switch (spell) {
+      case SpellType.fireRain: AudioSystem.instance.play(GameSound.spellFireRain); break;
+      case SpellType.iceStorm: AudioSystem.instance.play(GameSound.spellIceStorm); break;
+      case SpellType.castleRepair: AudioSystem.instance.play(GameSound.spellRepair); break;
+    }
+
+    // Visual overlay effect
+    final overlayInfo = switch (spell) {
+      SpellType.fireRain => ('assets/images/effects/fire_rain.png', const Color(0xFFFF5511)),
+      SpellType.iceStorm => ('assets/images/effects/ice_storm.png', const Color(0xFF22CCEE)),
+      SpellType.castleRepair => ('assets/images/effects/castle_repair.png', const Color(0xFF00CC44)),
+    };
+    world.add(SpellOverlay(
+      assetPath: overlayInfo.$1,
+      tintColor: overlayInfo.$2,
+      worldSize: Vector2(GameConfig.gridColumns * fixedCellSize, GameConfig.gridRows * fixedCellSize),
+    ));
+
+    switch (spell) {
+      case SpellType.fireRain:
+        final dmg = 15 + waveSystem.currentWave * 3;
+        for (final enemy in _enemies) {
+          if (enemy.isDead || enemy.reachedCastle || enemy.isBurrowed) continue;
+          enemy.takeDamage(dmg, bypassArmor: true);
+          enemy.applyEffect(StatusEffect.burn(dps: 5, duration: 3.0));
+          world.add(HitEffect.fire(pos: enemy.position));
+        }
+        world.add(FloatingText(
+          text: 'ATEŞ YAĞMURU!',
+          pos: castle.position + Vector2(0, -30),
+          color: const Color(0xFFFF4400),
+          fontSize: 14,
+        ));
+        break;
+      case SpellType.iceStorm:
+        for (final enemy in _enemies) {
+          if (enemy.isDead || enemy.reachedCastle) continue;
+          enemy.applyEffect(StatusEffect.slow(factor: 0.7, duration: 3.0));
+          world.add(HitEffect.ice(pos: enemy.position));
+        }
+        world.add(FloatingText(
+          text: 'BUZ FIRTINASI!',
+          pos: castle.position + Vector2(0, -30),
+          color: const Color(0xFF22CCEE),
+          fontSize: 14,
+        ));
+        break;
+      case SpellType.castleRepair:
+        castle.heal((castle.maxHp * 0.20).round());
+        world.add(FloatingText(
+          text: '+%20 HP',
+          pos: castle.position + Vector2(0, -30),
+          color: const Color(0xFF00FF44),
+          fontSize: 14,
+        ));
+        break;
+    }
+    onStateChanged?.call();
+  }
+
+  // --- T4 Branch Selection ---
+  void requestT4Upgrade(Tower tower) {
+    _pendingT4Tower = tower;
+    onStateChanged?.call();
+  }
+
+  void selectT4Branch(T4BranchPath path) {
+    if (_pendingT4Tower == null) return;
+    final cost = (_metaUpgradeCostReduction > 0)
+        ? (_pendingT4Tower!.upgradeCost * (1.0 - _metaUpgradeCostReduction)).round()
+        : _pendingT4Tower!.upgradeCost;
+    if (!economy.trySpend(cost)) return;
+    _pendingT4Tower!.upgradeToT4(path, cost);
+    _pendingT4Tower = null;
+    _recalculateSynergies();
+    AudioSystem.instance.play(GameSound.t4Upgrade);
+    onStateChanged?.call();
+  }
+
+  void cancelT4Selection() {
+    _pendingT4Tower = null;
+    onStateChanged?.call();
+  }
+
+  // --- Wave Events ---
+  void acceptMerchantEvent() {
+    if (!_merchantAvailable) return;
+    if (!economy.trySpend(50)) return;
+    _merchantAvailable = false;
+    // Grant a random artifact-like bonus
+    final rng = math.Random();
+    final bonusType = rng.nextInt(3);
+    switch (bonusType) {
+      case 0: // Damage boost all towers
+        for (final tower in _towers) {
+          tower.artifactDamageMultiplier *= 1.1;
+        }
+        world.add(FloatingText(text: 'Tüm kulelere +%10 hasar!', pos: castle.position + Vector2(0, -30), color: const Color(0xFFFFD700), fontSize: 12));
+        break;
+      case 1: // Gold bonus
+        economy.earnGold(100);
+        world.add(FloatingText(text: '+100 Altın!', pos: castle.position + Vector2(0, -30), color: const Color(0xFFFFD700), fontSize: 12));
+        break;
+      case 2: // Heal castle
+        castle.heal((castle.maxHp * 0.25).round());
+        world.add(FloatingText(text: 'Kale iyileştirildi!', pos: castle.position + Vector2(0, -30), color: const Color(0xFF00FF44), fontSize: 12));
+        break;
+    }
+    onStateChanged?.call();
+  }
+
+  void dismissEvent() {
+    _currentEvent = null;
+    _merchantAvailable = false;
+    onStateChanged?.call();
+  }
+
+  // --- Endless Mode ---
+  void continueToEndless() {
+    _endlessMode = true;
+    _showEndlessPrompt = false;
+    waveSystem.extendWaves(5);
+    _breakTimer = GameConfig.wavePrepTime * _mutationWavePrepMult;
+    _phase = GamePhase.waveBreak;
+    onStateChanged?.call();
+  }
+
+  void declineEndless() {
+    _showEndlessPrompt = false;
+    _phase = GamePhase.gameOver;
+    AudioSystem.instance.play(GameSound.victory);
+    onGameOver?.call(true);
   }
 
   void _updateSpawning(double dt) {
@@ -722,6 +1113,7 @@ class KaleGame extends FlameGame {
         final proj = tower.tryFire(target.position);
         if (proj != null) {
           world.add(proj);
+          AudioSystem.instance.play(GameSound.towerFire);
           // Instant hit for simplicity (projectile visual only)
           _applyTowerDamage(tower, target);
 
@@ -830,6 +1222,32 @@ class KaleGame extends FlameGame {
           enemy.applyEffect(StatusEffect.slow(factor: 0.3, duration: 2.0));
         }
       }
+    }
+
+    // Denge Patlaması (id 6): AoE burst every 5 seconds around synergy anchor
+    final dengePatlamasiSynergy = synergySystem.activeSynergies.where((s) => s.id == 6);
+    if (dengePatlamasiSynergy.isNotEmpty) {
+      _dengePatlamasiTimer += dt;
+      if (_dengePatlamasiTimer >= 5.0) {
+        _dengePatlamasiTimer = 0;
+        final anchor = dengePatlamasiSynergy.first.anchorPosition;
+        final burstCenter = Vector2((anchor.col + 0.5) * cellSize, (anchor.row + 0.5) * cellSize);
+        final burstRange = cellSize * 3.5; // 3.5 cell radius
+        final burstDmg = 20 + waveSystem.currentWave * 4;
+        for (final enemy in _enemies) {
+          if (enemy.isDead || enemy.reachedCastle || enemy.isBurrowed) continue;
+          final dist = burstCenter.distanceTo(enemy.position);
+          if (dist <= burstRange) {
+            enemy.takeDamage(burstDmg, bypassArmor: true);
+            _showDamageText(enemy.position, burstDmg);
+            world.add(HitEffect.explosion(pos: enemy.position, radius: 15));
+          }
+        }
+        // Visual burst at the synergy anchor
+        world.add(HitEffect.explosion(pos: burstCenter, radius: 30));
+      }
+    } else {
+      _dengePatlamasiTimer = 0;
     }
 
     // Kıyamet (id 10): massive AoE every 15 seconds
@@ -963,7 +1381,7 @@ class KaleGame extends FlameGame {
     final chainRange = cellSize * 2.0;
     final chainDamage = (wizard.currentDamage * 0.5).round();
     int chains = 0;
-    final maxChains = 2 + (wizard.tier > 2 ? 1 : 0); // tier 3+ gets extra chain
+    final maxChains = wizard.t4Branch == T4BranchPath.pathA ? 5 : (2 + (wizard.tier > 2 ? 1 : 0)); // Archmage: 5 chains
 
     for (final enemy in _enemies) {
       if (chains >= maxChains) break;
@@ -1045,8 +1463,64 @@ class KaleGame extends FlameGame {
         break;
     }
 
+    // Buz Hapsi synergy: full freeze (100% slow) for 3 seconds on hit
+    if (tower.synergyFreezeOnHit && !enemy.isDead) {
+      enemy.applyEffect(StatusEffect.slow(factor: 1.0, duration: 3.0));
+      world.add(HitEffect.ice(pos: enemy.position));
+    }
+
+    // Combo system check
+    if (!enemy.isDead) {
+      final combo = comboSystem.checkCombos(enemy.activeEffects, enemy.enemyId);
+      if (combo != null) {
+        _applyCombo(combo, enemy);
+      }
+    }
+
+    // T4 special: Phoenix (fire pathB) - heal castle on kill
+    if ((willKill || enemy.isDead) && tower.type == TowerType.fire && tower.t4Branch == T4BranchPath.pathB) {
+      castle.heal(3 + waveSystem.currentWave);
+    }
+
+    // T4 special: Siege (cannon pathB) - 2x damage vs boss
+    // Already handled through dmgMult, no extra needed
+
     if (willKill || enemy.isDead) {
       tower.kills++;
+    }
+  }
+
+  void _applyCombo(ComboType combo, Enemy enemy) {
+    AudioSystem.instance.play(GameSound.comboTrigger);
+    tutorialSystem.tryShow(TutorialTrigger.comboOccurred);
+    switch (combo) {
+      case ComboType.frozen:
+        // Full freeze for 5 seconds + 50% bonus damage marker
+        enemy.applyEffect(StatusEffect.slow(factor: 1.0, duration: 5.0));
+        world.add(HitEffect.ice(pos: enemy.position));
+        world.add(FloatingText(
+          text: 'DONMUŞ!', pos: enemy.position + Vector2(0, -20),
+          color: const Color(0xFF22CCEE), fontSize: 12, isCritical: true,
+        ));
+        break;
+      case ComboType.meltdown:
+        // 3x combined DPS burn+poison
+        enemy.applyEffect(StatusEffect.burn(dps: 15, duration: 4.0));
+        world.add(HitEffect.fire(pos: enemy.position));
+        world.add(FloatingText(
+          text: 'ERİME!', pos: enemy.position + Vector2(0, -20),
+          color: const Color(0xFFFF6600), fontSize: 12, isCritical: true,
+        ));
+        break;
+      case ComboType.soulShatter:
+        // Zero armor for 5 seconds
+        enemy.applyEffect(StatusEffect.curse(armorReduce: 999, duration: 5.0));
+        world.add(HitEffect(pos: enemy.position, color: const Color(0xFF8800FF), count: 8, speed: 50));
+        world.add(FloatingText(
+          text: 'RUH PARÇALAMA!', pos: enemy.position + Vector2(0, -20),
+          color: const Color(0xFF8800FF), fontSize: 12, isCritical: true,
+        ));
+        break;
     }
   }
 
@@ -1062,6 +1536,8 @@ class KaleGame extends FlameGame {
         final goldEarned = (enemy.goldReward * goldMult).round();
         economy.earnGold(goldEarned);
         _enemiesKilled++;
+        AudioSystem.instance.play(enemy.baseStats.isBoss ? GameSound.bossRoar : GameSound.enemyDeath);
+        if (enemy.baseStats.isBoss) _bossesKilled++;
         // Kill streak tracking
         _killStreak++;
         _killStreakTimer = _killStreakWindow;
@@ -1084,6 +1560,27 @@ class KaleGame extends FlameGame {
           color: _killStreak >= 5 ? const Color(0xFFFF4444) : _killStreak >= 3 ? const Color(0xFFFF8800) : const Color(0xFFFFD700),
           fontSize: _killStreak >= 5 ? 13 : _killStreak >= 3 ? 11 : 9,
         ));
+        // Elite splitting: spawn 2 copies on death
+        if (enemy.isElite && enemy.eliteModifier == EliteModifier.splitting && enemy.baseStats.splitCount == 0) {
+          final remainingPath = enemy.remainingPath;
+          if (remainingPath.length > 1) {
+            for (int i = 0; i < 2; i++) {
+              final split = Enemy(
+                type: enemy.type,
+                baseStats: EnemyStats(
+                  type: enemy.type, name: enemy.baseStats.name,
+                  hp: (enemy.maxHp * 0.4).round(), armor: 0,
+                  speed: enemy.baseStats.speed * 1.1,
+                  goldReward: 2, castleDamage: 1,
+                  difficulty: enemy.baseStats.difficulty,
+                ),
+                path: remainingPath,
+                cellSize: cellSize,
+              );
+              toSpawn.add(split);
+            }
+          }
+        }
         // Undead split mechanic
         if (enemy.baseStats.splitCount > 0) {
           final remainingPath = enemy.remainingPath;
@@ -1118,6 +1615,8 @@ class KaleGame extends FlameGame {
         }
         if (dmg > 0) {
           castle.takeDamage(dmg);
+          AudioSystem.instance.play(GameSound.castleHit);
+          _damageTakenThisWave = true;
           screenShake.shake(
             duration: 0.2,
             intensity: (dmg * 1.5).clamp(2.0, 8.0).toDouble(),
@@ -1125,7 +1624,7 @@ class KaleGame extends FlameGame {
         }
         // Goblin steals gold when reaching castle
         if (enemy.type == EnemyType.goblin) {
-          final stolen = (10 + waveSystem.currentWave * 2).clamp(0, economy.gold);
+          final stolen = (10 + waveSystem.currentWave * 2).clamp(0, 30).clamp(0, economy.gold);
           if (stolen > 0) {
             economy.trySpend(stolen);
             _goldStolen += stolen;
@@ -1136,6 +1635,10 @@ class KaleGame extends FlameGame {
     }
     for (final enemy in toRemove) {
       _enemies.remove(enemy);
+      _cavalryDashTimers.remove(enemy);
+      _darkKnightBuffed.remove(enemy);
+      _bossAbilityTimers.remove(enemy);
+      comboSystem.removeEnemy(enemy.enemyId);
       enemy.removeFromParent();
     }
     for (final enemy in toSpawn) {
@@ -1172,6 +1675,19 @@ class KaleGame extends FlameGame {
   }
 
   void _onWaveComplete() {
+    AudioSystem.instance.play(GameSound.waveComplete);
+    if (waveSystem.currentWave == 1) tutorialSystem.tryShow(TutorialTrigger.firstWaveComplete);
+    // Track perfect waves (no damage taken)
+    if (!_damageTakenThisWave) {
+      _consecutivePerfectWaves++;
+      if (_consecutivePerfectWaves > _bestPerfectWaves) {
+        _bestPerfectWaves = _consecutivePerfectWaves;
+      }
+    } else {
+      _consecutivePerfectWaves = 0;
+    }
+    _damageTakenThisWave = false;
+
     final goldBefore = economy.gold;
     economy.onWaveComplete(waveSystem.currentWave);
     // Artifact: Altın Taç - +15 gold per wave
@@ -1225,12 +1741,69 @@ class KaleGame extends FlameGame {
       ));
     }
 
+    // Decrement tower curse counters
+    final curseExpired = <Tower>[];
+    for (final entry in _cursedTowerWaves.entries) {
+      _cursedTowerWaves[entry.key] = entry.value - 1;
+      if (entry.value - 1 <= 0) {
+        entry.key.curseDebuffMult = 1.0;
+        curseExpired.add(entry.key);
+      }
+    }
+    for (final t in curseExpired) {
+      _cursedTowerWaves.remove(t);
+    }
+
+    // Roll wave event
+    final rng = math.Random(mapSeed + waveSystem.currentWave);
+    _currentEvent = EventSystem.rollEvent(waveSystem.currentWave, rng);
+    _merchantAvailable = false;
+
+    if (_currentEvent != null) tutorialSystem.tryShow(TutorialTrigger.eventAppeared);
+    // Apply non-interactive events immediately
+    if (_currentEvent != null) {
+      switch (_currentEvent!.type) {
+        case WaveEventType.treasure:
+          economy.earnGold(_currentEvent!.goldAmount ?? 50);
+          break;
+        case WaveEventType.castleRepair:
+          castle.heal((castle.maxHp * 0.15).round());
+          break;
+        case WaveEventType.curse:
+          if (_towers.isNotEmpty) {
+            final cursedTower = _towers[rng.nextInt(_towers.length)];
+            cursedTower.curseDebuffMult = 0.8;
+            _cursedTowerWaves[cursedTower] = 2;
+          }
+          break;
+        case WaveEventType.merchant:
+          _merchantAvailable = true;
+          break;
+        case WaveEventType.ambush:
+          // Ambush spawns enemies immediately after wave break starts
+          break;
+      }
+    }
+
+    // Endless scaling: +10% per 5 waves in endless mode
+    if (_endlessMode && waveSystem.currentWave % 5 == 0) {
+      _endlessScaling += 0.10;
+    }
+    if (_endlessMode) {
+      _endlessHighWave = waveSystem.currentWave;
+    }
+
     if (waveSystem.isComplete) {
       if (_metaInfiniteMode) {
-        // Infinite mode: continue with scaled enemies
-        waveSystem.extendWaves(5);
+        // Show endless mode prompt
+        _showEndlessPrompt = true;
+        _breakTimer = 999; // wait for player decision
+        _phase = GamePhase.waveBreak;
+        onStateChanged?.call();
+        return;
       } else {
         _phase = GamePhase.gameOver;
+        AudioSystem.instance.play(GameSound.victory);
         onGameOver?.call(true);
         return;
       }
@@ -1239,6 +1812,7 @@ class KaleGame extends FlameGame {
     if (_autoWave) {
       // Skip wave break, start immediately
       _breakTimer = 0;
+      _currentEvent = null;
       startNextWave();
     } else {
       _breakTimer = GameConfig.wavePrepTime * _mutationWavePrepMult;
@@ -1345,7 +1919,7 @@ class KaleGame extends FlameGame {
   List<WaveEntry> get nextWavePreview {
     final next = waveSystem.currentWave + 1;
     if (next > waveSystem.totalWaves) return [];
-    return WaveData.getWave(next, difficulty);
+    return WaveData.getWave(next, difficulty, seed: mapSeed);
   }
 
   /// Meta: improved artifact quality flag

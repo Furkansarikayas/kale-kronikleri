@@ -1,14 +1,14 @@
 import 'dart:math';
 
 enum MutationType {
-  fastEnemies('Hizli Dusmanlar', 'Tum dusmanlar %30 hizli'),
-  toughEnemies('Dayanikli Dusmanlar', 'Dusman cani %40 artmis'),
-  cheapTowers('Ucuz Kuleler', 'Kule maliyeti %25 azalmis'),
-  expensiveTowers('Pahali Kuleler', 'Kule maliyeti %30 artmis'),
-  richRewards('Zengin Oduller', 'Altin odulleri 2x'),
-  shortWaves('Kisa Dalgalar', 'Dalga arasi %50 kisa'),
-  armoredAll('Zirhli Ordu', 'Tum dusmanlara +5 zirh'),
-  bossRush('Boss Akini', 'Her 5 dalgada boss gelir'),
+  fastEnemies('Hızlı Düşmanlar', 'Tüm düşmanlar %30 hızlı'),
+  toughEnemies('Dayanıklı Düşmanlar', 'Düşman canı %40 artmış'),
+  cheapTowers('Ucuz Kuleler', 'Kule maliyeti %25 azalmış'),
+  expensiveTowers('Pahalı Kuleler', 'Kule maliyeti %30 artmış'),
+  richRewards('Zengin Ödüller', 'Altın ödülleri 2x'),
+  shortWaves('Kısa Dalgalar', 'Dalga arası %50 kısa'),
+  armoredAll('Zırhlı Ordu', 'Tüm düşmanlara +5 zırh'),
+  bossRush('Boss Akını', 'Her 5 dalgada boss gelir'),
   ;
 
   final String displayName;

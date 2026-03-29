@@ -5,8 +5,13 @@ import 'package:flutter/services.dart';
 import 'game/kale_game.dart';
 import 'game/data/game_config.dart';
 import 'game/systems/mutation_system.dart';
+import 'game/systems/spell_system.dart';
+import 'game/systems/audio_system.dart';
+import 'game/systems/tutorial_system.dart';
+import 'game/data/t4_branch_data.dart';
 import 'meta/artifact_system.dart';
 import 'meta/meta_tree.dart';
+import 'meta/achievements.dart';
 import 'meta/save_manager.dart';
 import 'screens/main_menu.dart';
 import 'screens/run_setup.dart';
@@ -77,11 +82,13 @@ class _AppShellState extends State<AppShell> {
   }
 
   // Debug: set to false before release
-  static const _debugAutoStart = true;
+  static const _debugAutoStart = false;
 
   Future<void> _loadSave() async {
     debugPrint('KaleKronikleri: Loading save...');
     _saveManager = await SaveManager.create();
+    // Sync audio settings from save
+    AudioSystem.instance.setSoundEnabled(_saveManager!.soundEnabled);
     debugPrint('KaleKronikleri: Save loaded, showing main menu');
     setState(() => _saveLoaded = true);
     if (_debugAutoStart) {
@@ -130,6 +137,8 @@ class _AppShellState extends State<AppShell> {
           _saveManager!.discoverSynergy(synergyId);
         }
       }
+      // Check synergy-related achievements
+      AchievementSystem.checkAll(_saveManager!);
     };
 
     game.onGameOver = (isVictory) {
@@ -141,9 +150,21 @@ class _AppShellState extends State<AppShell> {
 
       // Persist
       _saveManager!.addStoneSpirit(_lastSpiritEarned);
+      _saveManager!.addSpiritEarned(_lastSpiritEarned);
       _saveManager!.incrementRuns();
       _saveManager!.addKills(_lastEnemiesKilled);
       _saveManager!.updateBestWave(_lastWaves);
+      _saveManager!.addTowersPlaced(game.totalTowersPlacedThisRun);
+      _saveManager!.addBossKills(game.bossesKilled);
+      _saveManager!.updateBestPerfectWaves(game.bestPerfectWaves);
+
+      // Update best difficulty on victory
+      if (isVictory) {
+        _saveManager!.updateBestDifficulty(game.difficulty.index);
+      }
+
+      // Check achievements
+      AchievementSystem.checkAll(_saveManager!);
 
       if (mounted) setState(() => _screen = AppScreen.death);
     };
@@ -157,9 +178,37 @@ class _AppShellState extends State<AppShell> {
   @override
   Widget build(BuildContext context) {
     if (!_saveLoaded) {
-      return const Scaffold(
-        backgroundColor: Color(0xFF1A150E),
-        body: Center(child: CircularProgressIndicator(color: Color(0xFFBA7517))),
+      return Scaffold(
+        backgroundColor: const Color(0xFF1A150E),
+        body: Stack(
+          fit: StackFit.expand,
+          children: [
+            Image.asset(
+              'assets/images/ui/loading_bg.png',
+              fit: BoxFit.cover,
+              errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+            ),
+            Container(color: const Color(0x66000000)),
+            const Center(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  CircularProgressIndicator(color: Color(0xFFBA7517)),
+                  SizedBox(height: 16),
+                  Text(
+                    'KALE KRONIKLERI',
+                    style: TextStyle(
+                      color: Color(0xFFD4A843),
+                      fontSize: 24,
+                      fontWeight: FontWeight.bold,
+                      letterSpacing: 3,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
       );
     }
 
@@ -211,6 +260,7 @@ class _AppShellState extends State<AppShell> {
             final tree = MetaTree.trees.firstWhere((t) => t.id == treeId);
             final node = tree.nodes[index];
             await _saveManager!.unlockMetaNode(treeId, cost: node.cost);
+            AchievementSystem.checkAll(_saveManager!);
             setState(() {});
           },
           onBack: _goToMainMenu,
@@ -221,7 +271,10 @@ class _AppShellState extends State<AppShell> {
           soundEnabled: _saveManager!.soundEnabled,
           musicEnabled: _saveManager!.musicEnabled,
           screenShakeEnabled: _saveManager!.screenShakeEnabled,
-          onSoundChanged: (v) => _saveManager!.setSoundEnabled(v),
+          onSoundChanged: (v) {
+            _saveManager!.setSoundEnabled(v);
+            AudioSystem.instance.setSoundEnabled(v);
+          },
           onMusicChanged: (v) => _saveManager!.setMusicEnabled(v),
           onScreenShakeChanged: (v) {
             _saveManager!.setScreenShakeEnabled(v);
@@ -240,7 +293,7 @@ class _AppShellState extends State<AppShell> {
           towersPlaced: _lastTowersPlaced,
           enemiesKilled: _lastEnemiesKilled,
           totalDamageDealt: _game?.totalDamageDealt ?? 0,
-          difficultyName: _game?.difficulty.name ?? '',
+          difficultyName: _game?.difficulty.displayName ?? '',
           activeSynergies: _game?.activeSynergyNames ?? [],
           onContinue: _goToRunSetup,
           onMainMenu: _goToMainMenu,
@@ -320,6 +373,31 @@ class _AppShellState extends State<AppShell> {
             setState(() {});
           },
           waveEnemyTotal: game.waveEnemyTotal,
+          availableSpells: game.availableSpells,
+          spellCooldowns: {
+            for (final s in SpellType.values) s: game.spellCooldown(s),
+          },
+          spellMaxCooldowns: {
+            for (final s in SpellType.values) s: game.spellMaxCooldown(s),
+          },
+          onCastSpell: (spell) {
+            game.castSpell(spell);
+            setState(() {});
+          },
+          pendingT4Tower: game.pendingT4Tower,
+          onT4BranchSelected: (path) {
+            game.selectT4Branch(path);
+            setState(() {});
+          },
+          onT4Cancel: () {
+            game.cancelT4Selection();
+            setState(() {});
+          },
+          tutorialMessage: game.tutorialSystem.currentHint?.message,
+          onDismissTutorial: () {
+            game.tutorialSystem.dismiss();
+            setState(() {});
+          },
         ),
         // Wave break overlay
         if (game.isReady && game.phase == GamePhase.waveBreak)
@@ -331,6 +409,27 @@ class _AppShellState extends State<AppShell> {
             wavePreview: game.nextWavePreview,
             onStartNow: () => game.startNextWave(),
             showEnemyWeakness: game.showEnemyWeakness,
+            loreMessage: _getLoreMessage(game.waveSystem.currentWave + 1),
+            currentEvent: game.currentEvent,
+            merchantAvailable: game.merchantAvailable,
+            onAcceptMerchant: () {
+              game.acceptMerchantEvent();
+              setState(() {});
+            },
+            onDismissEvent: () {
+              game.dismissEvent();
+              setState(() {});
+            },
+            showEndlessPrompt: game.showEndlessPrompt,
+            onContinueEndless: () {
+              game.continueToEndless();
+              setState(() {});
+            },
+            onDeclineEndless: () {
+              game.declineEndless();
+            },
+            pathCount: game.gameMap.enemyPaths.length,
+            nextWavePattern: game.nextWavePathPattern,
           ),
         // Pause overlay
         if (game.isReady && game.phase == GamePhase.paused)
@@ -352,6 +451,21 @@ class _AppShellState extends State<AppShell> {
           ),
       ],
     );
+  }
+
+  static const Map<int, String> _loreMessages = {
+    5: 'Troller ormandan çıktı... Dikkatli ol!',
+    10: 'Gölge Lord\'u uyanıyor. Karanlık yaklaşıyor.',
+    15: 'Karanlık şövalyeler kalenin kapısına dayandı!',
+    20: 'Ejderha İmparatoru geliyor... Son savaş başlıyor!',
+    25: 'Gölgeler yeniden toplandı. Bu sefer daha güçlüler.',
+    30: 'Karanlığın kalbi atıyor. Sonunu getir!',
+    35: 'Efsanevi güçler savaş alanını kaplıyor...',
+    40: 'Kader anı geldi. Kalen sonsuza dek hatırlanacak!',
+  };
+
+  static String? _getLoreMessage(int nextWave) {
+    return _loreMessages[nextWave];
   }
 
   List<DifficultyTier> _unlockedDifficulties() {

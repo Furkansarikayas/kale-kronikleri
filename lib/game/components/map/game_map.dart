@@ -3,6 +3,8 @@ import '../../data/game_config.dart';
 import '../../systems/pathfinding.dart';
 import 'grid_cell.dart';
 import 'map_generator.dart';
+import 'map_decoration_layer.dart';
+import 'map_ground_layer.dart';
 
 class GameMap extends Component {
   late List<List<CellType>> grid;
@@ -23,7 +25,8 @@ class GameMap extends Component {
     // Pre-compute paths for all spawn points
     enemyPaths = [];
     for (final spawn in spawnPoints) {
-      final path = Pathfinding.findPath(grid: grid, start: spawn, end: castleEntry);
+      final path =
+          Pathfinding.findPath(grid: grid, start: spawn, end: castleEntry);
       if (path != null && path.isNotEmpty) {
         enemyPaths.add(path);
       }
@@ -31,26 +34,26 @@ class GameMap extends Component {
     // Legacy: first path for compatibility
     enemyPath = enemyPaths.isNotEmpty ? enemyPaths.first : [];
 
-    // Add cell components
+    // Ground layer renders entire map seamlessly (behind everything)
+    add(MapGroundLayer(grid: grid, cellSize: cellSize));
+
+    // Decoration layer: trees, rocks, flowers (above ground, below towers)
+    add(MapDecorationLayer(grid: grid, cellSize: cellSize));
+
+    // GridCells for tap detection + highlight only
     for (int r = 0; r < GameConfig.gridRows; r++) {
       for (int c = 0; c < GameConfig.gridColumns; c++) {
-        add(GridCell(col: c, row: r, cellType: grid[r][c], cellSize: cellSize));
+        add(GridCell(
+            col: c, row: r, cellType: grid[r][c], cellSize: cellSize));
       }
-    }
-
-    // Set neighbor types for edge blending
-    for (final child in children.whereType<GridCell>()) {
-      child.setNeighbors(
-        top: child.row > 0 ? grid[child.row - 1][child.col] : CellType.blocked,
-        bottom: child.row < GameConfig.gridRows - 1 ? grid[child.row + 1][child.col] : CellType.blocked,
-        left: child.col > 0 ? grid[child.row][child.col - 1] : CellType.blocked,
-        right: child.col < GameConfig.gridColumns - 1 ? grid[child.row][child.col + 1] : CellType.blocked,
-      );
     }
   }
 
   CellType cellAt(int col, int row) {
-    if (row < 0 || row >= GameConfig.gridRows || col < 0 || col >= GameConfig.gridColumns) {
+    if (row < 0 ||
+        row >= GameConfig.gridRows ||
+        col < 0 ||
+        col >= GameConfig.gridColumns) {
       return CellType.blocked;
     }
     return grid[row][col];

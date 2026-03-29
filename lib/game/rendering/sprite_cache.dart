@@ -3,6 +3,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import '../components/map/biome_data.dart';
+import 'perlin_noise.dart';
 
 /// High-quality smooth sprite generator and cache.
 ///
@@ -18,6 +19,23 @@ class SpriteCache {
   bool get isInitialized => _initialized;
 
   BiomeData _currentBiome = BiomeData.forest;
+  BiomeData get currentBiome => _currentBiome;
+
+  late final PerlinNoise _perlin;
+
+  // Terrain textures (512x512) for MapGroundLayer tiling
+  static const int terrainSize = 512;
+  ui.Image? _grassTexture;
+  ui.Image? _pathTexture;
+  ui.Image? _blockedTexture;
+  ui.Image? _spawnTexture;
+  ui.Image? _castleTexture;
+
+  ui.Image? get grassTexture => _grassTexture;
+  ui.Image? get pathTexture => _pathTexture;
+  ui.Image? get blockedTexture => _blockedTexture;
+  ui.Image? get spawnTexture => _spawnTexture;
+  ui.Image? get castleTexture => _castleTexture;
 
   static const int spriteSize = 128;
   static const double _s = 128.0;
@@ -35,6 +53,14 @@ class SpriteCache {
     }
     _cache.clear();
     _initialized = false;
+
+    // Generate terrain textures for MapGroundLayer
+    _perlin = PerlinNoise(seed: 42);
+    _grassTexture = await _renderTerrainTile(terrainSize, _paintTerrainGrass);
+    _pathTexture = await _renderTerrainTile(terrainSize, _paintTerrainPath);
+    _blockedTexture = await _renderTerrainTile(terrainSize, _paintTerrainBlocked);
+    _spawnTexture = await _renderTerrainTile(256, _paintTerrainSpawn);
+    _castleTexture = await _renderTerrainTile(terrainSize, _paintTerrainCastle);
 
     for (int v = 0; v < 6; v++) {
       _cache['grass_$v'] = await _renderTile((c) => _paintGrass(c, v));
@@ -59,6 +85,16 @@ class SpriteCache {
       img.dispose();
     }
     _cache.clear();
+    _grassTexture?.dispose();
+    _pathTexture?.dispose();
+    _blockedTexture?.dispose();
+    _spawnTexture?.dispose();
+    _castleTexture?.dispose();
+    _grassTexture = null;
+    _pathTexture = null;
+    _blockedTexture = null;
+    _spawnTexture = null;
+    _castleTexture = null;
     _initialized = false;
   }
 
@@ -819,7 +855,6 @@ class SpriteCache {
         Paint()..color = const Color(0xFFAA7520));
 
     // Stone brick pattern
-    final rng = math.Random(123);
     final brickColors = [
       const Color(0xFFD4A843),
       const Color(0xFFC49838),
@@ -910,6 +945,420 @@ class SpriteCache {
           const Offset(0, 0),
           Offset(_s, _s),
           [const Color(0x0AFFFFFF), const Color(0x00000000), const Color(0x06000000)],
+          [0.0, 0.5, 1.0],
+        ),
+    );
+  }
+
+  // =========================================================================
+  //  TERRAIN TEXTURES (512x512, for MapGroundLayer)
+  // =========================================================================
+
+  Future<ui.Image> _renderTerrainTile(
+      int sz, void Function(Canvas c, int size) painter) async {
+    final recorder = ui.PictureRecorder();
+    final canvas = Canvas(recorder);
+    painter(canvas, sz);
+    final picture = recorder.endRecording();
+    final image = await picture.toImage(sz, sz);
+    picture.dispose();
+    return image;
+  }
+
+  void _paintTerrainGrass(Canvas c, int sz) {
+    final s = sz.toDouble();
+    final rng = math.Random(42);
+
+    c.drawRect(Rect.fromLTWH(0, 0, s, s), Paint()..color = _currentBiome.groundBase);
+
+    final darkGround =
+        Color.lerp(_currentBiome.groundBase, const Color(0xFF000000), 0.22)!;
+    final midGround = _currentBiome.groundAccent;
+    final lightGround =
+        Color.lerp(_currentBiome.groundAccent, const Color(0xFFFFFFFF), 0.12)!;
+
+    for (int i = 0; i < 900; i++) {
+      final px = rng.nextDouble() * s;
+      final py = rng.nextDouble() * s;
+      final n = _perlin.fbm(px / 80, py / 80, octaves: 4);
+      final r = 3.0 + n * 12.0;
+
+      Color col;
+      if (n < 0.35) {
+        col = darkGround.withAlpha((22 + rng.nextInt(22)).clamp(0, 255));
+      } else if (n < 0.55) {
+        col = midGround.withAlpha((20 + rng.nextInt(18)).clamp(0, 255));
+      } else {
+        col = lightGround.withAlpha((18 + rng.nextInt(18)).clamp(0, 255));
+      }
+      c.drawCircle(Offset(px, py), r, Paint()..color = col);
+    }
+
+    // Grass blades
+    for (int i = 0; i < 70; i++) {
+      final bx = rng.nextDouble() * s;
+      final by = rng.nextDouble() * s;
+      final h = 5.0 + rng.nextDouble() * 14.0;
+      final lean = (rng.nextDouble() - 0.5) * 8;
+      final bladeColor = Color.lerp(
+        _currentBiome.groundBase,
+        _currentBiome.groundAccent,
+        rng.nextDouble(),
+      )!
+          .withAlpha(100);
+
+      c.drawPath(
+        Path()
+          ..moveTo(bx, by)
+          ..quadraticBezierTo(
+              bx + lean * 0.5, by - h * 0.6, bx + lean, by - h),
+        Paint()
+          ..color = bladeColor
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 1.5
+          ..strokeCap = StrokeCap.round,
+      );
+    }
+
+    c.drawRect(
+      Rect.fromLTWH(0, 0, s, s),
+      Paint()
+        ..shader = ui.Gradient.linear(
+          const Offset(0, 0),
+          Offset(s, s),
+          [
+            const Color(0x06FFFFFF),
+            const Color(0x00000000),
+            const Color(0x06000000),
+          ],
+          [0.0, 0.5, 1.0],
+        ),
+    );
+  }
+
+  void _paintTerrainPath(Canvas c, int sz) {
+    final s = sz.toDouble();
+    final rng = math.Random(77);
+
+    c.drawRect(
+        Rect.fromLTWH(0, 0, s, s), Paint()..color = _currentBiome.pathBase);
+
+    final stoneColors = [
+      Color.lerp(_currentBiome.pathAccent, const Color(0xFFFFFFFF), 0.15)!,
+      Color.lerp(_currentBiome.pathAccent, const Color(0xFFFFFFFF), 0.25)!,
+      Color.lerp(_currentBiome.pathAccent, const Color(0xFFFFFFFF), 0.30)!,
+      Color.lerp(_currentBiome.pathAccent, const Color(0xFFFFFFFF), 0.20)!,
+      Color.lerp(_currentBiome.pathAccent, const Color(0xFFFFFFFF), 0.40)!,
+    ];
+
+    double y = -2.0;
+    int rowIdx = 0;
+    while (y < s + 5) {
+      final stoneH = 14.0 + (rowIdx % 3) * 3;
+      final xOffset = (rowIdx % 2 == 0) ? 0.0 : 16.0;
+      double x = -xOffset;
+      int colIdx = 0;
+      while (x < s + 5) {
+        final stoneW = 24.0 + ((colIdx + rowIdx) % 4) * 5;
+        final color = stoneColors[(colIdx + rowIdx * 3) % stoneColors.length];
+        final rect = RRect.fromRectAndRadius(
+          Rect.fromLTWH(x + 1.5, y + 1.5, stoneW - 3, stoneH - 3),
+          Radius.circular(2.5 + rng.nextDouble()),
+        );
+        final stoneGrad = ui.Gradient.linear(
+          Offset(x, y),
+          Offset(x + stoneW, y + stoneH),
+          [
+            Color.lerp(color, Colors.white, 0.12)!,
+            color,
+            Color.lerp(color, Colors.black, 0.15)!,
+          ],
+          [0.0, 0.4, 1.0],
+        );
+        c.drawRRect(rect, Paint()..shader = stoneGrad);
+
+        for (int t = 0; t < 3; t++) {
+          final tx = x + 4 + rng.nextDouble() * (stoneW - 8);
+          final ty = y + 4 + rng.nextDouble() * (stoneH - 8);
+          c.drawCircle(
+            Offset(tx, ty),
+            1.0 + rng.nextDouble() * 1.5,
+            Paint()
+              ..color =
+                  Color.lerp(color, Colors.black, 0.08)!.withAlpha(40),
+          );
+        }
+
+        x += stoneW;
+        colIdx++;
+      }
+      y += stoneH;
+      rowIdx++;
+    }
+
+    // Mortar lines
+    final mortarColor =
+        Color.lerp(_currentBiome.pathBase, const Color(0xFF000000), 0.3)!;
+    y = -2.0;
+    rowIdx = 0;
+    while (y < s + 5) {
+      final stoneH = 14.0 + (rowIdx % 3) * 3;
+      c.drawLine(
+        Offset(0, y + stoneH),
+        Offset(s, y + stoneH),
+        Paint()
+          ..color = mortarColor
+          ..strokeWidth = 2.2,
+      );
+      final xOffset = (rowIdx % 2 == 0) ? 0.0 : 16.0;
+      double x = -xOffset;
+      int colIdx = 0;
+      while (x < s + 5) {
+        final stoneW = 24.0 + ((colIdx + rowIdx) % 4) * 5;
+        c.drawLine(
+          Offset(x + stoneW, y),
+          Offset(x + stoneW, y + stoneH),
+          Paint()
+            ..color = mortarColor
+            ..strokeWidth = 1.8,
+        );
+        x += stoneW;
+        colIdx++;
+      }
+      y += stoneH;
+      rowIdx++;
+    }
+
+    // Wear overlay
+    final dirtColor =
+        Color.lerp(_currentBiome.pathBase, const Color(0xFF000000), 0.2)!;
+    for (int i = 0; i < 80; i++) {
+      c.drawCircle(
+        Offset(rng.nextDouble() * s, rng.nextDouble() * s),
+        1.5 + rng.nextDouble() * 3,
+        Paint()..color = dirtColor.withAlpha(12 + rng.nextInt(12)),
+      );
+    }
+  }
+
+  void _paintTerrainBlocked(Canvas c, int sz) {
+    final s = sz.toDouble();
+    final rng = math.Random(31);
+
+    final blockedBase = _currentBiome.decorationColors.isNotEmpty
+        ? _currentBiome.decorationColors[0]
+        : _currentBiome.groundBase;
+    final blockedDark =
+        Color.lerp(blockedBase, const Color(0xFF000000), 0.35)!;
+
+    c.drawRect(Rect.fromLTWH(0, 0, s, s), Paint()..color = blockedDark);
+
+    for (int i = 0; i < 600; i++) {
+      final px = rng.nextDouble() * s;
+      final py = rng.nextDouble() * s;
+      final n = _perlin.fbm(px / 60, py / 60, octaves: 4);
+      final r = 2.5 + n * 8.0;
+      final brightness = (20 + n * 40).round().clamp(0, 255);
+      c.drawCircle(
+        Offset(px, py),
+        r,
+        Paint()
+          ..color = Color.fromARGB(
+              40, brightness, (brightness + 20).clamp(0, 255), (brightness - 5).clamp(0, 255)),
+      );
+    }
+
+    // Moss patches
+    for (int i = 0; i < 30; i++) {
+      final px = rng.nextDouble() * s;
+      final py = rng.nextDouble() * s;
+      final n = _perlin.fbm(px / 40 + 100, py / 40 + 100, octaves: 3);
+      if (n > 0.55) {
+        c.drawCircle(
+          Offset(px, py),
+          4 + rng.nextDouble() * 8,
+          Paint()
+            ..color = Color.lerp(
+                    blockedBase, _currentBiome.groundBase, 0.5)!
+                .withAlpha(30),
+        );
+      }
+    }
+
+    c.drawRect(
+      Rect.fromLTWH(0, 0, s, s),
+      Paint()
+        ..shader = ui.Gradient.radial(
+          Offset(s * 0.5, s * 0.5),
+          s * 0.7,
+          [const Color(0x00000000), const Color(0x20000000)],
+        ),
+    );
+  }
+
+  void _paintTerrainSpawn(Canvas c, int sz) {
+    final s = sz.toDouble();
+    final rng = math.Random(666);
+
+    c.drawRect(
+      Rect.fromLTWH(0, 0, s, s),
+      Paint()
+        ..shader = ui.Gradient.radial(
+          Offset(s * 0.5, s * 0.5),
+          s * 0.7,
+          [
+            const Color(0xFFBB3030),
+            const Color(0xFF8A2020),
+            const Color(0xFF551515),
+          ],
+          [0.0, 0.5, 1.0],
+        ),
+    );
+
+    final center = Offset(s * 0.5, s * 0.5);
+    c.drawCircle(
+      center,
+      s * 0.38,
+      Paint()
+        ..color = const Color(0x55FF5555)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 2.5,
+    );
+    c.drawCircle(
+      center,
+      s * 0.28,
+      Paint()
+        ..color = const Color(0x44FF7777)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 2.0,
+    );
+
+    c.drawLine(
+      Offset(s * 0.2, s * 0.5),
+      Offset(s * 0.8, s * 0.5),
+      Paint()
+        ..color = const Color(0x66FF6666)
+        ..strokeWidth = 2.5
+        ..strokeCap = StrokeCap.round,
+    );
+    c.drawLine(
+      Offset(s * 0.5, s * 0.2),
+      Offset(s * 0.5, s * 0.8),
+      Paint()
+        ..color = const Color(0x66FF6666)
+        ..strokeWidth = 2.5
+        ..strokeCap = StrokeCap.round,
+    );
+
+    c.drawCircle(
+      center,
+      s * 0.15,
+      Paint()
+        ..shader = ui.Gradient.radial(
+          center,
+          s * 0.15,
+          [const Color(0x66FFAAAA), const Color(0x00FF0000)],
+        ),
+    );
+
+    for (int i = 0; i < 50; i++) {
+      c.drawCircle(
+        Offset(rng.nextDouble() * s, rng.nextDouble() * s),
+        1.5 + rng.nextDouble() * 2,
+        Paint()
+          ..color = Color.fromARGB(12 + rng.nextInt(18), 40, 0, 0),
+      );
+    }
+  }
+
+  void _paintTerrainCastle(Canvas c, int sz) {
+    final s = sz.toDouble();
+    c.drawRect(
+        Rect.fromLTWH(0, 0, s, s), Paint()..color = const Color(0xFFAA7520));
+
+    final brickColors = [
+      const Color(0xFFD4A843),
+      const Color(0xFFC49838),
+      const Color(0xFFDDB853),
+      const Color(0xFFBA8A30),
+    ];
+
+    double y = -1;
+    int rowIdx = 0;
+    while (y < s + 5) {
+      final brickH = 14.0 + (rowIdx % 2) * 3;
+      final xOff = (rowIdx % 2 == 0) ? 0.0 : 18.0;
+      double x = -xOff;
+      int colIdx = 0;
+      while (x < s + 5) {
+        final brickW = 28.0 + (colIdx % 3) * 5;
+        final color = brickColors[(colIdx + rowIdx) % brickColors.length];
+        c.drawRRect(
+          RRect.fromRectAndRadius(
+            Rect.fromLTWH(x + 1, y + 1, brickW - 2, brickH - 2),
+            const Radius.circular(1.5),
+          ),
+          Paint()
+            ..shader = ui.Gradient.linear(
+              Offset(x, y),
+              Offset(x, y + brickH),
+              [
+                Color.lerp(color, Colors.white, 0.1)!,
+                color,
+                Color.lerp(color, Colors.black, 0.1)!,
+              ],
+              [0.0, 0.4, 1.0],
+            ),
+        );
+        x += brickW;
+        colIdx++;
+      }
+      y += brickH;
+      rowIdx++;
+    }
+
+    // Mortar lines
+    y = -1;
+    rowIdx = 0;
+    while (y < s + 5) {
+      final brickH = 14.0 + (rowIdx % 2) * 3;
+      c.drawLine(
+        Offset(0, y + brickH),
+        Offset(s, y + brickH),
+        Paint()
+          ..color = const Color(0xFF7A5510)
+          ..strokeWidth = 1.8,
+      );
+      final xOff = (rowIdx % 2 == 0) ? 0.0 : 18.0;
+      double x = -xOff;
+      int colIdx = 0;
+      while (x < s + 5) {
+        final brickW = 28.0 + (colIdx % 3) * 5;
+        c.drawLine(
+          Offset(x + brickW, y),
+          Offset(x + brickW, y + brickH),
+          Paint()
+            ..color = const Color(0xFF7A5510)
+            ..strokeWidth = 1.5,
+        );
+        x += brickW;
+        colIdx++;
+      }
+      y += brickH;
+      rowIdx++;
+    }
+
+    c.drawRect(
+      Rect.fromLTWH(0, 0, s, s),
+      Paint()
+        ..shader = ui.Gradient.linear(
+          const Offset(0, 0),
+          Offset(s, s),
+          [
+            const Color(0x08FFFFFF),
+            const Color(0x00000000),
+            const Color(0x05000000),
+          ],
           [0.0, 0.5, 1.0],
         ),
     );

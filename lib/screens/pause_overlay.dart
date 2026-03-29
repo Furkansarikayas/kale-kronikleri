@@ -65,7 +65,7 @@ class PauseOverlay extends StatelessWidget {
                         child: OutlinedButton.icon(
                           onPressed: onBestiary,
                           icon: const Icon(Icons.menu_book, size: 16),
-                          label: const Text('DUSMANLAR', style: TextStyle(fontSize: 11)),
+                          label: const Text('DÜŞMANLAR', style: TextStyle(fontSize: 11)),
                           style: OutlinedButton.styleFrom(
                             foregroundColor: _gold,
                             side: BorderSide(color: _gold.withAlpha(120)),
@@ -79,7 +79,7 @@ class PauseOverlay extends StatelessWidget {
                         child: OutlinedButton.icon(
                           onPressed: onSynergyGuide,
                           icon: const Icon(Icons.auto_awesome, size: 16),
-                          label: const Text('SINERJILER', style: TextStyle(fontSize: 11)),
+                          label: const Text('SİNERJİLER', style: TextStyle(fontSize: 11)),
                           style: OutlinedButton.styleFrom(
                             foregroundColor: _gold,
                             side: BorderSide(color: _gold.withAlpha(120)),
@@ -98,7 +98,7 @@ class PauseOverlay extends StatelessWidget {
                   side: const BorderSide(color: _cream),
                   minimumSize: const Size.fromHeight(44),
                 ),
-                child: const Text('ANA MENU'),
+                child: const Text('ANA MENÜ'),
               ),
             ],
           ),

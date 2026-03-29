@@ -21,6 +21,7 @@ void main() {
     final stats = TowerData.getStats(TowerType.arrow);
     expect(stats.upgradeCost(2), 100);
     expect(stats.upgradeCost(3), 200);
+    expect(stats.upgradeCost(4), 300);
   });
   test('tier upgrade multiplies damage by 1.5', () {
     final stats = TowerData.getStats(TowerType.arrow);

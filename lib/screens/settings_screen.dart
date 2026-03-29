@@ -77,7 +77,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               const SizedBox(height: 12),
               _buildToggle(
                 icon: Icons.music_note,
-                label: 'Muzik',
+                label: 'Müzik',
                 value: _music,
                 onChanged: (v) {
                   setState(() => _music = v);

@@ -64,8 +64,19 @@ class DeathScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: _darkBg,
-      body: BackdropFilter(
-        filter: ui.ImageFilter.blur(sigmaX: 6, sigmaY: 6),
+      body: Stack(
+        fit: StackFit.expand,
+        children: [
+          // Background image
+          Image.asset(
+            isVictory ? 'assets/images/ui/victory_bg.png' : 'assets/images/ui/defeat_bg.png',
+            fit: BoxFit.cover,
+            errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+          ),
+          // Dark overlay for readability
+          Container(color: const Color(0xAA000000)),
+          BackdropFilter(
+        filter: ui.ImageFilter.blur(sigmaX: 4, sigmaY: 4),
         child: Center(
           child: GlassPanel(
             padding: const EdgeInsets.all(32),
@@ -84,7 +95,7 @@ class DeathScreen extends StatelessWidget {
               ),
               const SizedBox(height: 16),
               Text(
-                isVictory ? 'ZAFER!' : 'KALE DUSTU',
+                isVictory ? 'ZAFER!' : 'KALE DÜŞTÜ',
                 style: TextStyle(
                   color: isVictory ? _gold : Colors.red,
                   fontSize: 28,
@@ -101,7 +112,7 @@ class DeathScreen extends StatelessWidget {
               ],
               const SizedBox(height: 24),
               _StatRow(label: 'Dalga', value: '$wavesCompleted / $totalWaves'),
-              _StatRow(label: 'Dusmanlar', value: '$enemiesKilled'),
+              _StatRow(label: 'Düşmanlar', value: '$enemiesKilled'),
               _StatRow(label: 'Kuleler', value: '$towersPlaced'),
               if (totalDamageDealt > 0) _StatRow(label: 'Toplam Hasar', value: _formatNumber(totalDamageDealt)),
               if (activeSynergies.isNotEmpty) ...[
@@ -123,11 +134,11 @@ class DeathScreen extends StatelessWidget {
               ],
               const Divider(color: _gold, height: 24),
               _StatRow(
-                label: 'Kazanilan Tas Ruhu',
+                label: 'Kazanılan Taş Ruhu',
                 value: '+$spiritEarned',
                 highlight: true,
               ),
-              _StatRow(label: 'Toplam Tas Ruhu', value: '$totalSpirit'),
+              _StatRow(label: 'Toplam Taş Ruhu', value: '$totalSpirit'),
               // Tip for defeated players
               if (!isVictory) ...[
                 const SizedBox(height: 12),
@@ -162,7 +173,7 @@ class DeathScreen extends StatelessWidget {
                       backgroundColor: Colors.grey[800],
                       foregroundColor: _cream,
                     ),
-                    child: const Text('ANA MENU'),
+                    child: const Text('ANA MENÜ'),
                   ),
                   const SizedBox(width: 16),
                   ElevatedButton(
@@ -180,6 +191,8 @@ class DeathScreen extends StatelessWidget {
             ),
           ),
         ),
+      ),
+        ],
       ),
     );
   }

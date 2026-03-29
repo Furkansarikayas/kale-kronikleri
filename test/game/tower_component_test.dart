@@ -31,9 +31,9 @@ void main() {
       expect(tower.upgrade(), false);
     });
 
-    test('sell value is 60% of total spent', () {
+    test('sell value is 65% of total spent', () {
       final tower = Tower(type: TowerType.arrow, col: 0, row: 0, cellSize: 40);
-      expect(tower.sellValue, 30); // 50 * 0.6
+      expect(tower.sellValue, 33); // 50 * 0.65
     });
 
     test('synergy bonus applies', () {

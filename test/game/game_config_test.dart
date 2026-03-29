@@ -2,21 +2,21 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:kale_kronikleri/game/data/game_config.dart';
 
 void main() {
-  test('grid dimensions are 22x10', () {
-    expect(GameConfig.gridColumns, 22);
-    expect(GameConfig.gridRows, 10);
+  test('grid dimensions are 12x7', () {
+    expect(GameConfig.gridColumns, 12);
+    expect(GameConfig.gridRows, 7);
   });
-  test('base castle HP is 50', () {
-    expect(GameConfig.baseCastleHp, 50);
+  test('base castle HP is 60', () {
+    expect(GameConfig.baseCastleHp, 60);
   });
-  test('base tower slots is 10', () {
-    expect(GameConfig.baseTowerSlots, 10);
+  test('base tower slots is 8', () {
+    expect(GameConfig.baseTowerSlots, 8);
   });
   test('starting gold is 200', () {
     expect(GameConfig.startingGold, 200);
   });
-  test('sell refund ratio is 0.6', () {
-    expect(GameConfig.sellRefundRatio, 0.6);
+  test('sell refund ratio is 0.65', () {
+    expect(GameConfig.sellRefundRatio, 0.65);
   });
   test('CellType has all required types', () {
     expect(CellType.values.length, 6);
