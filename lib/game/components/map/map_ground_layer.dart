@@ -20,7 +20,6 @@ class MapGroundLayer extends PositionComponent {
 
   ui.Image? _cached;
   static final Paint _imgPaint = Paint()..filterQuality = FilterQuality.medium;
-  double _time = 0;
 
   // Padding to extend grass beyond grid (covers ultrawide screens)
   static const double _padL = 350.0;
@@ -73,13 +72,8 @@ class MapGroundLayer extends PositionComponent {
     // 3. Path with rounded corners
     _renderPathGroup(canvas, cols, rows, cache, mapW, mapH);
 
-    // 4. Spawn cells
-    _renderCellGroup(canvas, [CellType.spawn], cache.spawnTexture, mapW, mapH,
-        const Color(0xFF992222));
-
-    // 5. Castle cells
-    _renderCellGroup(canvas, [CellType.castle], cache.castleTexture, mapW,
-        mapH, const Color(0xFFAA7520));
+    // 4. Spawn cells — skip, spawn on grass
+    // 5. Castle cells — skip, castle on grass
 
     // 6. PathBuildable green shimmer
     _renderPathBuildableTint(canvas);
@@ -473,40 +467,9 @@ class MapGroundLayer extends PositionComponent {
   }
 
   @override
-  void update(double dt) {
-    super.update(dt);
-    _time += dt;
-  }
-
-  @override
   void render(Canvas canvas) {
     if (_cached != null) {
       canvas.drawImage(_cached!, const Offset(-_padL, -_padT), _imgPaint);
-
-      // Animated spawn pulsing glow (rendered live, not cached)
-      final pulse = (math.sin(_time * 2.5) * 0.5 + 0.5); // 0..1
-      final alpha = (0x10 + (pulse * 0x18).toInt()).clamp(0, 255);
-      for (int r = 0; r < GameConfig.gridRows; r++) {
-        for (int c = 0; c < GameConfig.gridColumns; c++) {
-          if (grid[r][c] != CellType.spawn) continue;
-          final cx = c * cellSize + cellSize * 0.5;
-          final cy = r * cellSize + cellSize * 0.5;
-          final radius = cellSize * 0.6 + pulse * cellSize * 0.15;
-          canvas.drawCircle(
-            Offset(cx, cy),
-            radius,
-            Paint()
-              ..shader = ui.Gradient.radial(
-                Offset(cx, cy),
-                radius,
-                [
-                  Color.fromARGB(alpha, 255, 30, 30),
-                  const Color(0x00FF0000),
-                ],
-              ),
-          );
-        }
-      }
       return;
     }
     // Fallback: flat colors while cache builds
@@ -523,9 +486,9 @@ class MapGroundLayer extends PositionComponent {
           case CellType.blocked:
             color = const Color(0xFF2B3A1E);
           case CellType.spawn:
-            color = const Color(0xFF992222);
+            color = const Color(0xFF3B7A35); // grass
           case CellType.castle:
-            color = const Color(0xFF555577);
+            color = const Color(0xFF3B7A35); // grass
         }
         canvas.drawRect(
           Rect.fromLTWH(c * cellSize, r * cellSize, cellSize, cellSize),
