@@ -45,9 +45,9 @@ class EnemyStats {
 class EnemyData {
   EnemyData._();
   static const Map<EnemyType, EnemyStats> _stats = {
-    EnemyType.soldier: EnemyStats(type: EnemyType.soldier, name: 'Sıradan Asker', hp: 30, armor: 0, speed: 1.0, goldReward: 5, castleDamage: 1, difficulty: EnemyDifficulty.easy),
-    EnemyType.cavalry: EnemyStats(type: EnemyType.cavalry, name: 'Hızlı Süvari', hp: 20, armor: 0, speed: 2.0, goldReward: 6, castleDamage: 1, difficulty: EnemyDifficulty.easy),
-    EnemyType.goblin: EnemyStats(type: EnemyType.goblin, name: 'Goblin Hırsız', hp: 25, armor: 0, speed: 1.3, goldReward: 8, castleDamage: 1, difficulty: EnemyDifficulty.easy),
+    EnemyType.soldier: EnemyStats(type: EnemyType.soldier, name: 'Sıradan Asker', hp: 45, armor: 0, speed: 1.0, goldReward: 5, castleDamage: 1, difficulty: EnemyDifficulty.easy),
+    EnemyType.cavalry: EnemyStats(type: EnemyType.cavalry, name: 'Hızlı Süvari', hp: 35, armor: 0, speed: 2.0, goldReward: 6, castleDamage: 1, difficulty: EnemyDifficulty.easy),
+    EnemyType.goblin: EnemyStats(type: EnemyType.goblin, name: 'Goblin Hırsız', hp: 40, armor: 0, speed: 1.3, goldReward: 8, castleDamage: 1, difficulty: EnemyDifficulty.easy),
     EnemyType.armoredGiant: EnemyStats(type: EnemyType.armoredGiant, name: 'Zırhlı Dev', hp: 120, armor: 15, speed: 0.5, goldReward: 12, castleDamage: 2, difficulty: EnemyDifficulty.medium),
     EnemyType.undead: EnemyStats(type: EnemyType.undead, name: 'Canlanır Ölü', hp: 60, armor: 0, speed: 0.8, goldReward: 10, castleDamage: 2, difficulty: EnemyDifficulty.medium, splitCount: 3, splitHp: 15),
     EnemyType.shieldBearer: EnemyStats(type: EnemyType.shieldBearer, name: 'Kalkan Taşıyıcı', hp: 50, armor: 25, speed: 0.7, goldReward: 10, castleDamage: 2, difficulty: EnemyDifficulty.medium),

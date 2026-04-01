@@ -1,5 +1,4 @@
 import 'dart:math' as math;
-import 'dart:ui' as ui;
 import 'package:flame/components.dart';
 import 'package:flutter/material.dart';
 
@@ -10,13 +9,17 @@ class HitEffect extends PositionComponent {
   final double maxLife;
   final bool _isExplosion;
 
+  // Cached paints — single-threaded render, safe to share
+  static final Paint _fp = Paint();
+  static final Paint _sp = Paint()..style = PaintingStyle.stroke;
+
   HitEffect({
     required Vector2 pos,
     required Color color,
-    int count = 8,
+    int count = 6,
     double speed = 60.0,
-    double size = 2.5,
-    this.maxLife = 0.4,
+    double size = 2.0,
+    this.maxLife = 0.3,
   }) : _life = maxLife,
        _isExplosion = false,
        super(position: pos.clone(), anchor: Anchor.center) {
@@ -30,138 +33,77 @@ class HitEffect extends PositionComponent {
         dy: math.sin(angle) * spd,
         size: size * (0.6 + rng.nextDouble() * 0.6),
         color: _shiftHue(color, hue),
-        rotation: rng.nextDouble() * math.pi * 2,
-        rotSpeed: (rng.nextDouble() - 0.5) * 8,
         gravity: 20 + rng.nextDouble() * 40,
-        shape: rng.nextInt(3), // 0=circle, 1=square, 2=diamond
+        shape: rng.nextInt(3),
       ));
     }
   }
 
   /// Explosion effect for cannon/AoE
   factory HitEffect.explosion({required Vector2 pos, double radius = 40}) {
-    final effect = HitEffect(
-      pos: pos,
-      color: const Color(0xFFFF6600),
-      count: 16,
-      speed: radius * 2.5,
-      size: 3.5,
-      maxLife: 0.6,
-    );
-    // Mark as explosion for shockwave ring
     return HitEffect._withExplosion(
       pos: pos,
       color: const Color(0xFFFF6600),
-      count: 16,
-      speed: radius * 2.5,
-      size: 3.5,
-      maxLife: 0.6,
+      count: 8,
+      speed: radius * 2.0,
+      size: 2.5,
+      maxLife: 0.35,
     );
   }
 
   HitEffect._withExplosion({
     required Vector2 pos,
     required Color color,
-    int count = 16,
-    double speed = 100.0,
-    double size = 3.5,
-    this.maxLife = 0.6,
+    int count = 8,
+    double speed = 80.0,
+    double size = 2.5,
+    this.maxLife = 0.35,
   }) : _life = maxLife,
        _isExplosion = true,
        super(position: pos.clone(), anchor: Anchor.center) {
     final rng = math.Random();
+    const colors = [
+      Color(0xFFFF6600),
+      Color(0xFFFF8800),
+      Color(0xFFFFAA00),
+      Color(0xFFFF4400),
+    ];
     for (int i = 0; i < count; i++) {
       final angle = i * math.pi * 2 / count;
       final spd = speed * (0.6 + rng.nextDouble() * 0.4);
-      final colors = [
-        const Color(0xFFFF6600),
-        const Color(0xFFFF8800),
-        const Color(0xFFFFAA00),
-        const Color(0xFFFF4400),
-      ];
       _particles.add(_Particle(
         dx: math.cos(angle) * spd,
         dy: math.sin(angle) * spd,
         size: size * (0.7 + rng.nextDouble() * 0.5),
         color: colors[rng.nextInt(colors.length)],
-        rotation: angle,
-        rotSpeed: (rng.nextDouble() - 0.5) * 6,
         gravity: 30,
         shape: rng.nextInt(2),
       ));
     }
   }
 
-  /// Ice shatter effect
   factory HitEffect.ice({required Vector2 pos}) {
-    return HitEffect(
-      pos: pos,
-      color: const Color(0xFF87CEEB),
-      count: 7,
-      speed: 50,
-      size: 2.2,
-      maxLife: 0.4,
-    );
+    return HitEffect(pos: pos, color: const Color(0xFF87CEEB), count: 5, speed: 50, size: 1.8, maxLife: 0.25);
   }
 
-  /// Fire burst
   factory HitEffect.fire({required Vector2 pos}) {
-    return HitEffect(
-      pos: pos,
-      color: const Color(0xFFFF4500),
-      count: 10,
-      speed: 55,
-      size: 2.8,
-      maxLife: 0.45,
-    );
+    return HitEffect(pos: pos, color: const Color(0xFFFF4500), count: 7, speed: 55, size: 2.2, maxLife: 0.3);
   }
 
-  /// Poison splash
   factory HitEffect.poison({required Vector2 pos}) {
-    return HitEffect(
-      pos: pos,
-      color: const Color(0xFF00FF00),
-      count: 6,
-      speed: 35,
-      size: 2.2,
-      maxLife: 0.55,
-    );
+    return HitEffect(pos: pos, color: const Color(0xFF00FF00), count: 5, speed: 35, size: 1.8, maxLife: 0.35);
   }
 
-  /// Lightning spark
   factory HitEffect.lightning({required Vector2 pos}) {
-    return HitEffect(
-      pos: pos,
-      color: const Color(0xFFFFD700),
-      count: 8,
-      speed: 100,
-      size: 1.8,
-      maxLife: 0.2,
-    );
+    return HitEffect(pos: pos, color: const Color(0xFFFFD700), count: 6, speed: 100, size: 1.5, maxLife: 0.15);
   }
 
-  /// Death burst when enemy dies
   factory HitEffect.death({required Vector2 pos, Color color = const Color(0xFFFF0000)}) {
-    return HitEffect(
-      pos: pos,
-      color: color,
-      count: 20,
-      speed: 80,
-      size: 3.0,
-      maxLife: 0.7,
-    );
+    return HitEffect(pos: pos, color: color, count: 8, speed: 80, size: 2.5, maxLife: 0.35);
   }
 
-  /// Boss death — even bigger and longer burst
   factory HitEffect.bossDeath({required Vector2 pos, Color color = const Color(0xFFFF0000)}) {
-    return HitEffect(
-      pos: pos,
-      color: color,
-      count: 30,
-      speed: 120,
-      size: 4.5,
-      maxLife: 0.8,
-    );
+    return HitEffect(pos: pos, color: color, count: 12, speed: 100, size: 3.0, maxLife: 0.4);
   }
 
   @override
@@ -175,9 +117,7 @@ class HitEffect extends PositionComponent {
     for (final p in _particles) {
       p.x += p.dx * dt;
       p.y += p.dy * dt;
-      p.dy += p.gravity * dt; // Gravity pull
-      p.rotation += p.rotSpeed * dt;
-      // Friction
+      p.dy += p.gravity * dt;
       p.dx *= 0.94;
       p.dy *= 0.94;
     }
@@ -187,88 +127,47 @@ class HitEffect extends PositionComponent {
   void render(Canvas canvas) {
     final t = (_life / maxLife).clamp(0.0, 1.0);
 
-    // Explosion shockwave ring with glow
+    // Explosion shockwave ring (simplified — no outer glow layer)
     if (_isExplosion && t > 0.3) {
       final ringT = 1.0 - t;
       final ringRadius = ringT * 30;
       final ringAlpha = ((t - 0.3) / 0.7 * 180).round().clamp(0, 255);
-
-      // Outer glow ring
-      canvas.drawCircle(
-        Offset.zero, ringRadius,
-        Paint()
-          ..color = Color.fromARGB((ringAlpha * 0.4).round().clamp(0, 255), 255, 180, 50)
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = 6.0 * t
-          ..maskFilter = MaskFilter.blur(BlurStyle.normal, 4.0 * t),
-      );
-
-      // Core shockwave ring
-      canvas.drawCircle(
-        Offset.zero, ringRadius,
-        Paint()
-          ..color = Color.fromARGB(ringAlpha, 255, 150, 0)
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = 2.5 * t,
-      );
+      _sp.color = Color.fromARGB(ringAlpha, 255, 150, 0);
+      _sp.strokeWidth = 2.5 * t;
+      canvas.drawCircle(Offset.zero, ringRadius, _sp);
     }
 
     // Flash on start
     if (t > 0.85) {
       final flashAlpha = ((t - 0.85) / 0.15 * 60).round().clamp(0, 255);
-      canvas.drawCircle(
-        Offset.zero, 8 * t,
-        Paint()..color = Color.fromARGB(flashAlpha, 255, 255, 200),
-      );
+      _fp.color = Color.fromARGB(flashAlpha, 255, 255, 200);
+      canvas.drawCircle(Offset.zero, 8 * t, _fp);
     }
 
     for (final p in _particles) {
       final alpha = (t * 255).round().clamp(0, 255);
       final currentSize = p.size * (0.3 + t * 0.7);
 
-      canvas.save();
-      canvas.translate(p.x, p.y);
-      canvas.rotate(p.rotation);
-
-      // Particle glow
-      if (currentSize > 1.5) {
-        canvas.drawCircle(
-          Offset.zero, currentSize * 1.5,
-          Paint()..color = p.color.withAlpha((alpha * 0.2).round().clamp(0, 255)),
-        );
-      }
-
-      // Main particle
-      final paint = Paint()..color = p.color.withAlpha(alpha);
+      // Main particle — solid color, no gradient
+      _fp.color = p.color.withAlpha(alpha);
       switch (p.shape) {
         case 1: // Square
           canvas.drawRect(
-            Rect.fromCenter(center: Offset.zero, width: currentSize * 1.4, height: currentSize * 1.4),
-            paint,
+            Rect.fromCenter(center: Offset(p.x, p.y), width: currentSize * 1.4, height: currentSize * 1.4),
+            _fp,
           );
-          break;
         case 2: // Diamond
-          final path = Path()
-            ..moveTo(0, -currentSize)
-            ..lineTo(currentSize * 0.7, 0)
-            ..lineTo(0, currentSize)
-            ..lineTo(-currentSize * 0.7, 0)
-            ..close();
-          canvas.drawPath(path, paint);
-          break;
-        default: // Circle with gradient
-          if (currentSize > 1.0) {
-            final grad = ui.Gradient.radial(
-              Offset(-currentSize * 0.2, -currentSize * 0.2), currentSize,
-              [p.color.withAlpha(alpha), p.color.withAlpha((alpha * 0.3).round().clamp(0, 255))],
-            );
-            canvas.drawCircle(Offset.zero, currentSize, Paint()..shader = grad);
-          } else {
-            canvas.drawCircle(Offset.zero, currentSize, paint);
-          }
+          canvas.save();
+          canvas.translate(p.x, p.y);
+          canvas.rotate(0.785); // pi/4
+          canvas.drawRect(
+            Rect.fromCenter(center: Offset.zero, width: currentSize, height: currentSize),
+            _fp,
+          );
+          canvas.restore();
+        default: // Circle — simple solid fill (no gradient)
+          canvas.drawCircle(Offset(p.x, p.y), currentSize, _fp);
       }
-
-      canvas.restore();
     }
   }
 
@@ -287,8 +186,6 @@ class _Particle {
   double dy;
   double size;
   Color color;
-  double rotation;
-  double rotSpeed;
   double gravity;
   int shape;
 
@@ -297,9 +194,43 @@ class _Particle {
     required this.dy,
     required this.size,
     required this.color,
-    this.rotation = 0,
-    this.rotSpeed = 0,
     this.gravity = 0,
     this.shape = 0,
   });
+}
+
+/// Brief glowing line between two points (wizard chain, etc.).
+class ChainEffect extends PositionComponent {
+  final Vector2 _to;
+  final Color _color;
+  double _life;
+  static const double _maxLife = 0.15;
+
+  // Cached paints
+  static final Paint _linePaint = Paint()..strokeCap = StrokeCap.round;
+
+  ChainEffect({required Vector2 from, required Vector2 to, required Color color})
+      : _to = to.clone(),
+        _color = color,
+        _life = _maxLife,
+        super(position: from.clone(), anchor: Anchor.center);
+
+  @override
+  void update(double dt) {
+    super.update(dt);
+    _life -= dt;
+    if (_life <= 0) removeFromParent();
+  }
+
+  @override
+  void render(Canvas canvas) {
+    final t = (_life / _maxLife).clamp(0.0, 1.0);
+    final alpha = (t * 200).round().clamp(0, 255);
+    final end = (_to - position).toOffset();
+
+    // Core line only (skip glow layer for performance)
+    _linePaint.color = _color.withAlpha(alpha);
+    _linePaint.strokeWidth = 1.5 * t;
+    canvas.drawLine(Offset.zero, end, _linePaint);
+  }
 }

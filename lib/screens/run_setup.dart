@@ -54,7 +54,7 @@ class _RunSetupState extends State<RunSetup> {
         children: [
           // Background
           Image.asset(
-            'assets/images/ui/menu_bg.png',
+            'assets/images/ui/menu_bg.webp',
             fit: BoxFit.cover,
             errorBuilder: (_, __, ___) => const SizedBox.shrink(),
           ),
@@ -74,7 +74,7 @@ class _RunSetupState extends State<RunSetup> {
                         Expanded(
                           flex: 2,
                           child: _buildPanelFrame(
-                            'assets/images/ui/panel_left.png',
+                            'assets/images/ui/panel_left.webp',
                             _buildLeftContent(),
                           ),
                         ),
@@ -83,7 +83,7 @@ class _RunSetupState extends State<RunSetup> {
                         Expanded(
                           flex: 3,
                           child: _buildPanelFrame(
-                            'assets/images/ui/panel_right.png',
+                            'assets/images/ui/panel_right.webp',
                             _buildArtifactContent(),
                           ),
                         ),
@@ -325,7 +325,7 @@ class _RunSetupState extends State<RunSetup> {
                     ),
                     const SizedBox(height: 1),
                     Text(
-                      '${d.totalWaves} dalga | HP x${d.hpMultiplier} | Ruh x${d.spiritMultiplier}',
+                      '${d.totalWaves} dalga | HP x${d.hpMultiplier} | Hız x${d.speedMultiplier} | Ruh x${d.spiritMultiplier}',
                       style: TextStyle(
                         color: _cream.withAlpha(160),
                         fontSize: 9,
@@ -479,7 +479,7 @@ class _RunSetupState extends State<RunSetup> {
               width: 36,
               height: 36,
               child: Image.asset(
-                'assets/images/ui/artifact_${artifact.id}.png',
+                'assets/images/ui/artifact_${artifact.id}.webp',
                 fit: BoxFit.contain,
                 errorBuilder: (_, __, ___) => Container(
                   decoration: BoxDecoration(
@@ -578,7 +578,7 @@ class _RunSetupState extends State<RunSetup> {
             ],
           ),
           child: Image.asset(
-            'assets/images/ui/btn_basla.png',
+            'assets/images/ui/btn_basla.webp',
             fit: BoxFit.contain,
             errorBuilder: (_, __, ___) => Container(
               decoration: BoxDecoration(

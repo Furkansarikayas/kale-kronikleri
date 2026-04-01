@@ -28,6 +28,7 @@ dependencies:
   flutter_riverpod: ^2.6.0
   shared_preferences: ^2.3.0
   flame_audio: ^2.12.0
+  audioplayers: ^6.1.0
 
 dev_dependencies:
   flutter_test:
@@ -40,9 +41,9 @@ dev_dependencies:
 flutter_launcher_icons:
   android: true
   ios: true
-  image_path: "assets/images/ui/castle_logo.png"
+  image_path: "assets/images/ui/castle_logo.webp"
   adaptive_icon_background: "#0D0D15"
-  adaptive_icon_foreground: "assets/images/ui/castle_logo.png"
+  adaptive_icon_foreground: "assets/images/ui/castle_logo.webp"
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec
@@ -68,6 +69,8 @@ flutter:
     - assets/images/ui/
     - assets/images/backgrounds/
     - assets/images/tiles/
+    - assets/images/textures/forest/
+    - assets/audio/
 
   # To add assets to your application, add an assets section, like this:
   # assets:

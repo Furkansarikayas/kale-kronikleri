@@ -77,7 +77,7 @@ class SpriteManager {
 
   /// Returns a [Sprite] for the given [key].
   ///
-  /// First attempts to load `assets/images/<key>.png` via Flame's image loader.
+  /// First attempts to load `assets/images/<key>.webp` via Flame's image loader.
   /// If that fails (file missing, decode error, etc.), uses [fallbackGenerator]
   /// to produce a [ui.Image] procedurally.
   ///
@@ -100,7 +100,7 @@ class SpriteManager {
 
     // Attempt PNG load from assets.
     try {
-      final image = await Flame.images.load('$key.png');
+      final image = await Flame.images.load('$key.webp');
       final sprite = Sprite(image);
       _spriteCache[key] = sprite;
       return sprite;
@@ -134,7 +134,7 @@ class SpriteManager {
 
   /// Returns a [SpriteAnimation] for the given [key].
   ///
-  /// Attempts to load a sprite sheet at `assets/images/<key>.png` and split it
+  /// Attempts to load a sprite sheet at `assets/images/<key>.webp` and split it
   /// into [frameCount] frames of [textureSize] x [textureSize].
   ///
   /// If loading fails, uses [fallbackGenerator] to create individual frame
@@ -160,7 +160,7 @@ class SpriteManager {
 
     // Attempt sprite-sheet load from assets.
     try {
-      final image = await Flame.images.load('$key.png');
+      final image = await Flame.images.load('$key.webp');
       final spriteSheet = SpriteSheet(
         image: image,
         srcSize: Vector2(textureSize.toDouble(), textureSize.toDouble()),

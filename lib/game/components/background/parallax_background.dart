@@ -9,8 +9,10 @@ class ParallaxBackground extends Component with HasGameReference {
   final BiomeData biome;
   double _time = 0;
 
-  // World dimensions (grid area)
-  static const double _w = 880.0;
+  // World dimensions — wide enough for ultrawide screens (21:9 etc.)
+  static const double _w = 1400.0;
+  // X offset so the wider background is centered around the grid (768 wide)
+  static const double _xOff = -316.0; // (768 - 1400) / 2
   static const double _gridH = 540.0;
 
   // Extended sky area above the grid (visible via camera offset)
@@ -33,8 +35,8 @@ class ParallaxBackground extends Component with HasGameReference {
   // Ambient particles
   late final List<_Particle> _particles;
 
-  // Moon position — in the sky strip above grid
-  static const double _moonX = _w * 0.82;
+  // Moon position — in the sky strip above grid (relative to grid, not bg width)
+  static const double _moonX = 630.0; // near right side of 768-wide grid
   static const double _moonY = -_skyExtension * 0.35;
   static const double _moonRadius = 16.0;
 
@@ -50,9 +52,9 @@ class ParallaxBackground extends Component with HasGameReference {
     final rng = math.Random(42);
 
     // Generate stars distributed across the sky area (above grid + top portion of grid)
-    // Stars range from _topY to about 30% into the grid
+    // Stars range from _topY to about 30% into the grid, spread over full width
     _stars = List.generate(50, (i) => _Star(
-      x: rng.nextDouble() * _w,
+      x: _xOff + rng.nextDouble() * _w,
       y: _topY + rng.nextDouble() * (_skyExtension + _gridH * 0.35),
       size: 0.5 + rng.nextDouble() * 1.8,
       phase: rng.nextDouble() * math.pi * 2,
@@ -61,7 +63,7 @@ class ParallaxBackground extends Component with HasGameReference {
 
     // Generate ambient particles (30 particles, biome-specific)
     _particles = List.generate(30, (i) => _Particle(
-      x: rng.nextDouble() * _w,
+      x: _xOff + rng.nextDouble() * _w,
       y: rng.nextDouble() * _gridH, // particles stay in grid area
       size: 0.8 + rng.nextDouble() * 2.0,
       speedX: 0.2 + rng.nextDouble() * 0.6,
@@ -94,7 +96,7 @@ class ParallaxBackground extends Component with HasGameReference {
 
   Future<ui.Image?> _tryLoadBiomeBg() async {
     try {
-      final path = 'assets/images/backgrounds/${biome.type.name}_bg.png';
+      final path = 'assets/images/backgrounds/${biome.type.name}_bg.webp';
       final data = await rootBundle.load(path);
       final bytes = data.buffer.asUint8List();
       final codec = await ui.instantiateImageCodec(bytes);
@@ -152,19 +154,20 @@ class ParallaxBackground extends Component with HasGameReference {
     _time += dt;
 
     // Update particle positions
+    final xEnd = _xOff + _w;
     for (final p in _particles) {
       if (biome.type == BiomeType.snow) {
         p.y += p.speedY * dt * 30;
         p.x += math.sin(_time * p.speedX + p.phase) * dt * 10;
         if (p.y > _gridH) {
           p.y = -5;
-          p.x = math.Random().nextDouble() * _w;
+          p.x = _xOff + math.Random().nextDouble() * _w;
         }
       } else {
         p.x += p.speedX * dt * 8;
         p.y += math.sin(_time * p.speedY * 2 + p.phase) * dt * 6;
-        if (p.x > _w) p.x = -5;
-        if (p.x < -5) p.x = _w;
+        if (p.x > xEnd) p.x = _xOff;
+        if (p.x < _xOff) p.x = xEnd;
         if (p.y > _gridH) p.y = _gridH;
         if (p.y < 0) p.y = 0;
       }
@@ -176,7 +179,7 @@ class ParallaxBackground extends Component with HasGameReference {
     if (_biomeBgImage != null) {
       // Draw the Leonardo background image, scaled to cover the full area
       final src = Rect.fromLTWH(0, 0, _biomeBgImage!.width.toDouble(), _biomeBgImage!.height.toDouble());
-      final dst = Rect.fromLTWH(-10, _topY - 10, _w + 20, _totalH + 20);
+      final dst = Rect.fromLTWH(_xOff - 10, _topY - 10, _w + 20, _totalH + 20);
       canvas.drawImageRect(_biomeBgImage!, src, dst, Paint()..filterQuality = FilterQuality.medium);
       // Still draw fog, particles, and vignette on top for atmosphere
       _renderFog(canvas);
@@ -197,6 +200,7 @@ class ParallaxBackground extends Component with HasGameReference {
 
   void _renderSkyGradient(Canvas canvas) {
     // Draw sky from _topY (above grid) all the way down to _gridH + 20
+    // Extra wide to cover widescreen displays
     final grad = ui.Gradient.linear(
       Offset(0, _topY - 10),
       Offset(0, _gridH + 20),
@@ -204,7 +208,7 @@ class ParallaxBackground extends Component with HasGameReference {
       [0.0, 1.0],
     );
     canvas.drawRect(
-      Rect.fromLTWH(-10, _topY - 10, _w + 20, _totalH + 20),
+      Rect.fromLTWH(_xOff - 10, _topY - 10, _w + 20, _totalH + 20),
       Paint()..shader = grad,
     );
   }
@@ -276,13 +280,13 @@ class ParallaxBackground extends Component with HasGameReference {
 
   void _renderFarMountains(Canvas canvas) {
     if (_farMountainImage != null) {
-      canvas.drawImage(_farMountainImage!, Offset.zero, Paint());
+      canvas.drawImage(_farMountainImage!, Offset(_xOff, 0), Paint());
     }
   }
 
   void _renderMidSilhouettes(Canvas canvas) {
     if (_midSilhouetteImage != null) {
-      canvas.drawImage(_midSilhouetteImage!, Offset.zero, Paint());
+      canvas.drawImage(_midSilhouetteImage!, Offset(_xOff, 0), Paint());
     }
   }
 
@@ -293,7 +297,7 @@ class ParallaxBackground extends Component with HasGameReference {
       [Colors.transparent, biome.fogColor],
     );
     canvas.drawRect(
-      Rect.fromLTWH(0, _gridH * 0.6, _w, _gridH * 0.4),
+      Rect.fromLTWH(_xOff, _gridH * 0.6, _w, _gridH * 0.4),
       Paint()..shader = fogGrad,
     );
   }
@@ -339,7 +343,7 @@ class ParallaxBackground extends Component with HasGameReference {
   void _renderVignette(Canvas canvas) {
     // Top edge (from sky area)
     canvas.drawRect(
-      Rect.fromLTWH(0, _topY, _w, 50),
+      Rect.fromLTWH(_xOff, _topY, _w, 50),
       Paint()
         ..shader = ui.Gradient.linear(
           Offset(0, _topY),
@@ -349,32 +353,12 @@ class ParallaxBackground extends Component with HasGameReference {
     );
     // Bottom edge
     canvas.drawRect(
-      Rect.fromLTWH(0, _gridH - 30, _w, 30),
+      Rect.fromLTWH(_xOff, _gridH - 30, _w, 30),
       Paint()
         ..shader = ui.Gradient.linear(
           Offset(0, _gridH - 30),
           Offset(0, _gridH),
           [Colors.transparent, const Color(0x40000000)],
-        ),
-    );
-    // Left edge
-    canvas.drawRect(
-      Rect.fromLTWH(0, _topY, 30, _totalH),
-      Paint()
-        ..shader = ui.Gradient.linear(
-          Offset.zero,
-          const Offset(30, 0),
-          [const Color(0x35000000), Colors.transparent],
-        ),
-    );
-    // Right edge
-    canvas.drawRect(
-      Rect.fromLTWH(_w - 30, _topY, 30, _totalH),
-      Paint()
-        ..shader = ui.Gradient.linear(
-          const Offset(_w - 30, 0),
-          const Offset(_w, 0),
-          [Colors.transparent, const Color(0x35000000)],
         ),
     );
   }

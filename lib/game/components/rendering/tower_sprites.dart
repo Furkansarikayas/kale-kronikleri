@@ -36,7 +36,7 @@ class TowerSpriteGenerator {
       for (int tier = 1; tier <= 4; tier++) {
         final key = _cacheKey(type, tier);
         // Try loading PNG asset first
-        final pngPath = 'assets/images/towers/${type.name}_t$tier.png';
+        final pngPath = 'assets/images/towers/${type.name}_t$tier.webp';
         final pngImage = await _tryLoadPng(pngPath);
         if (pngImage != null) {
           _cache[key] = pngImage;
@@ -50,7 +50,7 @@ class TowerSpriteGenerator {
       // Load T4 branch variants (pathA / pathB)
       for (final branch in ['a', 'b']) {
         final branchKey = '${type.name}_t4$branch';
-        final branchPath = 'assets/images/towers/${type.name}_t4$branch.png';
+        final branchPath = 'assets/images/towers/${type.name}_t4$branch.webp';
         final branchImage = await _tryLoadPng(branchPath);
         if (branchImage != null) {
           _cache[branchKey] = branchImage;

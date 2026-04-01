@@ -1,7 +1,11 @@
+import '../data/enemy_data.dart';
+import '../data/tower_data.dart';
+
 /// Contextual tutorial hint system.
 /// Shows progressive hints based on game state transitions.
 enum TutorialTrigger {
   gameStart,        // Wave 0, no towers placed
+  towerSelected,    // Player selected a tower from grid (onboarding only)
   firstTowerPlaced, // First tower placed
   firstWaveStart,   // Wave 1 started
   firstWaveComplete,// Wave 1 completed
@@ -30,32 +34,52 @@ class TutorialHint {
 }
 
 class TutorialSystem {
+  final bool isFirstRun;
   final Set<TutorialTrigger> _shownHints = {};
   TutorialHint? _currentHint;
   double _hintTimer = 0;
-  static const double _hintDuration = 6.0; // seconds to show each hint
+  static const double _hintDuration = 6.0;
+  static const double _onboardingHintDuration = 8.0;
+
+  TutorialSystem({this.isFirstRun = false});
 
   TutorialHint? get currentHint => _currentHint;
 
-  static const List<TutorialHint> _allHints = [
+  /// Onboarding triggers that only show on first run.
+  static const _onboardingTriggers = {
+    TutorialTrigger.gameStart,
+    TutorialTrigger.towerSelected,
+    TutorialTrigger.firstTowerPlaced,
+    TutorialTrigger.firstWaveStart,
+    TutorialTrigger.firstWaveComplete,
+    TutorialTrigger.upgradeAvailable,
+  };
+
+  /// Step-by-step onboarding hints (first run only).
+  static const List<TutorialHint> _onboardingHints = [
     TutorialHint(
       trigger: TutorialTrigger.gameStart,
-      message: 'Aşağıdan kule seç, yeşil alana yerleştir, dalga başlat!',
+      message: 'Aşağıdan bir kule seç!',
       icon: 'start',
     ),
     TutorialHint(
+      trigger: TutorialTrigger.towerSelected,
+      message: 'Harita üzerinde yeşil alana dokunarak kuleyi yerleştir.',
+      icon: 'place',
+    ),
+    TutorialHint(
       trigger: TutorialTrigger.firstTowerPlaced,
-      message: 'Harika! Kuleleri yan yana koyarak sinerji oluşturabilirsin.',
-      icon: 'synergy',
+      message: 'Harika! Daha fazla kule koy veya ⚔ Dalga Başlat butonuna bas.',
+      icon: 'wave',
     ),
     TutorialHint(
       trigger: TutorialTrigger.firstWaveStart,
-      message: 'Düşmanlar yola çıktı! Kuleye dokunarak hedefleme modunu değiştirebilirsin.',
+      message: 'Düşmanlar geliyor! Kulelerin otomatik saldırıyor.',
       icon: 'target',
     ),
     TutorialHint(
       trigger: TutorialTrigger.firstWaveComplete,
-      message: 'İyi iş! Dalga arası kulelerini geliştir veya yeni kuleler yerleştir.',
+      message: 'İlk dalga tamam! Kulelere dokunarak yükseltebilirsin.',
       icon: 'upgrade',
     ),
     TutorialHint(
@@ -63,6 +87,10 @@ class TutorialSystem {
       message: 'Bir kulen yükseltilebilir! Dokunup "Yükselt" butonuna bas.',
       icon: 'upgrade',
     ),
+  ];
+
+  /// Regular contextual hints (shown every run for advanced mechanics).
+  static const List<TutorialHint> _contextualHints = [
     TutorialHint(
       trigger: TutorialTrigger.spellUnlocked,
       message: 'Büyü açıldı! Alt barda büyü ikonlarına basarak kale büyüleri kullan.',
@@ -103,15 +131,26 @@ class TutorialSystem {
   /// Try to show a hint for the given trigger. Returns true if a new hint was shown.
   bool tryShow(TutorialTrigger trigger) {
     if (_shownHints.contains(trigger)) return false;
-    final hint = _allHints.where((h) => h.trigger == trigger).firstOrNull;
-    if (hint == null) return false;
 
-    // Don't interrupt an existing hint (queue would be overkill)
+    // On non-first runs, skip onboarding-only triggers
+    if (!isFirstRun && _onboardingTriggers.contains(trigger)) return false;
+
+    // Don't interrupt an existing hint
     if (_currentHint != null) return false;
+
+    // Look up hint: first-run uses onboarding hints, then falls through to contextual
+    TutorialHint? hint;
+    if (isFirstRun) {
+      hint = _onboardingHints.where((h) => h.trigger == trigger).firstOrNull;
+    }
+    hint ??= _contextualHints.where((h) => h.trigger == trigger).firstOrNull;
+    if (hint == null) return false;
 
     _shownHints.add(trigger);
     _currentHint = hint;
-    _hintTimer = _hintDuration;
+    _hintTimer = isFirstRun && _onboardingTriggers.contains(trigger)
+        ? _onboardingHintDuration
+        : _hintDuration;
     return true;
   }
 
@@ -129,4 +168,47 @@ class TutorialSystem {
   }
 
   bool wasShown(TutorialTrigger trigger) => _shownHints.contains(trigger);
+
+  // ─── Enemy weakness hints (Issue #2) ─────────────────────────────────────
+  final Set<EnemyType> _seenEnemyTypes = {};
+
+  /// Show weakness hint when a new enemy type is first encountered.
+  bool tryShowEnemyWeakness(EnemyType type) {
+    if (_seenEnemyTypes.contains(type)) return false;
+    _seenEnemyTypes.add(type);
+
+    final weaknesses = EnemyData.getWeaknesses(type);
+    if (weaknesses.isEmpty) return false;
+
+    // Don't interrupt existing hint
+    if (_currentHint != null) return false;
+
+    final enemyName = EnemyData.getStats(type).name;
+    final towerNames = weaknesses.map((t) => TowerData.getStats(t).tierNames[0]).join(', ');
+    final mechanic = _enemyMechanic(type);
+    final message = '$enemyName zayıflığı: $towerNames${mechanic.isNotEmpty ? ' | $mechanic' : ''}';
+
+    _currentHint = TutorialHint(
+      trigger: TutorialTrigger.gameStart, // dummy trigger
+      message: message,
+      icon: 'weakness',
+    );
+    _hintTimer = 5.0;
+    return true;
+  }
+
+  String _enemyMechanic(EnemyType type) {
+    switch (type) {
+      case EnemyType.cavalry: return 'Çok hızlı!';
+      case EnemyType.goblin: return 'Kaleye ulaşırsa altın çalar!';
+      case EnemyType.undead: return 'Öldürünce 3 küçük parçaya bölünür!';
+      case EnemyType.healer: return 'Yakındaki düşmanları iyileştirir!';
+      case EnemyType.burrower: return 'Yeraltına dalıp 4 hücre atlar!';
+      case EnemyType.troll: return 'Sürekli HP yeniler!';
+      case EnemyType.darkKnight: return 'Yakındaki düşmanlara zırh verir!';
+      case EnemyType.shadowLord: return 'Işınlanır ve asker çağırır!';
+      case EnemyType.dragonEmperor: return 'Nefes saldırısıyla kuleleri devre dışı bırakır!';
+      default: return '';
+    }
+  }
 }

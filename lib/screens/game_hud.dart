@@ -5,6 +5,7 @@ import '../game/data/synergy_data.dart';
 import '../game/data/t4_branch_data.dart';
 import '../game/components/towers/tower.dart';
 import '../game/systems/spell_system.dart';
+import '../game/systems/mutation_system.dart';
 import 'widgets/glass_panel.dart';
 
 class GameHud extends StatefulWidget {
@@ -52,6 +53,20 @@ class GameHud extends StatefulWidget {
   final String? tutorialMessage;
   final VoidCallback? onDismissTutorial;
 
+  // Merge system
+  final int mergeCandidateCount;
+
+  // Active mutations
+  final List<MutationType> activeMutations;
+
+  // Gold UI reject feedback
+  final int goldRejectCounter;
+
+  // Run objectives
+  final bool objWaves;
+  final bool objKills;
+  final bool objBoss;
+
   const GameHud({
     super.key,
     required this.castleHp,
@@ -91,6 +106,12 @@ class GameHud extends StatefulWidget {
     this.onT4Cancel,
     this.tutorialMessage,
     this.onDismissTutorial,
+    this.mergeCandidateCount = 0,
+    this.activeMutations = const [],
+    this.goldRejectCounter = 0,
+    this.objWaves = false,
+    this.objKills = false,
+    this.objBoss = false,
   });
 
   @override
@@ -106,7 +127,10 @@ class _GameHudState extends State<GameHud> with TickerProviderStateMixin {
 
   late AnimationController _pulseController;
   late AnimationController _goldFlashController;
+  late AnimationController _goldRejectController;
   int _prevGold = 0;
+  int _goldDelta = 0;
+  int _prevRejectCounter = 0;
 
   @override
   void initState() {
@@ -120,14 +144,24 @@ class _GameHudState extends State<GameHud> with TickerProviderStateMixin {
       vsync: this,
       duration: const Duration(milliseconds: 400),
     );
+    _goldRejectController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 350),
+    );
+    _prevRejectCounter = widget.goldRejectCounter;
   }
 
   @override
   void didUpdateWidget(covariant GameHud oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (widget.gold != _prevGold) {
+      _goldDelta = widget.gold - _prevGold;
       _goldFlashController.forward(from: 0);
       _prevGold = widget.gold;
+    }
+    if (widget.goldRejectCounter != _prevRejectCounter) {
+      _goldRejectController.forward(from: 0);
+      _prevRejectCounter = widget.goldRejectCounter;
     }
   }
 
@@ -135,6 +169,7 @@ class _GameHudState extends State<GameHud> with TickerProviderStateMixin {
   void dispose() {
     _pulseController.dispose();
     _goldFlashController.dispose();
+    _goldRejectController.dispose();
     super.dispose();
   }
 
@@ -220,29 +255,35 @@ class _GameHudState extends State<GameHud> with TickerProviderStateMixin {
           child: SafeArea(
             bottom: false,
             child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
               child: Row(
                 children: [
                   _buildHpBar(),
-                  const SizedBox(width: 12),
+                  const SizedBox(width: 6),
                   _buildGoldDisplay(),
-                  const SizedBox(width: 10),
+                  const SizedBox(width: 6),
                   _buildWaveCounter(),
-                  const SizedBox(width: 8),
+                  const SizedBox(width: 5),
                   _buildSlotsBadge(),
                   if (widget.isWaveActive && widget.waveEnemyTotal > 0) ...[
-                    const SizedBox(width: 8),
+                    const SizedBox(width: 5),
                     _buildEnemyCounter(),
                   ],
+                  const SizedBox(width: 5),
+                  _buildObjectives(),
                   const Spacer(),
+                  if (widget.activeMutations.isNotEmpty) ...[
+                    _buildMutationBadge(),
+                    const SizedBox(width: 4),
+                  ],
                   if (widget.activeSynergies.isNotEmpty) ...[
                     _buildSynergyBadge(),
-                    const SizedBox(width: 6),
+                    const SizedBox(width: 4),
                   ],
                   _buildAutoWaveButton(),
-                  const SizedBox(width: 4),
+                  const SizedBox(width: 3),
                   _buildSpeedButton(),
-                  const SizedBox(width: 6),
+                  const SizedBox(width: 4),
                   _buildPauseButton(),
                 ],
               ),
@@ -255,46 +296,121 @@ class _GameHudState extends State<GameHud> with TickerProviderStateMixin {
 
   Widget _buildGoldDisplay() {
     return AnimatedBuilder(
-      animation: _goldFlashController,
+      animation: Listenable.merge([_goldFlashController, _goldRejectController]),
       builder: (context, child) {
         final flash = _goldFlashController.value;
-        final glowAlpha = (80 + 120 * (1 - flash)).round();
-        return Container(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              colors: [_bgDark.withAlpha(200), _bgDark.withAlpha(150)],
-            ),
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(
-              color: flash > 0 ? _gold.withAlpha(glowAlpha) : _gold.withAlpha(120),
-              width: flash > 0 ? 1.5 : 1,
-            ),
-            boxShadow: flash > 0
-                ? [BoxShadow(color: _gold.withAlpha((60 * (1 - flash)).round()), blurRadius: 10)]
-                : null,
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
+        final reject = _goldRejectController.value;
+        final isGain = _goldDelta > 0;
+        final isLargeGain = _goldDelta >= 15;
+
+        // Reject shake: horizontal oscillation that decays
+        final shakeOffset = reject < 1.0
+            ? (reject < 0.5 ? reject * 2 : (1.0 - reject) * 2)
+                * 3.0
+                * (reject < 0.25 ? 1 : reject < 0.5 ? -1 : reject < 0.75 ? 1 : -1)
+            : 0.0;
+
+        // Border color: gain = warm gold, spend = dim, reject = red
+        Color borderColor;
+        double borderWidth = 1.0;
+        if (reject < 1.0) {
+          final rejectAlpha = ((1.0 - reject) * 200).round().clamp(0, 255);
+          borderColor = Color.fromARGB(rejectAlpha, 255, 60, 40);
+          borderWidth = 1.5;
+        } else if (flash > 0) {
+          final glowAlpha = (80 + 120 * (1 - flash)).round();
+          borderColor = isGain
+              ? Color.fromARGB(glowAlpha, 212, 200, 67)
+              : Color.fromARGB(glowAlpha, 180, 140, 80);
+          borderWidth = 1.5;
+        } else {
+          borderColor = _gold.withAlpha(120);
+        }
+
+        // Box shadow: gain = warm glow, spend = subtle, reject = red glow
+        List<BoxShadow>? boxShadows;
+        if (reject < 1.0) {
+          boxShadows = [BoxShadow(color: Color.fromARGB(((1.0 - reject) * 80).round(), 255, 40, 30), blurRadius: 10)];
+        } else if (flash > 0 && isGain) {
+          final glowStrength = isLargeGain ? 80 : 60;
+          boxShadows = [BoxShadow(color: _gold.withAlpha((glowStrength * (1 - flash)).round()), blurRadius: isLargeGain ? 14 : 10)];
+        }
+
+        // Text color and size: gain = bright warm pop, spend = sharper dim, reject = red tint
+        Color textColor;
+        double fontSize;
+        if (reject < 1.0) {
+          textColor = Color.lerp(const Color(0xFFFF6644), _gold, reject)!;
+          fontSize = 12.0;
+        } else if (flash > 0) {
+          textColor = isGain ? const Color(0xFFFFEEAA) : const Color(0xFFCCBB88);
+          fontSize = isGain ? (isLargeGain ? 13.5 : 13.0) : 11.5;
+        } else {
+          textColor = _gold;
+          fontSize = 12.0;
+        }
+
+        return Transform.translate(
+          offset: Offset(shakeOffset, 0),
+          child: Stack(
+            clipBehavior: Clip.none,
             children: [
               Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                 decoration: BoxDecoration(
-                  boxShadow: [
-                    BoxShadow(color: _gold.withAlpha(80), blurRadius: 6, spreadRadius: 1),
+                  gradient: LinearGradient(
+                    colors: [_bgDark.withAlpha(200), _bgDark.withAlpha(150)],
+                  ),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: borderColor, width: borderWidth),
+                  boxShadow: boxShadows,
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      decoration: BoxDecoration(
+                        boxShadow: [
+                          BoxShadow(color: _gold.withAlpha(80), blurRadius: 4, spreadRadius: 1),
+                        ],
+                      ),
+                      child: const Icon(Icons.monetization_on, color: _gold, size: 14),
+                    ),
+                    const SizedBox(width: 3),
+                    Text(
+                      '${widget.gold}',
+                      style: TextStyle(
+                        color: textColor,
+                        fontSize: fontSize,
+                        fontWeight: FontWeight.bold,
+                        shadows: const [Shadow(color: Color(0x88D4A843), blurRadius: 4)],
+                      ),
+                    ),
                   ],
                 ),
-                child: const Icon(Icons.monetization_on, color: _gold, size: 18),
               ),
-              const SizedBox(width: 5),
-              Text(
-                '${widget.gold}',
-                style: TextStyle(
-                  color: flash > 0 ? const Color(0xFFFFEEAA) : _gold,
-                  fontSize: flash > 0 ? 16 : 15,
-                  fontWeight: FontWeight.bold,
-                  shadows: const [Shadow(color: Color(0x88D4A843), blurRadius: 4)],
+              // Gold delta indicator: "+50" or "-90"
+              if (flash < 1.0 && _goldDelta != 0)
+                Positioned(
+                  top: -12 - flash * 8,
+                  left: 0,
+                  right: 0,
+                  child: Opacity(
+                    opacity: (1.0 - flash).clamp(0.0, 1.0),
+                    child: Text(
+                      _goldDelta > 0 ? '+$_goldDelta' : '$_goldDelta',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        color: _goldDelta > 0
+                            ? const Color(0xFF44DD44)
+                            : const Color(0xFFDD4444),
+                        fontSize: isLargeGain ? 11 : 10,
+                        fontWeight: FontWeight.bold,
+                        shadows: const [Shadow(color: Color(0xCC000000), blurRadius: 3)],
+                      ),
+                    ),
+                  ),
                 ),
-              ),
             ],
           ),
         );
@@ -304,22 +420,22 @@ class _GameHudState extends State<GameHud> with TickerProviderStateMixin {
 
   Widget _buildWaveCounter() {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
       decoration: BoxDecoration(
         gradient: const LinearGradient(
           colors: [Color(0xFF1A1A2E), Color(0xFF16213E)],
         ),
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: BorderRadius.circular(8),
         border: Border.all(color: const Color(0xFF4488CC).withAlpha(100), width: 1),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Icon(Icons.waves, color: Color(0xFF6699CC), size: 15),
-          const SizedBox(width: 5),
+          const Icon(Icons.waves, color: Color(0xFF6699CC), size: 12),
+          const SizedBox(width: 3),
           Text(
             '${widget.currentWave}/${widget.totalWaves}',
-            style: const TextStyle(color: _cream, fontSize: 14, fontWeight: FontWeight.bold),
+            style: const TextStyle(color: _cream, fontSize: 11, fontWeight: FontWeight.bold),
           ),
         ],
       ),
@@ -328,22 +444,22 @@ class _GameHudState extends State<GameHud> with TickerProviderStateMixin {
 
   Widget _buildSlotsBadge() {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
       decoration: BoxDecoration(
         gradient: const LinearGradient(
           colors: [Color(0xFF1A1E1A), Color(0xFF0D150D)],
         ),
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: BorderRadius.circular(8),
         border: Border.all(color: const Color(0xFF66AA66).withAlpha(100), width: 1),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Icon(Icons.grid_view, color: Color(0xFF88CC88), size: 15),
-          const SizedBox(width: 5),
+          const Icon(Icons.grid_view, color: Color(0xFF88CC88), size: 12),
+          const SizedBox(width: 3),
           Text(
             '${widget.towersPlaced}/${widget.towerSlots}',
-            style: const TextStyle(color: _cream, fontSize: 14, fontWeight: FontWeight.bold),
+            style: const TextStyle(color: _cream, fontSize: 11, fontWeight: FontWeight.bold),
           ),
         ],
       ),
@@ -356,22 +472,22 @@ class _GameHudState extends State<GameHud> with TickerProviderStateMixin {
       builder: (context, child) {
         final opacity = 0.6 + 0.4 * _pulseController.value;
         return Container(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
           decoration: BoxDecoration(
             gradient: LinearGradient(
               colors: [Color.fromRGBO(180, 40, 40, 0.3 * opacity), Color.fromRGBO(120, 20, 20, 0.2 * opacity)],
             ),
-            borderRadius: BorderRadius.circular(10),
+            borderRadius: BorderRadius.circular(8),
             border: Border.all(color: Colors.red.withAlpha((140 * opacity).round()), width: 1),
           ),
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(Icons.pest_control, color: Colors.red.withAlpha((220 * opacity).round()), size: 15),
-              const SizedBox(width: 5),
+              Icon(Icons.pest_control, color: Colors.red.withAlpha((220 * opacity).round()), size: 12),
+              const SizedBox(width: 3),
               Text(
                 '${widget.enemiesAlive}/${widget.waveEnemyTotal}',
-                style: TextStyle(color: Colors.red.withAlpha(230), fontSize: 14, fontWeight: FontWeight.bold),
+                style: TextStyle(color: Colors.red.withAlpha(230), fontSize: 11, fontWeight: FontWeight.bold),
               ),
             ],
           ),
@@ -380,29 +496,93 @@ class _GameHudState extends State<GameHud> with TickerProviderStateMixin {
     );
   }
 
+  Widget _buildObjectives() {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        _objDot(Icons.waves, widget.objWaves, '10 Dalga'),
+        const SizedBox(width: 2),
+        _objDot(Icons.groups, widget.objKills, '50 Kill'),
+        const SizedBox(width: 2),
+        _objDot(Icons.whatshot, widget.objBoss, '1 Boss'),
+      ],
+    );
+  }
+
+  Widget _objDot(IconData icon, bool done, String label) {
+    return Tooltip(
+      message: '$label${done ? ' ✓' : ''}',
+      child: Container(
+        width: 18,
+        height: 18,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          color: done ? _gold.withAlpha(50) : _bgDark.withAlpha(120),
+          border: Border.all(
+            color: done ? _gold : _cream.withAlpha(40),
+            width: 1,
+          ),
+        ),
+        child: Icon(
+          done ? Icons.check : icon,
+          size: 10,
+          color: done ? _gold : _cream.withAlpha(60),
+        ),
+      ),
+    );
+  }
+
   Widget _buildSynergyBadge() {
     return Tooltip(
       message: widget.activeSynergies.join('\n'),
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+        padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
         decoration: BoxDecoration(
           gradient: LinearGradient(
             colors: [_gold.withAlpha(50), _gold.withAlpha(30)],
           ),
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(10),
           border: Border.all(color: _gold.withAlpha(100)),
           boxShadow: [
-            BoxShadow(color: _gold.withAlpha(20), blurRadius: 8),
+            BoxShadow(color: _gold.withAlpha(20), blurRadius: 6),
           ],
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.auto_awesome, color: _gold, size: 14),
-            const SizedBox(width: 4),
+            const Icon(Icons.auto_awesome, color: _gold, size: 11),
+            const SizedBox(width: 3),
             Text(
               '${widget.activeSynergies.length}',
-              style: const TextStyle(color: _gold, fontSize: 13, fontWeight: FontWeight.bold),
+              style: const TextStyle(color: _gold, fontSize: 10, fontWeight: FontWeight.bold),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMutationBadge() {
+    final names = widget.activeMutations.map((m) => '${m.displayName}: ${m.description}').join('\n');
+    return Tooltip(
+      message: names,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            colors: [const Color(0xFFFF6644).withAlpha(50), const Color(0xFFFF6644).withAlpha(30)],
+          ),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: const Color(0xFFFF6644).withAlpha(100)),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.science, color: Color(0xFFFF6644), size: 11),
+            const SizedBox(width: 3),
+            Text(
+              '${widget.activeMutations.length}',
+              style: const TextStyle(color: Color(0xFFFF6644), fontSize: 10, fontWeight: FontWeight.bold),
             ),
           ],
         ),
@@ -415,13 +595,13 @@ class _GameHudState extends State<GameHud> with TickerProviderStateMixin {
     return GestureDetector(
       onTap: widget.onToggleAutoWave,
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 3),
         decoration: BoxDecoration(
           gradient: active
               ? const LinearGradient(colors: [Color(0x55D4A843), Color(0x33BA7517)])
               : null,
           color: active ? null : Colors.transparent,
-          borderRadius: BorderRadius.circular(14),
+          borderRadius: BorderRadius.circular(10),
           border: Border.all(
             color: active ? _gold : _creamDim.withAlpha(60),
             width: active ? 1.5 : 1,
@@ -433,14 +613,14 @@ class _GameHudState extends State<GameHud> with TickerProviderStateMixin {
             Icon(
               Icons.fast_forward,
               color: active ? _gold : _creamDim.withAlpha(140),
-              size: 14,
+              size: 12,
             ),
-            const SizedBox(width: 3),
+            const SizedBox(width: 2),
             Text(
               'Oto',
               style: TextStyle(
                 color: active ? _gold : _creamDim.withAlpha(140),
-                fontSize: 10,
+                fontSize: 9,
                 fontWeight: active ? FontWeight.bold : FontWeight.normal,
               ),
             ),
@@ -455,13 +635,13 @@ class _GameHudState extends State<GameHud> with TickerProviderStateMixin {
     return GestureDetector(
       onTap: widget.onToggleSpeed,
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 3),
         decoration: BoxDecoration(
           gradient: fast
               ? const LinearGradient(colors: [Color(0x55D4A843), Color(0x33BA7517)])
               : null,
           color: fast ? null : Colors.transparent,
-          borderRadius: BorderRadius.circular(14),
+          borderRadius: BorderRadius.circular(10),
           border: Border.all(
             color: fast ? _gold : _creamDim.withAlpha(60),
             width: fast ? 1.5 : 1,
@@ -471,7 +651,7 @@ class _GameHudState extends State<GameHud> with TickerProviderStateMixin {
           '${widget.gameSpeed.toStringAsFixed(0)}x',
           style: TextStyle(
             color: fast ? _gold : _cream,
-            fontSize: 12,
+            fontSize: 10,
             fontWeight: FontWeight.bold,
           ),
         ),
@@ -483,13 +663,13 @@ class _GameHudState extends State<GameHud> with TickerProviderStateMixin {
     return GestureDetector(
       onTap: widget.onPause,
       child: Container(
-        padding: const EdgeInsets.all(5),
+        padding: const EdgeInsets.all(4),
         decoration: BoxDecoration(
           color: _bgDark.withAlpha(180),
           shape: BoxShape.circle,
           border: Border.all(color: _creamDim.withAlpha(80)),
         ),
-        child: const Icon(Icons.pause, color: _cream, size: 20),
+        child: const Icon(Icons.pause, color: _cream, size: 16),
       ),
     );
   }
@@ -504,7 +684,7 @@ class _GameHudState extends State<GameHud> with TickerProviderStateMixin {
       builder: (context, child) {
         final glowAlpha = isLowHp ? (40 + (60 * _pulseController.value)).round() : 0;
         return Container(
-          width: 110,
+          width: 90,
           padding: const EdgeInsets.all(2),
           decoration: isLowHp
               ? BoxDecoration(
@@ -528,25 +708,25 @@ class _GameHudState extends State<GameHud> with TickerProviderStateMixin {
             children: [
               Row(
                 children: [
-                  const Icon(Icons.favorite, color: Color(0xFFEE4444), size: 14),
-                  const SizedBox(width: 4),
+                  const Icon(Icons.favorite, color: Color(0xFFEE4444), size: 11),
+                  const SizedBox(width: 3),
                   Text(
                     hasShield
                         ? '${widget.castleHp}/${widget.maxCastleHp} +${widget.secondaryShield}'
                         : '${widget.castleHp}/${widget.maxCastleHp}',
-                    style: const TextStyle(color: _cream, fontSize: 13, fontWeight: FontWeight.bold),
+                    style: const TextStyle(color: _cream, fontSize: 10, fontWeight: FontWeight.bold),
                   ),
                 ],
               ),
-              const SizedBox(height: 3),
+              const SizedBox(height: 2),
               CustomPaint(
-                size: const Size(106, 8),
+                size: const Size(86, 8),
                 painter: _HpBarPainter(ratio: ratio, isFull: ratio >= 1.0),
               ),
               if (hasShield) ...[
-                const SizedBox(height: 2),
+                const SizedBox(height: 1),
                 CustomPaint(
-                  size: const Size(106, 4),
+                  size: const Size(86, 3),
                   painter: _ShieldBarPainter(
                     ratio: widget.maxSecondaryShield > 0
                         ? widget.secondaryShield / widget.maxSecondaryShield
@@ -567,7 +747,7 @@ class _GameHudState extends State<GameHud> with TickerProviderStateMixin {
     return SafeArea(
       top: false,
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.end,
           children: [
@@ -594,7 +774,7 @@ class _GameHudState extends State<GameHud> with TickerProviderStateMixin {
         return GestureDetector(
           onTap: widget.onStartWave,
           child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
             decoration: BoxDecoration(
               gradient: const LinearGradient(
                 begin: Alignment.topLeft,
@@ -619,13 +799,13 @@ class _GameHudState extends State<GameHud> with TickerProviderStateMixin {
             child: const Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(Icons.shield, color: _bgDark, size: 20),
-                SizedBox(width: 6),
+                Icon(Icons.shield, color: _bgDark, size: 16),
+                SizedBox(width: 4),
                 Text(
                   'Dalga',
                   style: TextStyle(
                     color: _bgDark,
-                    fontSize: 14,
+                    fontSize: 12,
                     fontWeight: FontWeight.bold,
                     letterSpacing: 1,
                     shadows: [Shadow(color: Color(0x44FFFFFF), blurRadius: 2)],
@@ -645,7 +825,7 @@ class _GameHudState extends State<GameHud> with TickerProviderStateMixin {
       builder: (context, child) {
         final pulse = 0.6 + 0.4 * _pulseController.value;
         return Container(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
           decoration: BoxDecoration(
             gradient: LinearGradient(
               colors: [
@@ -697,8 +877,8 @@ class _GameHudState extends State<GameHud> with TickerProviderStateMixin {
       child: BackdropFilter(
         filter: ui.ImageFilter.blur(sigmaX: 8, sigmaY: 8),
         child: Container(
-      height: 80,
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      height: 70,
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
       decoration: BoxDecoration(
         color: const Color(0xAA0D0D15),
         borderRadius: BorderRadius.circular(10),
@@ -710,44 +890,73 @@ class _GameHudState extends State<GameHud> with TickerProviderStateMixin {
       child: Row(
         children: [
           Container(
-            width: 40,
-            height: 40,
+            width: 34,
+            height: 34,
             decoration: BoxDecoration(
               color: tColor.withAlpha(40),
               shape: BoxShape.circle,
               border: Border.all(color: tColor.withAlpha(120)),
             ),
             child: Image.asset(
-              'assets/images/towers/${tower.type.name}_t${tower.tier}.png',
+              'assets/images/towers/${tower.type.name}_t${tower.tier}.webp',
               fit: BoxFit.contain,
-              errorBuilder: (_, __, ___) => Icon(_towerIcon(tower.type), color: tColor, size: 22),
+              errorBuilder: (_, __, ___) => Icon(_towerIcon(tower.type), color: tColor, size: 18),
             ),
           ),
-          const SizedBox(width: 10),
+          const SizedBox(width: 8),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Text(
-                  '$tierName (Lv.${tower.tier})',
-                  style: TextStyle(
-                    color: _cream,
-                    fontSize: 13,
-                    fontWeight: FontWeight.bold,
-                    shadows: [Shadow(color: tColor.withAlpha(80), blurRadius: 4)],
-                  ),
+                Row(
+                  children: [
+                    Flexible(
+                      child: Text(
+                        tierName,
+                        style: TextStyle(
+                          color: _cream,
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
+                          shadows: [Shadow(color: tColor.withAlpha(80), blurRadius: 4)],
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    const SizedBox(width: 5),
+                    for (int i = 0; i < 4; i++)
+                      Container(
+                        width: 5,
+                        height: 5,
+                        margin: const EdgeInsets.only(right: 2),
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: i < tower.tier ? tColor : _creamDim.withAlpha(40),
+                          boxShadow: i < tower.tier
+                              ? [BoxShadow(color: tColor.withAlpha(60), blurRadius: 2)]
+                              : null,
+                        ),
+                      ),
+                  ],
                 ),
                 const SizedBox(height: 2),
                 Text(
                   tower.type == TowerType.support
                       ? 'Buff: +${(15 * tower.tier)}% hasar komşu kulelere'
-                      : 'Hasar: ${tower.currentDamage}  Menzil: ${tower.currentRange.toStringAsFixed(1)}',
+                      : 'Hasar: ${tower.currentDamage}  Menzil: ${tower.currentRange.toStringAsFixed(1)}  ${_towerAbility(tower.type)}',
                   style: TextStyle(color: _cream.withAlpha(180), fontSize: 10),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
                 Text(
-                  'Kills: ${tower.kills}  Toplam: ${tower.totalDamageDealt}',
-                  style: TextStyle(color: _creamDim.withAlpha(160), fontSize: 9),
+                  tower.needsT4Choice
+                      ? 'Kills: ${tower.kills} | Yükselt: T4 branş seçimi!'
+                      : 'Kills: ${tower.kills}  Toplam: ${tower.totalDamageDealt}',
+                  style: TextStyle(
+                    color: tower.needsT4Choice ? _gold.withAlpha(220) : _creamDim.withAlpha(160),
+                    fontSize: 9,
+                    fontWeight: tower.needsT4Choice ? FontWeight.bold : FontWeight.normal,
+                  ),
                 ),
               ],
             ),
@@ -755,7 +964,9 @@ class _GameHudState extends State<GameHud> with TickerProviderStateMixin {
           if (canTarget)
             Padding(
               padding: const EdgeInsets.only(right: 6),
-              child: GestureDetector(
+              child: Tooltip(
+                message: _targetingTooltip(tower.targetingMode),
+                child: GestureDetector(
                 onTap: widget.onCycleTargeting,
                 child: Container(
                   padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 5),
@@ -777,43 +988,84 @@ class _GameHudState extends State<GameHud> with TickerProviderStateMixin {
                   ),
                 ),
               ),
+              ),
+            ),
+          if (widget.mergeCandidateCount > 0 && tower.canUpgrade)
+            Padding(
+              padding: const EdgeInsets.only(right: 6),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(colors: [Color(0xFF6B3FA0), Color(0xFF4A2D73)]),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.purple.withAlpha(160)),
+                  boxShadow: [
+                    BoxShadow(color: Colors.purple.withAlpha(40), blurRadius: 6),
+                  ],
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.merge_type, size: 16, color: _cream),
+                    Text(
+                      '${widget.mergeCandidateCount}',
+                      style: const TextStyle(fontSize: 9, color: _gold, fontWeight: FontWeight.bold),
+                    ),
+                  ],
+                ),
+              ),
             ),
           if (tower.canUpgrade)
             Padding(
               padding: const EdgeInsets.only(right: 6),
               child: GestureDetector(
                 onTap: widget.gold >= tower.upgradeCost ? widget.onUpgradeTower : null,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                  decoration: BoxDecoration(
-                    gradient: widget.gold >= tower.upgradeCost
-                        ? const LinearGradient(colors: [Color(0xFF2D7D2D), Color(0xFF1B5E1B)])
-                        : null,
-                    color: widget.gold >= tower.upgradeCost ? null : Colors.grey[800],
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(
-                      color: widget.gold >= tower.upgradeCost
-                          ? Colors.green.withAlpha(160)
-                          : Colors.grey.withAlpha(60),
-                    ),
-                  ),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(Icons.arrow_upward,
-                        size: 16,
-                        color: widget.gold >= tower.upgradeCost ? _cream : Colors.grey,
-                      ),
-                      Text(
-                        '${tower.upgradeCost}g',
-                        style: TextStyle(
-                          fontSize: 9,
-                          color: widget.gold >= tower.upgradeCost ? _gold : Colors.grey,
-                          fontWeight: FontWeight.bold,
+                child: AnimatedBuilder(
+                  animation: _pulseController,
+                  builder: (context, child) {
+                    final canAfford = widget.gold >= tower.upgradeCost;
+                    final pulse = canAfford ? _pulseController.value : 0.0;
+                    return Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                      decoration: BoxDecoration(
+                        gradient: canAfford
+                            ? const LinearGradient(colors: [Color(0xFF2D7D2D), Color(0xFF1B5E1B)])
+                            : null,
+                        color: canAfford ? null : Colors.grey[800],
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(
+                          color: canAfford
+                              ? Colors.green.withAlpha(160 + (40 * pulse).round())
+                              : Colors.grey.withAlpha(60),
+                          width: canAfford ? 1.5 : 1.0,
                         ),
+                        boxShadow: canAfford
+                            ? [BoxShadow(
+                                color: Colors.green.withAlpha((35 + 25 * pulse).round()),
+                                blurRadius: 6 + 4 * pulse,
+                                spreadRadius: 1,
+                              )]
+                            : null,
                       ),
-                    ],
-                  ),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.arrow_upward,
+                            size: 16,
+                            color: canAfford ? _cream : Colors.grey,
+                          ),
+                          Text(
+                            '${tower.upgradeCost}g',
+                            style: TextStyle(
+                              fontSize: 9,
+                              color: canAfford ? _gold : Colors.grey,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  },
                 ),
               ),
             ),
@@ -884,7 +1136,7 @@ class _GameHudState extends State<GameHud> with TickerProviderStateMixin {
 
   Widget _buildSpellBar() {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 2),
+      padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 1),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.center,
         children: widget.availableSpells.map((spell) {
@@ -895,9 +1147,9 @@ class _GameHudState extends State<GameHud> with TickerProviderStateMixin {
           String spellAsset;
           Color color;
           switch (spell) {
-            case SpellType.fireRain: spellAsset = 'assets/images/effects/fire_rain.png'; color = const Color(0xFFFF5511); break;
-            case SpellType.iceStorm: spellAsset = 'assets/images/effects/ice_storm.png'; color = const Color(0xFF22CCEE); break;
-            case SpellType.castleRepair: spellAsset = 'assets/images/effects/castle_repair.png'; color = const Color(0xFF00CC44); break;
+            case SpellType.fireRain: spellAsset = 'assets/images/effects/fire_rain.webp'; color = const Color(0xFFFF5511); break;
+            case SpellType.iceStorm: spellAsset = 'assets/images/effects/ice_storm.webp'; color = const Color(0xFF22CCEE); break;
+            case SpellType.castleRepair: spellAsset = 'assets/images/effects/castle_repair.webp'; color = const Color(0xFF00CC44); break;
           }
           return Padding(
             padding: const EdgeInsets.symmetric(horizontal: 3),
@@ -909,7 +1161,7 @@ class _GameHudState extends State<GameHud> with TickerProviderStateMixin {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Container(
-                      width: 40, height: 40,
+                      width: 32, height: 32,
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
                         gradient: ready ? LinearGradient(
@@ -941,8 +1193,8 @@ class _GameHudState extends State<GameHud> with TickerProviderStateMixin {
                                     ]),
                               child: Image.asset(
                                 spellAsset,
-                                width: 32,
-                                height: 32,
+                                width: 26,
+                                height: 26,
                                 fit: BoxFit.cover,
                                 errorBuilder: (_, __, ___) => Icon(Icons.auto_awesome, color: ready ? color : _creamDim.withAlpha(80), size: 18),
                               ),
@@ -950,7 +1202,7 @@ class _GameHudState extends State<GameHud> with TickerProviderStateMixin {
                           ),
                           if (!ready)
                             SizedBox(
-                              width: 40, height: 40,
+                              width: 32, height: 32,
                               child: CircularProgressIndicator(
                                 value: 1 - (cd / maxCd).clamp(0, 1),
                                 strokeWidth: 2.5,
@@ -1091,38 +1343,47 @@ class _GameHudState extends State<GameHud> with TickerProviderStateMixin {
 
   Widget _buildTowerGrid() {
     final towers = widget.availableTowers;
+    // Use Row instead of ListView so empty gaps between cards
+    // pass touches through to the game map below.
     return SizedBox(
-      height: 82,
-      child: ListView.separated(
-        scrollDirection: Axis.horizontal,
-        itemCount: towers.length,
-        separatorBuilder: (_, __) => const SizedBox(width: 5),
-        itemBuilder: (context, index) {
-          final tower = towers[index];
-          final stats = TowerData.getStats(tower);
-          final isSelected = widget.selectedTower == tower;
-          final canAfford = widget.gold >= stats.cost;
-          final hasSlot = widget.towersPlaced < widget.towerSlots;
-          final tColor = _towerTypeColor(tower);
+      height: 62,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          for (int index = 0; index < towers.length; index++) ...[
+            if (index > 0) const SizedBox(width: 5),
+            _buildTowerCard(towers[index]),
+          ],
+        ],
+      ),
+    );
+  }
 
-          return Tooltip(
-            message: '${stats.name}\nHasar: ${stats.damage} | Menzil: ${stats.range} | Hiz: ${stats.fireRate}s\n${_towerAbility(tower)}',
-            child: GestureDetector(
-              onTap: () {
-                if (canAfford && hasSlot) {
-                  widget.onTowerSelected(isSelected ? null : tower);
-                }
-              },
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-              AnimatedScale(
-                scale: isSelected ? 1.08 : 1.0,
+  Widget _buildTowerCard(TowerType tower) {
+    final stats = TowerData.getStats(tower);
+    final isSelected = widget.selectedTower == tower;
+    final canAfford = widget.gold >= stats.cost;
+    final hasSlot = widget.towersPlaced < widget.towerSlots;
+    final tColor = _towerTypeColor(tower);
+
+    return Tooltip(
+      message: '${stats.name}\nHasar: ${stats.damage} | Menzil: ${stats.range} | Hiz: ${stats.fireRate}s\n${_towerAbility(tower)}',
+      child: GestureDetector(
+        onTap: () {
+          if (canAfford && hasSlot) {
+            widget.onTowerSelected(isSelected ? null : tower);
+          }
+        },
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            AnimatedScale(
+              scale: isSelected ? 1.08 : 1.0,
+              duration: const Duration(milliseconds: 200),
+              child: AnimatedContainer(
                 duration: const Duration(milliseconds: 200),
-                child: AnimatedContainer(
-                duration: const Duration(milliseconds: 200),
-                width: 66,
-                height: 66,
+                width: 52,
+                height: 52,
                 decoration: BoxDecoration(
                   gradient: LinearGradient(
                     begin: Alignment.topCenter,
@@ -1150,9 +1411,9 @@ class _GameHudState extends State<GameHud> with TickerProviderStateMixin {
                     // Tower sprite filling the card
                     Positioned.fill(
                       child: Padding(
-                        padding: const EdgeInsets.fromLTRB(6, 4, 6, 16),
+                        padding: const EdgeInsets.fromLTRB(4, 3, 4, 13),
                         child: Image.asset(
-                          'assets/images/towers/${tower.name}_t1.png',
+                          'assets/images/towers/${tower.name}_t1.webp',
                           fit: BoxFit.contain,
                           opacity: AlwaysStoppedAnimation(canAfford ? 1.0 : 0.35),
                           errorBuilder: (_, __, ___) => Icon(
@@ -1208,22 +1469,19 @@ class _GameHudState extends State<GameHud> with TickerProviderStateMixin {
                   ],
                 ),
               ),
-              ),
-              const SizedBox(height: 1),
-              Text(
-                stats.name.split(' ').first,
-                style: TextStyle(
-                  color: isSelected ? _gold : (canAfford ? _cream.withAlpha(160) : Colors.grey[700]),
-                  fontSize: 7,
-                  fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                ),
-                overflow: TextOverflow.ellipsis,
-              ),
-              ],
             ),
+            const SizedBox(height: 1),
+            Text(
+              stats.name.split(' ').first,
+              style: TextStyle(
+                color: isSelected ? _gold : (canAfford ? _cream.withAlpha(160) : Colors.grey[700]),
+                fontSize: 7,
+                fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+              ),
+              overflow: TextOverflow.ellipsis,
             ),
-          );
-        },
+          ],
+        ),
       ),
     );
   }
@@ -1275,6 +1533,14 @@ class _GameHudState extends State<GameHud> with TickerProviderStateMixin {
       case TargetingMode.nearest: return 'Yakın';
       case TargetingMode.first: return 'İlk';
       case TargetingMode.strongest: return 'Güçlü';
+    }
+  }
+
+  String _targetingTooltip(TargetingMode mode) {
+    switch (mode) {
+      case TargetingMode.nearest: return 'Kuleye en yakın düşmanı hedefle';
+      case TargetingMode.first: return 'Kaleye en yakın düşmanı hedefle';
+      case TargetingMode.strongest: return 'En yüksek HP düşmanı hedefle';
     }
   }
 

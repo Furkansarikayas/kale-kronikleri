@@ -1,16 +1,15 @@
+import 'dart:math' as math;
 import 'dart:ui' as ui;
 import 'package:flame/components.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 
-/// Full-screen spell effect overlay that fades in and out when a spell is cast.
+/// Full-screen spell effect overlay — color/gradient flash, no image.
 class SpellOverlay extends PositionComponent {
-  final String assetPath;
+  final String assetPath; // kept for API compat, not used
   final Color tintColor;
   final double duration;
 
   double _timer = 0;
-  ui.Image? _image;
 
   SpellOverlay({
     required this.assetPath,
@@ -23,19 +22,6 @@ class SpellOverlay extends PositionComponent {
   }
 
   @override
-  Future<void> onLoad() async {
-    try {
-      final data = await rootBundle.load(assetPath);
-      final bytes = data.buffer.asUint8List();
-      final codec = await ui.instantiateImageCodec(bytes);
-      final frame = await codec.getNextFrame();
-      _image = frame.image;
-    } catch (_) {
-      // If asset fails to load, just show color overlay
-    }
-  }
-
-  @override
   void update(double dt) {
     _timer += dt;
     if (_timer >= duration) {
@@ -45,29 +31,36 @@ class SpellOverlay extends PositionComponent {
 
   @override
   void render(Canvas canvas) {
-    // Fade curve: quick fade in, hold, fade out
     final progress = (_timer / duration).clamp(0.0, 1.0);
-    final alpha = progress < 0.2
-        ? (progress / 0.2) // fade in
-        : progress > 0.6
-            ? (1.0 - progress) / 0.4 // fade out
-            : 1.0; // hold
+    // Quick fade in, hold, fade out
+    final alpha = progress < 0.15
+        ? (progress / 0.15)
+        : progress > 0.5
+            ? (1.0 - progress) / 0.5
+            : 1.0;
 
-    final opacity = (alpha * 0.6).clamp(0.0, 1.0);
+    final opacity = (alpha * 0.35).clamp(0.0, 1.0);
+    final rect = Rect.fromLTWH(0, 0, size.x, size.y);
 
-    if (_image != null) {
-      final src = Rect.fromLTWH(0, 0, _image!.width.toDouble(), _image!.height.toDouble());
-      final dst = Rect.fromLTWH(0, 0, size.x, size.y);
-      final paint = Paint()
-        ..filterQuality = FilterQuality.medium
-        ..color = Color.fromRGBO(255, 255, 255, opacity);
-      canvas.drawImageRect(_image!, src, dst, paint);
-    }
+    // Radial gradient flash from center
+    final center = Offset(size.x / 2, size.y / 2);
+    final radius = math.max(size.x, size.y) * 0.7;
+    final grad = ui.Gradient.radial(
+      center,
+      radius,
+      [
+        tintColor.withAlpha((opacity * 120).round()),
+        tintColor.withAlpha((opacity * 50).round()),
+        Colors.transparent,
+      ],
+      [0.0, 0.5, 1.0],
+    );
+    canvas.drawRect(rect, Paint()..shader = grad);
 
-    // Tinted overlay on top
+    // Edge vignette tint
     canvas.drawRect(
-      Rect.fromLTWH(0, 0, size.x, size.y),
-      Paint()..color = tintColor.withAlpha((opacity * 40).round()),
+      rect,
+      Paint()..color = tintColor.withAlpha((opacity * 25).round()),
     );
   }
 }

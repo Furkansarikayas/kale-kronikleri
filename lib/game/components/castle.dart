@@ -10,6 +10,19 @@ class Castle extends RectangleComponent {
   final int maxHp;
   double _animTimer = 0;
 
+  // Hit flash
+  double _hitFlashTimer = 0;
+  static const double _hitFlashDuration = 0.25;
+
+  // Heal flash
+  double _healFlashTimer = 0;
+  static const double _healFlashDuration = 0.35;
+
+  // Cached HP text to avoid TextPainter allocation every frame
+  int _cachedHpTextHp = -1;
+  int _cachedHpTextMax = -1;
+  TextPainter? _cachedHpPainter;
+
   Castle({required double cellSize, int? maxHp})
       : _hp = maxHp ?? GameConfig.baseCastleHp,
         maxHp = maxHp ?? GameConfig.baseCastleHp,
@@ -25,16 +38,21 @@ class Castle extends RectangleComponent {
   void takeDamage(int damage, {double damageReduction = 0.0}) {
     final actual = (damage * (1 - damageReduction)).round();
     _hp = (_hp - actual).clamp(0, maxHp);
+    if (actual > 0) _hitFlashTimer = _hitFlashDuration;
   }
 
   void heal(int amount) {
+    final before = _hp;
     _hp = (_hp + amount).clamp(0, maxHp);
+    if (_hp > before) _healFlashTimer = _healFlashDuration;
   }
 
   @override
   void update(double dt) {
     super.update(dt);
     _animTimer += dt;
+    if (_hitFlashTimer > 0) _hitFlashTimer -= dt;
+    if (_healFlashTimer > 0) _healFlashTimer -= dt;
   }
 
   // ---------------------------------------------------------------------------
@@ -64,16 +82,72 @@ class Castle extends RectangleComponent {
         0, 0, sprite.width.toDouble(), sprite.height.toDouble(),
       );
       final dst = Rect.fromLTWH(0, 0, w, h);
-      canvas.drawImageRect(
-        sprite,
-        src,
-        dst,
-        Paint()..filterQuality = FilterQuality.medium,
-      );
+      final paint = Paint()..filterQuality = FilterQuality.medium;
+
+      // Hit flash: brief red pulse on damage (highest priority)
+      if (_hitFlashTimer > 0) {
+        final flashT = (_hitFlashTimer / _hitFlashDuration).clamp(0.0, 1.0);
+        paint.colorFilter = ColorFilter.matrix(<double>[
+          1, 0, 0, 0, flashT * 120,
+          0, 1, 0, 0, -flashT * 30,
+          0, 0, 1, 0, -flashT * 30,
+          0, 0, 0, 1, 0,
+        ]);
+      } else if (_healFlashTimer > 0) {
+        // Heal flash: brief green pulse on recovery
+        final healT = (_healFlashTimer / _healFlashDuration).clamp(0.0, 1.0);
+        paint.colorFilter = ColorFilter.matrix(<double>[
+          1, 0, 0, 0, -healT * 20,
+          0, 1, 0, 0, healT * 100,
+          0, 0, 1, 0, -healT * 15,
+          0, 0, 0, 1, 0,
+        ]);
+      } else if (phase == 2) {
+        // Critical damage: pulsing red-orange tint
+        final dangerPulse = 0.3 + 0.2 * math.sin(_animTimer * 3.0);
+        final tintIntensity = dangerPulse * 35;
+        paint.colorFilter = ColorFilter.matrix(<double>[
+          1, 0, 0, 0, tintIntensity,
+          0, 1, 0, 0, -tintIntensity * 0.2,
+          0, 0, 1, 0, -tintIntensity * 0.3,
+          0, 0, 0, 1, 0,
+        ]);
+      } else if (phase == 1) {
+        // Moderate damage: subtle warm amber tint
+        paint.colorFilter = const ColorFilter.matrix(<double>[
+          1, 0, 0, 0, 12,
+          0, 1, 0, 0, 6,
+          0, 0, 1, 0, -5,
+          0, 0, 0, 1, 0,
+        ]);
+      }
+
+      canvas.drawImageRect(sprite, src, dst, paint);
     }
 
     // Dynamic overlays that animate every frame
     _renderDynamicEffects(canvas, w, h, phase);
+
+    // Hit flash red overlay on top of castle
+    if (_hitFlashTimer > 0) {
+      final flashT = (_hitFlashTimer / _hitFlashDuration).clamp(0.0, 1.0);
+      final flashAlpha = (flashT * 60).round().clamp(0, 255);
+      canvas.drawRect(
+        Rect.fromLTWH(0, 0, w, h),
+        Paint()..color = Color.fromARGB(flashAlpha, 255, 50, 30),
+      );
+    }
+
+    // Heal flash green overlay on top of castle
+    if (_healFlashTimer > 0) {
+      final healT = (_healFlashTimer / _healFlashDuration).clamp(0.0, 1.0);
+      final healAlpha = (healT * 45).round().clamp(0, 255);
+      canvas.drawRect(
+        Rect.fromLTWH(0, 0, w, h),
+        Paint()..color = Color.fromARGB(healAlpha, 30, 255, 80),
+      );
+    }
+
     _renderHpBar(canvas, w, h);
   }
 
@@ -99,13 +173,27 @@ class Castle extends RectangleComponent {
       _drawAnimatedFlag(canvas, w - turretW * 0.5, h * 0.04, flagWave, const Color(0xFFDD1111), phase, isLeft: false);
     }
 
+    // Phase 1: light smoke wisps from damaged areas
+    if (phase == 1) {
+      final smokeT = _animTimer * 1.5;
+      for (int i = 0; i < 2; i++) {
+        final sx = w * 0.35 + i * w * 0.30;
+        final sy = h * 0.12 - math.sin(smokeT + i * 2.0) * (w * 0.04);
+        final alpha = (25 - i * 5).clamp(0, 255);
+        final smokeSize = w * 0.03 + i * w * 0.01;
+        canvas.drawCircle(
+          Offset(sx, sy), smokeSize,
+          Paint()..color = Color.fromARGB(alpha, 80, 80, 80),
+        );
+      }
+    }
+
     // Phase 2: animated fire glow pulse emanating from cracks
     if (phase >= 2) {
       final glowPulse = (math.sin(_animTimer * 2.5) * 0.5 + 0.5);
       final glowAlpha = (20 + glowPulse * 35).round();
       final crackGlow = Paint()
-        ..color = Color.fromARGB(glowAlpha, 255, 100, 20)
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4);
+        ..color = Color.fromARGB(glowAlpha, 255, 100, 20);
       canvas.drawCircle(Offset(w * 0.37, h * 0.50), w * 0.06, crackGlow);
       canvas.drawCircle(Offset(w * 0.64, h * 0.42), w * 0.06, crackGlow);
       canvas.drawCircle(Offset(w * 0.56, h * 0.55), w * 0.05, crackGlow);
@@ -250,25 +338,29 @@ class Castle extends RectangleComponent {
       );
     }
 
-    // HP text
+    // HP text (cached to avoid TextPainter allocation every frame)
     if (w > 40) {
-      final fontSize = (w * 0.06).clamp(5.0, 14.0);
-      final textPainter = TextPainter(
-        text: TextSpan(
-          text: '$_hp / $maxHp',
-          style: TextStyle(
-            color: const Color(0xFFFFFFFF),
-            fontSize: fontSize,
-            fontWeight: FontWeight.bold,
-            shadows: const [Shadow(color: Color(0xAA000000), blurRadius: 2)],
+      if (_cachedHpPainter == null || _cachedHpTextHp != _hp || _cachedHpTextMax != maxHp) {
+        final fontSize = (w * 0.06).clamp(5.0, 14.0);
+        _cachedHpPainter = TextPainter(
+          text: TextSpan(
+            text: '$_hp / $maxHp',
+            style: TextStyle(
+              color: const Color(0xFFFFFFFF),
+              fontSize: fontSize,
+              fontWeight: FontWeight.bold,
+              shadows: const [Shadow(color: Color(0xAA000000), blurRadius: 2)],
+            ),
           ),
-        ),
-        textDirection: TextDirection.ltr,
-      );
-      textPainter.layout();
-      textPainter.paint(
+          textDirection: TextDirection.ltr,
+        );
+        _cachedHpPainter!.layout();
+        _cachedHpTextHp = _hp;
+        _cachedHpTextMax = maxHp;
+      }
+      _cachedHpPainter!.paint(
         canvas,
-        Offset((w - textPainter.width) / 2, barY + (barH - textPainter.height) / 2),
+        Offset((w - _cachedHpPainter!.width) / 2, barY + (barH - _cachedHpPainter!.height) / 2),
       );
     }
   }

@@ -7,7 +7,7 @@ class WaveEntry {
   final EnemyType type;
   final int count;
   final double spawnDelay;
-  const WaveEntry({required this.type, required this.count, this.spawnDelay = 0.8});
+  const WaveEntry({required this.type, required this.count, this.spawnDelay = 0.6});
 }
 
 /// Controls how enemies distribute across available paths in a wave.
@@ -117,12 +117,18 @@ class WaveData {
       return entries;
     }
 
-    final baseCount = 2 + waveNumber;
+    final baseCount = 3 + waveNumber;
 
     // Early waves (1-5): introduce basic enemies
     if (waveNumber <= 5) {
-      final types = [EnemyType.soldier, EnemyType.soldier, EnemyType.goblin, EnemyType.cavalry, EnemyType.cavalry];
-      entries.add(WaveEntry(type: types[(waveNumber - 1) % types.length], count: v(baseCount), spawnDelay: waveNumber <= 2 ? 1.2 : 0.8));
+      final primary = [EnemyType.soldier, EnemyType.soldier, EnemyType.goblin, EnemyType.cavalry, EnemyType.cavalry];
+      final delay = waveNumber <= 2 ? 1.0 : 0.7;
+      entries.add(WaveEntry(type: primary[(waveNumber - 1) % primary.length], count: v(baseCount), spawnDelay: delay));
+      // Wave 4+ adds a small secondary group for variety
+      if (waveNumber >= 4) {
+        final secondary = [EnemyType.cavalry, EnemyType.goblin];
+        entries.add(WaveEntry(type: secondary[(waveNumber - 4) % secondary.length], count: v(baseCount ~/ 3), spawnDelay: delay));
+      }
     }
     // Mid waves (6-10): introduce medium enemies
     else if (waveNumber <= 10) {

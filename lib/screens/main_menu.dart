@@ -73,7 +73,7 @@ class _MainMenuState extends State<MainMenu> with SingleTickerProviderStateMixin
           // Background castle image - full opacity, image is already dark
           Positioned.fill(
             child: Image.asset(
-              'assets/images/ui/menu_bg.png',
+              'assets/images/ui/menu_bg.webp',
               fit: BoxFit.cover,
               errorBuilder: (_, __, ___) => const SizedBox.shrink(),
             ),
@@ -147,7 +147,7 @@ class _MainMenuState extends State<MainMenu> with SingleTickerProviderStateMixin
         ],
       ),
       child: Image.asset(
-        'assets/images/ui/castle_logo.png',
+        'assets/images/ui/castle_logo.webp',
         width: 110,
         height: 110,
         fit: BoxFit.contain,
@@ -187,7 +187,7 @@ class _MainMenuState extends State<MainMenu> with SingleTickerProviderStateMixin
         _PremiumMenuButton(
           label: 'OYNA',
           icon: Icons.play_arrow,
-          imageAsset: 'assets/images/ui/btn_oyna.png',
+          imageAsset: 'assets/images/ui/btn_oyna.webp',
           onPressed: widget.onPlay,
           widthFactor: 0.52,
           heightFactor: 0.17,
@@ -199,7 +199,7 @@ class _MainMenuState extends State<MainMenu> with SingleTickerProviderStateMixin
             _PremiumMenuButton(
               label: 'META AĞACI',
               icon: Icons.account_tree,
-              imageAsset: 'assets/images/ui/btn_meta.png',
+              imageAsset: 'assets/images/ui/btn_meta.webp',
               onPressed: widget.onMeta,
               widthFactor: 0.40,
               heightFactor: 0.14,
@@ -209,7 +209,7 @@ class _MainMenuState extends State<MainMenu> with SingleTickerProviderStateMixin
               _PremiumMenuButton(
                 label: 'AYARLAR',
                 icon: Icons.settings,
-                imageAsset: 'assets/images/ui/btn_ayarlar.png',
+                imageAsset: 'assets/images/ui/btn_ayarlar.webp',
                 onPressed: widget.onSettings!,
                 widthFactor: 0.40,
                 heightFactor: 0.14,
@@ -226,12 +226,12 @@ class _MainMenuState extends State<MainMenu> with SingleTickerProviderStateMixin
       runSpacing: 8,
       alignment: WrapAlignment.center,
       children: [
-        _PremiumStatChip(imageAsset: 'assets/images/ui/stat_spirit.png', icon: Icons.diamond, label: 'Taş Ruhu', value: '${widget.stoneSpirit}'),
-        _PremiumStatChip(imageAsset: 'assets/images/ui/stat_runs.png', icon: Icons.loop, label: 'Koşu', value: '${widget.totalRuns}'),
+        _PremiumStatChip(imageAsset: 'assets/images/ui/stat_spirit.webp', icon: Icons.diamond, label: 'Taş Ruhu', value: '${widget.stoneSpirit}'),
+        _PremiumStatChip(imageAsset: 'assets/images/ui/stat_runs.webp', icon: Icons.loop, label: 'Koşu', value: '${widget.totalRuns}'),
         if (widget.bestWave > 0)
-          _PremiumStatChip(imageAsset: 'assets/images/ui/stat_wave.png', icon: Icons.waves, label: 'En İyi Dalga', value: '${widget.bestWave}'),
+          _PremiumStatChip(imageAsset: 'assets/images/ui/stat_wave.webp', icon: Icons.waves, label: 'En İyi Dalga', value: '${widget.bestWave}'),
         if (widget.totalKills > 0)
-          _PremiumStatChip(imageAsset: 'assets/images/ui/stat_kills.png', icon: Icons.dangerous, label: 'Toplam Öldürülen', value: '${widget.totalKills}'),
+          _PremiumStatChip(imageAsset: 'assets/images/ui/stat_kills.webp', icon: Icons.dangerous, label: 'Toplam Öldürülen', value: '${widget.totalKills}'),
       ],
     );
   }
@@ -461,7 +461,7 @@ class _PremiumMenuButtonState extends State<_PremiumMenuButton> {
                     ],
             ),
             child: Image.asset(
-              widget.imageAsset ?? 'assets/images/ui/button_normal.png',
+              widget.imageAsset ?? 'assets/images/ui/button_normal.webp',
               fit: BoxFit.fill,
               errorBuilder: (_, __, ___) => Container(
                 decoration: BoxDecoration(

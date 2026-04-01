@@ -4,6 +4,8 @@ import '../game/data/enemy_data.dart';
 import '../game/data/tower_data.dart';
 import '../game/data/wave_data.dart';
 import '../game/systems/event_system.dart';
+import '../game/systems/wave_buff_system.dart';
+import '../game/systems/audio_system.dart';
 import 'widgets/glass_panel.dart';
 
 class WaveBreak extends StatelessWidget {
@@ -12,6 +14,7 @@ class WaveBreak extends StatelessWidget {
   final int gold;
   final double timeRemaining;
   final List<WaveEntry> wavePreview;
+  final List<List<WaveEntry>> extraWavePreviews;
   final VoidCallback onStartNow;
   final VoidCallback? onWatchAd;
   final bool showEnemyWeakness;
@@ -26,6 +29,10 @@ class WaveBreak extends StatelessWidget {
   final int pathCount;
   final WavePathPattern? nextWavePattern;
 
+  // Roguelike buff selection
+  final List<WaveBuff>? buffChoices;
+  final ValueChanged<WaveBuff>? onBuffSelected;
+
   const WaveBreak({
     super.key,
     required this.nextWave,
@@ -33,6 +40,7 @@ class WaveBreak extends StatelessWidget {
     required this.gold,
     required this.timeRemaining,
     this.wavePreview = const [],
+    this.extraWavePreviews = const [],
     required this.onStartNow,
     this.onWatchAd,
     this.showEnemyWeakness = false,
@@ -46,6 +54,8 @@ class WaveBreak extends StatelessWidget {
     this.onDeclineEndless,
     this.pathCount = 1,
     this.nextWavePattern,
+    this.buffChoices,
+    this.onBuffSelected,
   });
 
   static const _gold = Color(0xFFBA7517);
@@ -57,13 +67,18 @@ class WaveBreak extends StatelessWidget {
     return BackdropFilter(
       filter: ui.ImageFilter.blur(sigmaX: 8, sigmaY: 8),
       child: Center(
-        child: GlassPanel(
+        child: ConstrainedBox(
+          constraints: BoxConstraints(
+            maxHeight: MediaQuery.of(context).size.height * 0.85,
+          ),
+          child: GlassPanel(
           padding: const EdgeInsets.all(24),
           borderColor: _gold,
           borderRadius: 12,
           blur: 12,
           child: SizedBox(
             width: 340,
+            child: SingleChildScrollView(
             child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -149,7 +164,7 @@ class WaveBreak extends StatelessWidget {
                             SizedBox(
                               width: 16, height: 16,
                               child: Image.asset(
-                                'assets/images/enemies/${entry.type.name}.png',
+                                'assets/images/enemies/${entry.type.name}.webp',
                                 fit: BoxFit.contain,
                                 errorBuilder: (_, __, ___) => Container(
                                   width: 8, height: 8,
@@ -172,13 +187,65 @@ class WaveBreak extends StatelessWidget {
                                 child: SizedBox(
                                   width: 12, height: 12,
                                   child: Image.asset(
-                                    'assets/images/towers/${t.name}_t1.png',
+                                    'assets/images/towers/${t.name}_t1.webp',
                                     fit: BoxFit.contain,
                                     errorBuilder: (_, __, ___) => Icon(_towerIcon(t), color: const Color(0xFFFF6666), size: 9),
                                   ),
                                 ),
                               )),
                             ],
+                          ],
+                        );
+                      }).toList(),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+            // Extra wave previews (Kesif node 6: Harita Okuyucu)
+            for (int pi = 0; pi < extraWavePreviews.length; pi++) ...[
+              const SizedBox(height: 8),
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: _cream.withAlpha(6),
+                  borderRadius: BorderRadius.circular(6),
+                  border: Border.all(color: _cream.withAlpha(20)),
+                ),
+                child: Column(
+                  children: [
+                    Text(
+                      'Dalga ${nextWave + pi + 1} Düşmanları',
+                      style: TextStyle(color: _cream.withAlpha(120), fontSize: 10),
+                    ),
+                    const SizedBox(height: 4),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 4,
+                      children: extraWavePreviews[pi].map((entry) {
+                        final stats = EnemyData.getStats(entry.type);
+                        return Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            SizedBox(
+                              width: 14, height: 14,
+                              child: Image.asset(
+                                'assets/images/enemies/${entry.type.name}.webp',
+                                fit: BoxFit.contain,
+                                errorBuilder: (_, __, ___) => Container(
+                                  width: 7, height: 7,
+                                  decoration: BoxDecoration(
+                                    color: _enemyColor(entry.type),
+                                    shape: BoxShape.circle,
+                                  ),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 3),
+                            Text(
+                              '${stats.name} x${entry.count}',
+                              style: TextStyle(color: _cream.withAlpha(160), fontSize: 9),
+                            ),
                           ],
                         );
                       }).toList(),
@@ -217,7 +284,7 @@ class WaveBreak extends StatelessWidget {
                     if (merchantAvailable && onAcceptMerchant != null) ...[
                       const SizedBox(height: 6),
                       ElevatedButton(
-                        onPressed: onAcceptMerchant,
+                        onPressed: () { AudioSystem.instance.play(GameSound.eventMerchant); onAcceptMerchant?.call(); },
                         style: ElevatedButton.styleFrom(
                           backgroundColor: const Color(0xFFD4A843),
                           foregroundColor: _darkBg,
@@ -252,7 +319,7 @@ class WaveBreak extends StatelessWidget {
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         ElevatedButton(
-                          onPressed: onContinueEndless,
+                          onPressed: () { AudioSystem.instance.play(GameSound.buttonClick); onContinueEndless?.call(); },
                           style: ElevatedButton.styleFrom(backgroundColor: _gold, foregroundColor: _darkBg),
                           child: const Text('Devam Et', style: TextStyle(fontWeight: FontWeight.bold)),
                         ),
@@ -268,6 +335,79 @@ class WaveBreak extends StatelessWidget {
                 ),
               ),
             ],
+            // Roguelike buff selection
+            if (buffChoices != null && buffChoices!.isNotEmpty) ...[
+              const SizedBox(height: 12),
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(colors: [
+                    Colors.purple.withAlpha(25), Colors.transparent,
+                  ]),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.purple.withAlpha(80)),
+                ),
+                child: Column(
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.auto_awesome, color: const Color(0xFFCCA0FF).withAlpha(180), size: 14),
+                        const SizedBox(width: 6),
+                        const Text('Güçlendirme Seç',
+                          style: TextStyle(color: Color(0xFFCCA0FF), fontSize: 13, fontWeight: FontWeight.bold, letterSpacing: 1)),
+                        const SizedBox(width: 6),
+                        Icon(Icons.auto_awesome, color: const Color(0xFFCCA0FF).withAlpha(180), size: 14),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    ...buffChoices!.map((buff) => Padding(
+                      padding: const EdgeInsets.only(bottom: 5),
+                      child: SizedBox(
+                        width: double.infinity,
+                        child: ElevatedButton(
+                          onPressed: () { AudioSystem.instance.play(GameSound.buttonClick); onBuffSelected?.call(buff); },
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF2D1F4E),
+                            foregroundColor: _cream,
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8),
+                              side: BorderSide(color: Colors.purple.withAlpha(100)),
+                            ),
+                          ),
+                          child: Row(
+                            children: [
+                              Container(
+                                width: 32, height: 32,
+                                decoration: BoxDecoration(
+                                  color: Colors.purple.withAlpha(40),
+                                  borderRadius: BorderRadius.circular(6),
+                                ),
+                                alignment: Alignment.center,
+                                child: Text(buff.icon, style: const TextStyle(fontSize: 20)),
+                              ),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(buff.name, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                                    const SizedBox(height: 1),
+                                    Text(buff.description, style: TextStyle(fontSize: 10, color: _cream.withAlpha(180))),
+                                  ],
+                                ),
+                              ),
+                              Icon(Icons.chevron_right, color: _cream.withAlpha(60), size: 16),
+                            ],
+                          ),
+                        ),
+                      ),
+                    )),
+                  ],
+                ),
+              ),
+            ],
             if (!showEndlessPrompt) ...[
               const SizedBox(height: 12),
               ElevatedButton(
@@ -275,15 +415,17 @@ class WaveBreak extends StatelessWidget {
                 style: ElevatedButton.styleFrom(
                   backgroundColor: _gold,
                   foregroundColor: _darkBg,
-                  minimumSize: const Size.fromHeight(40),
+                  minimumSize: const Size.fromHeight(42),
+                  elevation: 6,
+                  shadowColor: _gold.withAlpha(100),
                 ),
-                child: const Text('ŞİMDİ BAŞLA', style: TextStyle(fontWeight: FontWeight.bold)),
+                child: const Text('ŞİMDİ BAŞLA', style: TextStyle(fontWeight: FontWeight.bold, letterSpacing: 1.5)),
               ),
             ],
             if (onWatchAd != null) ...[
               const SizedBox(height: 8),
               OutlinedButton.icon(
-                onPressed: onWatchAd,
+                onPressed: () { AudioSystem.instance.play(GameSound.buttonClick); onWatchAd?.call(); },
                 icon: const Icon(Icons.play_circle_outline, size: 18),
                 label: const Text('Reklam İzle (+50 Altın)'),
                 style: OutlinedButton.styleFrom(
@@ -294,11 +436,13 @@ class WaveBreak extends StatelessWidget {
               ),
             ],
           ],
-        ),
-          ),
-        ),
-      ),
-    );
+        ),         // Column
+        ),         // SingleChildScrollView
+        ),         // SizedBox
+        ),         // GlassPanel
+        ),         // ConstrainedBox
+      ),           // Center
+    );             // BackdropFilter
   }
 
   IconData _towerIcon(TowerType type) {

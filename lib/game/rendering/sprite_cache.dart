@@ -2,6 +2,7 @@ import 'dart:ui' as ui;
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../components/map/biome_data.dart';
 import 'perlin_noise.dart';
 
@@ -54,13 +55,19 @@ class SpriteCache {
     _cache.clear();
     _initialized = false;
 
-    // Generate terrain textures for MapGroundLayer
+    // Load terrain textures from assets, fall back to procedural generation
     _perlin = PerlinNoise(seed: 42);
-    _grassTexture = await _renderTerrainTile(terrainSize, _paintTerrainGrass);
-    _pathTexture = await _renderTerrainTile(terrainSize, _paintTerrainPath);
-    _blockedTexture = await _renderTerrainTile(terrainSize, _paintTerrainBlocked);
-    _spawnTexture = await _renderTerrainTile(256, _paintTerrainSpawn);
-    _castleTexture = await _renderTerrainTile(terrainSize, _paintTerrainCastle);
+    final biomeName = _currentBiome.type.name; // forest, desert, etc.
+    _grassTexture = await _loadTerrainAsset('$biomeName/grass.webp') ??
+        await _renderTerrainTile(terrainSize, _paintTerrainGrass);
+    _pathTexture = await _loadTerrainAsset('$biomeName/path.webp') ??
+        await _renderTerrainTile(terrainSize, _paintTerrainPath);
+    _blockedTexture = await _loadTerrainAsset('$biomeName/blocked.webp') ??
+        await _renderTerrainTile(terrainSize, _paintTerrainBlocked);
+    _spawnTexture = await _loadTerrainAsset('$biomeName/spawn.webp') ??
+        await _renderTerrainTile(256, _paintTerrainSpawn);
+    _castleTexture = await _loadTerrainAsset('$biomeName/castle.webp') ??
+        await _renderTerrainTile(terrainSize, _paintTerrainCastle);
 
     for (int v = 0; v < 6; v++) {
       _cache['grass_$v'] = await _renderTile((c) => _paintGrass(c, v));
@@ -177,37 +184,38 @@ class SpriteCache {
     c.drawRect(Rect.fromLTWH(0, 0, _s, _s), Paint()..shader = baseGrad);
 
     // Organic noise texture — overlapping soft circles for natural look
-    final darkGround = Color.lerp(_currentBiome.groundBase, const Color(0xFF000000), 0.3)!;
-    final midGround = _currentBiome.groundAccent;
-    final lightGround = Color.lerp(_currentBiome.groundAccent, const Color(0xFFFFFFFF), 0.15)!;
-    for (int i = 0; i < 220; i++) {
+    // Softened contrast (~20% less) to keep background subordinate to towers
+    final darkGround = Color.lerp(_currentBiome.groundBase, const Color(0xFF000000), 0.06)!;
+    final midGround = Color.lerp(_currentBiome.groundAccent, _currentBiome.groundBase, 0.15)!;
+    final lightGround = Color.lerp(_currentBiome.groundAccent, const Color(0xFFFFFFFF), 0.08)!;
+    for (int i = 0; i < 150; i++) {
       final px = rng.nextDouble() * _s;
       final py = rng.nextDouble() * _s;
       final n = _fbm(px, py, seed);
-      final r = 2.0 + n * 6.0;
+      final r = 2.5 + n * 4.5;
 
       Color col;
-      if (n < 0.3) {
-        col = darkGround.withAlpha((25 + rng.nextInt(20)).clamp(0, 255));
+      if (n < 0.25) {
+        col = darkGround.withAlpha((10 + rng.nextInt(8)).clamp(0, 255));
       } else if (n < 0.55) {
-        col = midGround.withAlpha((25 + rng.nextInt(15)).clamp(0, 255));
+        col = midGround.withAlpha((14 + rng.nextInt(10)).clamp(0, 255));
       } else {
-        col = lightGround.withAlpha((22 + rng.nextInt(15)).clamp(0, 255));
+        col = lightGround.withAlpha((12 + rng.nextInt(10)).clamp(0, 255));
       }
       c.drawCircle(Offset(px, py), r, Paint()..color = col);
     }
 
-    // Grass blades — thin curved lines
-    for (int i = 0; i < 18; i++) {
+    // Grass blades — thin curved lines (reduced alpha for softer background)
+    for (int i = 0; i < 14; i++) {
       final bx = rng.nextDouble() * _s;
       final by = rng.nextDouble() * _s;
-      final h = 4.0 + rng.nextDouble() * 10.0;
-      final lean = (rng.nextDouble() - 0.5) * 6;
+      final h = 4.0 + rng.nextDouble() * 8.0;
+      final lean = (rng.nextDouble() - 0.5) * 5;
       final bladeColor = Color.lerp(
         _currentBiome.groundBase,
         _currentBiome.groundAccent,
         rng.nextDouble(),
-      )!.withAlpha(120);
+      )!.withAlpha(85);
 
       final path = Path()
         ..moveTo(bx, by)
@@ -222,7 +230,7 @@ class SpriteCache {
       );
     }
 
-    // Variant-specific decorations
+    // Variant-specific decorations — only subtle flowers, no dark objects
     switch (variant) {
       case 1:
         _drawSmoothFlower(c, rng.nextDouble() * 60 + 30, rng.nextDouble() * 60 + 30,
@@ -236,23 +244,17 @@ class SpriteCache {
         _drawSmoothFlower(c, rng.nextDouble() * 60 + 30, rng.nextDouble() * 60 + 30,
             const Color(0xFF5599DD), rng);
         break;
-      case 4:
-        _drawSmoothMushroom(c, 60 + rng.nextDouble() * 20, 60 + rng.nextDouble() * 20);
-        break;
-      case 5:
-        _drawSmoothRock(c, 40 + rng.nextDouble() * 30, 50 + rng.nextDouble() * 30, 8);
-        _drawSmoothRock(c, 80 + rng.nextDouble() * 20, 70 + rng.nextDouble() * 20, 5);
-        break;
+      // variant 4 (mushroom) and 5 (rocks) removed — too dark on grass
     }
 
-    // Subtle top-left lighting (ambient occlusion fake)
+    // Subtle top-left lighting (reduced for softer background)
     c.drawRect(
       Rect.fromLTWH(0, 0, _s, _s),
       Paint()
         ..shader = ui.Gradient.linear(
           const Offset(0, 0),
           Offset(_s, _s),
-          [const Color(0x0AFFFFFF), const Color(0x00000000), const Color(0x08000000)],
+          [const Color(0x06FFFFFF), const Color(0x00000000), const Color(0x04000000)],
           [0.0, 0.4, 1.0],
         ),
     );
@@ -332,15 +334,15 @@ class SpriteCache {
           Paint()..color = dirtColor.withAlpha(15 + rng.nextInt(15)));
     }
 
-    // Top-down lighting
+    // Center-lighter / edges-darker for path depth
     c.drawRect(
       Rect.fromLTWH(0, 0, _s, _s),
       Paint()
         ..shader = ui.Gradient.linear(
           const Offset(0, 0),
           Offset(0, _s),
-          [const Color(0x0CFFFFFF), const Color(0x00000000), const Color(0x0A000000)],
-          [0.0, 0.3, 1.0],
+          [const Color(0x12000000), const Color(0x08FFFFFF), const Color(0x12000000)],
+          [0.0, 0.5, 1.0],
         ),
     );
   }
@@ -954,6 +956,20 @@ class SpriteCache {
   //  TERRAIN TEXTURES (512x512, for MapGroundLayer)
   // =========================================================================
 
+  /// Tries to load a terrain texture from assets. Returns null if not found.
+  Future<ui.Image?> _loadTerrainAsset(String name) async {
+    try {
+      final data = await rootBundle.load('assets/images/textures/$name');
+      final codec = await ui.instantiateImageCodec(data.buffer.asUint8List());
+      final frame = await codec.getNextFrame();
+      debugPrint('SpriteCache: Loaded texture asset: $name');
+      return frame.image;
+    } catch (_) {
+      debugPrint('SpriteCache: Asset not found: $name, using procedural fallback');
+      return null;
+    }
+  }
+
   Future<ui.Image> _renderTerrainTile(
       int sz, void Function(Canvas c, int size) painter) async {
     final recorder = ui.PictureRecorder();
@@ -971,41 +987,42 @@ class SpriteCache {
 
     c.drawRect(Rect.fromLTWH(0, 0, s, s), Paint()..color = _currentBiome.groundBase);
 
+    // Softened contrast (~20% less) to keep background subordinate to towers
     final darkGround =
-        Color.lerp(_currentBiome.groundBase, const Color(0xFF000000), 0.22)!;
-    final midGround = _currentBiome.groundAccent;
+        Color.lerp(_currentBiome.groundBase, const Color(0xFF000000), 0.05)!;
+    final midGround = Color.lerp(_currentBiome.groundAccent, _currentBiome.groundBase, 0.15)!;
     final lightGround =
-        Color.lerp(_currentBiome.groundAccent, const Color(0xFFFFFFFF), 0.12)!;
+        Color.lerp(_currentBiome.groundAccent, const Color(0xFFFFFFFF), 0.08)!;
 
-    for (int i = 0; i < 900; i++) {
+    for (int i = 0; i < 550; i++) {
       final px = rng.nextDouble() * s;
       final py = rng.nextDouble() * s;
       final n = _perlin.fbm(px / 80, py / 80, octaves: 4);
-      final r = 3.0 + n * 12.0;
+      final r = 3.0 + n * 8.0;
 
       Color col;
-      if (n < 0.35) {
-        col = darkGround.withAlpha((22 + rng.nextInt(22)).clamp(0, 255));
+      if (n < 0.25) {
+        col = darkGround.withAlpha((8 + rng.nextInt(8)).clamp(0, 255));
       } else if (n < 0.55) {
-        col = midGround.withAlpha((20 + rng.nextInt(18)).clamp(0, 255));
+        col = midGround.withAlpha((12 + rng.nextInt(10)).clamp(0, 255));
       } else {
-        col = lightGround.withAlpha((18 + rng.nextInt(18)).clamp(0, 255));
+        col = lightGround.withAlpha((10 + rng.nextInt(10)).clamp(0, 255));
       }
       c.drawCircle(Offset(px, py), r, Paint()..color = col);
     }
 
-    // Grass blades
-    for (int i = 0; i < 70; i++) {
+    // Grass blades (reduced for softer background)
+    for (int i = 0; i < 50; i++) {
       final bx = rng.nextDouble() * s;
       final by = rng.nextDouble() * s;
-      final h = 5.0 + rng.nextDouble() * 14.0;
-      final lean = (rng.nextDouble() - 0.5) * 8;
+      final h = 5.0 + rng.nextDouble() * 10.0;
+      final lean = (rng.nextDouble() - 0.5) * 6;
       final bladeColor = Color.lerp(
         _currentBiome.groundBase,
         _currentBiome.groundAccent,
         rng.nextDouble(),
       )!
-          .withAlpha(100);
+          .withAlpha(70);
 
       c.drawPath(
         Path()
@@ -1027,9 +1044,9 @@ class SpriteCache {
           const Offset(0, 0),
           Offset(s, s),
           [
-            const Color(0x06FFFFFF),
+            const Color(0x04FFFFFF),
             const Color(0x00000000),
-            const Color(0x06000000),
+            const Color(0x04000000),
           ],
           [0.0, 0.5, 1.0],
         ),
@@ -1139,6 +1156,22 @@ class SpriteCache {
         Paint()..color = dirtColor.withAlpha(12 + rng.nextInt(12)),
       );
     }
+
+    // Center-lighter / edges-darker gradient for path depth
+    c.drawRect(
+      Rect.fromLTWH(0, 0, s, s),
+      Paint()
+        ..shader = ui.Gradient.linear(
+          Offset(0, 0),
+          Offset(0, s),
+          [
+            const Color(0x14000000), // top edge darker
+            const Color(0x08FFFFFF), // center lighter
+            const Color(0x14000000), // bottom edge darker
+          ],
+          [0.0, 0.5, 1.0],
+        ),
+    );
   }
 
   void _paintTerrainBlocked(Canvas c, int sz) {

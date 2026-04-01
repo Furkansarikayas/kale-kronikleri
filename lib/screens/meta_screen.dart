@@ -4,6 +4,7 @@ import '../meta/meta_tree.dart';
 class MetaScreen extends StatefulWidget {
   final int stoneSpirit;
   final int totalRuns;
+  final int totalMetaUnlocks;
   final Map<String, int> unlockedLevels; // tree id -> unlocked level (0-based)
   final void Function(String treeId, int nodeIndex) onUnlock;
   final VoidCallback onBack;
@@ -12,6 +13,7 @@ class MetaScreen extends StatefulWidget {
     super.key,
     required this.stoneSpirit,
     required this.totalRuns,
+    this.totalMetaUnlocks = 0,
     required this.unlockedLevels,
     required this.onUnlock,
     required this.onBack,
@@ -68,7 +70,7 @@ class _MetaScreenState extends State<MetaScreen> {
                     width: 24,
                     height: 24,
                     child: Image.asset(
-                      'assets/images/ui/meta_${tree.id}_1.png',
+                      'assets/images/ui/meta_${tree.id}_1.webp',
                       fit: BoxFit.contain,
                       errorBuilder: (_, __, ___) => Icon(_treeIcon(tree.id), color: isSelected ? _gold : _cream.withAlpha(120), size: 20),
                     ),
@@ -109,7 +111,7 @@ class _MetaScreenState extends State<MetaScreen> {
   }
 
   Widget _nodeIcon(String treeId, int nodeIndex) {
-    final path = 'assets/images/ui/meta_${treeId}_${nodeIndex + 1}.png';
+    final path = 'assets/images/ui/meta_${treeId}_${nodeIndex + 1}.webp';
     return Image.asset(
       path,
       width: 32,
@@ -142,11 +144,13 @@ class _MetaScreenState extends State<MetaScreen> {
         final node = tree.nodes[index];
         final isUnlocked = index < unlockedLevel;
         final isNext = index == unlockedLevel;
+        final effectiveCost = MetaTree.effectiveCost(node.cost, widget.totalMetaUnlocks);
+        final isDiscounted = effectiveCost < node.cost;
         final canUnlock = isNext && node.canUnlock(
           spirit: widget.stoneSpirit,
           currentLevel: unlockedLevel,
           totalRuns: widget.totalRuns,
-        );
+        ) && widget.stoneSpirit >= effectiveCost;
 
         return Container(
           margin: const EdgeInsets.only(bottom: 12),
@@ -201,12 +205,42 @@ class _MetaScreenState extends State<MetaScreen> {
                       style: TextStyle(color: _cream.withAlpha(150), fontSize: 12),
                     ),
                     if (!isUnlocked)
-                      Text(
-                        '${node.cost} Ruh${node.runGate > 0 ? ' | ${node.runGate} koşu gerekli' : ''}',
-                        style: TextStyle(
-                          color: canUnlock ? _gold : Colors.grey,
-                          fontSize: 11,
-                        ),
+                      Row(
+                        children: [
+                          if (isDiscounted && isNext) ...[
+                            Text(
+                              '${node.cost}',
+                              style: const TextStyle(
+                                color: Colors.grey,
+                                fontSize: 11,
+                                decoration: TextDecoration.lineThrough,
+                              ),
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              '$effectiveCost Ruh',
+                              style: const TextStyle(color: Color(0xFF4CAF50), fontSize: 11, fontWeight: FontWeight.bold),
+                            ),
+                            const SizedBox(width: 4),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF4CAF50).withAlpha(30),
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                              child: const Text('-%50', style: TextStyle(color: Color(0xFF4CAF50), fontSize: 9, fontWeight: FontWeight.bold)),
+                            ),
+                          ] else
+                            Text(
+                              '$effectiveCost Ruh',
+                              style: TextStyle(color: canUnlock ? _gold : Colors.grey, fontSize: 11),
+                            ),
+                          if (node.runGate > 0)
+                            Text(
+                              ' | ${node.runGate} koşu gerekli',
+                              style: TextStyle(color: canUnlock ? _gold : Colors.grey, fontSize: 11),
+                            ),
+                        ],
                       ),
                   ],
                 ),

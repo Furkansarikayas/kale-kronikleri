@@ -21,6 +21,13 @@ class MetaTreeDef {
 
 class MetaTree {
   MetaTree._();
+
+  /// First 3 meta unlocks across all trees cost 50% less.
+  static int effectiveCost(int baseCost, int totalUnlocks) {
+    if (totalUnlocks < 3) return (baseCost * 0.5).round();
+    return baseCost;
+  }
+
   static const List<MetaTreeDef> trees = [
     MetaTreeDef(id: 'savas', name: 'Savaş Ağacı', nodes: [
       MetaNode(name: 'Kule Hafızası', description: 'Her runda +1 ekstra kule slotu', cost: 15),

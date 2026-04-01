@@ -1,8 +1,9 @@
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
+import '../game/systems/audio_system.dart';
 import 'widgets/glass_panel.dart';
 
-class PauseOverlay extends StatelessWidget {
+class PauseOverlay extends StatefulWidget {
   final VoidCallback onResume;
   final VoidCallback onMainMenu;
   final VoidCallback? onBestiary;
@@ -15,6 +16,12 @@ class PauseOverlay extends StatelessWidget {
     this.onBestiary,
     this.onSynergyGuide,
   });
+
+  @override
+  State<PauseOverlay> createState() => _PauseOverlayState();
+}
+
+class _PauseOverlayState extends State<PauseOverlay> {
 
   static const _gold = Color(0xFFBA7517);
   static const _cream = Color(0xFFF5EDD8);
@@ -32,7 +39,9 @@ class PauseOverlay extends StatelessWidget {
             borderColor: _gold,
             borderRadius: 12,
             blur: 12,
-            child: SizedBox(
+            child: Material(
+              color: Colors.transparent,
+              child: SizedBox(
               width: 280,
               child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -46,9 +55,94 @@ class PauseOverlay extends StatelessWidget {
                   letterSpacing: 3,
                 ),
               ),
-              const SizedBox(height: 24),
+              const SizedBox(height: 16),
+              // SFX Volume
+              Row(
+                children: [
+                  Text('SES', style: TextStyle(color: _cream.withAlpha(150), fontSize: 10, fontWeight: FontWeight.bold)),
+                ],
+              ),
+              Row(
+                children: [
+                  Icon(
+                    AudioSystem.instance.soundEnabled ? Icons.volume_up : Icons.volume_off,
+                    color: _cream, size: 18,
+                  ),
+                  Expanded(
+                    child: Slider(
+                      value: AudioSystem.instance.volume,
+                      onChanged: (v) {
+                        setState(() {
+                          AudioSystem.instance.setVolume(v);
+                          if (v == 0) {
+                            AudioSystem.instance.setSoundEnabled(false);
+                          } else if (!AudioSystem.instance.soundEnabled) {
+                            AudioSystem.instance.setSoundEnabled(true);
+                          }
+                        });
+                      },
+                      activeColor: _gold,
+                      inactiveColor: _cream.withAlpha(40),
+                    ),
+                  ),
+                  GestureDetector(
+                    onTap: () {
+                      setState(() {
+                        AudioSystem.instance.setSoundEnabled(!AudioSystem.instance.soundEnabled);
+                      });
+                    },
+                    child: Text(
+                      AudioSystem.instance.soundEnabled ? 'AÇIK' : 'KAPALI',
+                      style: TextStyle(color: _cream.withAlpha(180), fontSize: 10),
+                    ),
+                  ),
+                ],
+              ),
+              // Music Volume
+              Row(
+                children: [
+                  Text('MÜZİK', style: TextStyle(color: _cream.withAlpha(150), fontSize: 10, fontWeight: FontWeight.bold)),
+                ],
+              ),
+              Row(
+                children: [
+                  Icon(
+                    AudioSystem.instance.musicEnabled ? Icons.music_note : Icons.music_off,
+                    color: _cream, size: 18,
+                  ),
+                  Expanded(
+                    child: Slider(
+                      value: AudioSystem.instance.musicVolume,
+                      onChanged: (v) {
+                        setState(() {
+                          AudioSystem.instance.setMusicVolume(v);
+                          if (v == 0) {
+                            AudioSystem.instance.setMusicEnabled(false);
+                          } else if (!AudioSystem.instance.musicEnabled) {
+                            AudioSystem.instance.setMusicEnabled(true);
+                          }
+                        });
+                      },
+                      activeColor: _gold,
+                      inactiveColor: _cream.withAlpha(40),
+                    ),
+                  ),
+                  GestureDetector(
+                    onTap: () {
+                      setState(() {
+                        AudioSystem.instance.setMusicEnabled(!AudioSystem.instance.musicEnabled);
+                      });
+                    },
+                    child: Text(
+                      AudioSystem.instance.musicEnabled ? 'AÇIK' : 'KAPALI',
+                      style: TextStyle(color: _cream.withAlpha(180), fontSize: 10),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
               ElevatedButton(
-                onPressed: onResume,
+                onPressed: widget.onResume,
                 style: ElevatedButton.styleFrom(
                   backgroundColor: _gold,
                   foregroundColor: _darkBg,
@@ -56,14 +150,14 @@ class PauseOverlay extends StatelessWidget {
                 ),
                 child: const Text('DEVAM ET', style: TextStyle(fontWeight: FontWeight.bold)),
               ),
-              if (onBestiary != null || onSynergyGuide != null) ...[
+              if (widget.onBestiary != null || widget.onSynergyGuide != null) ...[
                 const SizedBox(height: 12),
                 Row(
                   children: [
-                    if (onBestiary != null)
+                    if (widget.onBestiary != null)
                       Expanded(
                         child: OutlinedButton.icon(
-                          onPressed: onBestiary,
+                          onPressed: widget.onBestiary,
                           icon: const Icon(Icons.menu_book, size: 16),
                           label: const Text('DÜŞMANLAR', style: TextStyle(fontSize: 11)),
                           style: OutlinedButton.styleFrom(
@@ -73,11 +167,11 @@ class PauseOverlay extends StatelessWidget {
                           ),
                         ),
                       ),
-                    if (onBestiary != null && onSynergyGuide != null) const SizedBox(width: 8),
-                    if (onSynergyGuide != null)
+                    if (widget.onBestiary != null && widget.onSynergyGuide != null) const SizedBox(width: 8),
+                    if (widget.onSynergyGuide != null)
                       Expanded(
                         child: OutlinedButton.icon(
-                          onPressed: onSynergyGuide,
+                          onPressed: widget.onSynergyGuide,
                           icon: const Icon(Icons.auto_awesome, size: 16),
                           label: const Text('SİNERJİLER', style: TextStyle(fontSize: 11)),
                           style: OutlinedButton.styleFrom(
@@ -92,7 +186,7 @@ class PauseOverlay extends StatelessWidget {
               ],
               const SizedBox(height: 12),
               OutlinedButton(
-                onPressed: onMainMenu,
+                onPressed: widget.onMainMenu,
                 style: OutlinedButton.styleFrom(
                   foregroundColor: _cream,
                   side: const BorderSide(color: _cream),
@@ -102,6 +196,7 @@ class PauseOverlay extends StatelessWidget {
               ),
             ],
           ),
+            ),
             ),
           ),
         ),

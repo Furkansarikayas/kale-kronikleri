@@ -7,6 +7,10 @@ class SynergyParticles extends PositionComponent {
   final List<_OrbitalParticle> _particles = [];
   double _timer = 0;
 
+  // Cached paints — single-threaded render, safe to reuse
+  static final Paint _glowPaint = Paint();
+  static final Paint _bodyPaint = Paint();
+
   SynergyParticles({required this.cellSize}) {
     final rng = Random();
     for (int i = 0; i < 6; i++) {
@@ -35,13 +39,12 @@ class SynergyParticles extends PositionComponent {
       final pos = center + Offset(cos(p.angle) * p.radius, sin(p.angle) * p.radius);
 
       // Outer glow
-      canvas.drawCircle(pos, p.size * 3, Paint()
-        ..color = const Color(0x20FFD700)
-        ..maskFilter = MaskFilter.blur(BlurStyle.normal, p.size * 2));
+      _glowPaint.color = const Color(0x20FFD700);
+      canvas.drawCircle(pos, p.size * 3, _glowPaint);
 
       // Particle body
-      canvas.drawCircle(pos, p.size, Paint()
-        ..color = const Color.fromRGBO(255, 215, 0, 0.8));
+      _bodyPaint.color = const Color.fromRGBO(255, 215, 0, 0.8);
+      canvas.drawCircle(pos, p.size, _bodyPaint);
     }
   }
 }

@@ -31,7 +31,7 @@ class CastleSpriteGenerator {
     if (_initialized) return;
 
     for (int phase = 0; phase <= 2; phase++) {
-      final pngPath = 'assets/images/castle/castle_phase$phase.png';
+      final pngPath = 'assets/images/castle/castle_phase$phase.webp';
       final pngImage = await _tryLoadPng(pngPath);
       if (pngImage != null) {
         _cache[phase] = pngImage;

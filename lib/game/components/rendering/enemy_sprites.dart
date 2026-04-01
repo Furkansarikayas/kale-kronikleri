@@ -58,7 +58,7 @@ class EnemySpriteGenerator {
       final key = _cacheKey(type);
       if (!_cache.containsKey(key)) {
         // Try loading AI-generated PNG first
-        final pngPath = 'assets/images/enemies/${type.name}.png';
+        final pngPath = 'assets/images/enemies/${type.name}.webp';
         final pngImage = await _tryLoadPng(pngPath);
         if (pngImage != null) {
           // Create a 4-frame sprite sheet from single image

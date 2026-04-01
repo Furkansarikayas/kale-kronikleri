@@ -26,6 +26,9 @@ class SaveManager {
 
   int getMetaLevel(String tree) => _prefs.getInt('meta_$tree') ?? 0;
 
+  /// Total meta unlocks across all trees.
+  int get totalMetaUnlocks => metaSavas + metaKesif + metaKale + metaEfsane;
+
   Future<bool> unlockMetaNode(String tree, {required int cost}) async {
     if (stoneSpirit < cost) return false;
     await _prefs.setInt('stone_spirit', stoneSpirit - cost);
@@ -58,6 +61,9 @@ class SaveManager {
 
   bool get screenShakeEnabled => _prefs.getBool('screen_shake_enabled') ?? true;
   Future<void> setScreenShakeEnabled(bool v) async => _prefs.setBool('screen_shake_enabled', v);
+
+  bool get onboardingCompleted => _prefs.getBool('onboarding_completed') ?? false;
+  Future<void> completeOnboarding() async => _prefs.setBool('onboarding_completed', true);
 
   // --- Achievement tracking stats ---
 

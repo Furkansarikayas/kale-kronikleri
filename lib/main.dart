@@ -74,6 +74,17 @@ class _AppShellState extends State<AppShell> {
   int _lastSpiritEarned = 0;
   int _lastEnemiesKilled = 0;
   int _lastTowersPlaced = 0;
+  int _lastBossesKilled = 0;
+  int _lastClearedWaves = 0;
+  int _lastRunEndBonus = 0;
+  int _lastAdjustedBonus = 0;
+  int _lastObjectiveBonus = 0;
+  bool _lastObjWaves = false;
+  bool _lastObjKills = false;
+  bool _lastObjBoss = false;
+  DifficultyTier _lastDifficulty = DifficultyTier.apprentice;
+  bool _lastIsFirstRun = false;
+  int _previousBestWave = 0;
 
   @override
   void initState() {
@@ -104,11 +115,47 @@ class _AppShellState extends State<AppShell> {
 
   void _goToMeta() => setState(() => _screen = AppScreen.meta);
 
+  /// Quick restart: start new game with same difficulty and random artifacts.
+  void _quickRestart() {
+    _startGame(_lastDifficulty, []);
+  }
+
+  /// Get 1-2 suggested meta upgrades the player can afford or is close to.
+  List<({String treeName, String nodeName, int cost, bool canAfford})> _getSuggestedUpgrades() {
+    final suggestions = <({String treeName, String nodeName, int cost, bool canAfford})>[];
+    final spirit = _saveManager!.stoneSpirit;
+    final totalUnlocks = _saveManager!.totalMetaUnlocks;
+
+    for (final tree in MetaTree.trees) {
+      final level = _saveManager!.getMetaLevel(tree.id);
+      if (level >= tree.nodes.length) continue;
+      final node = tree.nodes[level];
+      final cost = MetaTree.effectiveCost(node.cost, totalUnlocks);
+      suggestions.add((
+        treeName: tree.name,
+        nodeName: node.name,
+        cost: cost,
+        canAfford: spirit >= cost,
+      ));
+    }
+
+    // Sort: affordable first, then by cost
+    suggestions.sort((a, b) {
+      if (a.canAfford != b.canAfford) return a.canAfford ? -1 : 1;
+      return a.cost.compareTo(b.cost);
+    });
+
+    return suggestions.take(2).toList();
+  }
+
   void _goToSettings() => setState(() => _screen = AppScreen.settings);
 
   void _startGame(DifficultyTier difficulty, List<ArtifactDef> artifacts) {
+    _lastDifficulty = difficulty;
     final seed = Random().nextInt(999999);
     final weeklyMutations = MutationSystem.getWeeklyMutations();
+    final isFirstRun = !_saveManager!.onboardingCompleted;
+    _lastIsFirstRun = isFirstRun;
     final game = KaleGame(
       mapSeed: seed,
       difficulty: difficulty,
@@ -121,10 +168,16 @@ class _AppShellState extends State<AppShell> {
       },
       mutations: weeklyMutations,
       initialScreenShakeEnabled: _saveManager!.screenShakeEnabled,
+      isFirstRun: isFirstRun,
     );
 
     game.onStateChanged = () {
-      if (mounted) setState(() {});
+      if (!mounted) return;
+      // Schedule setState for after the current build phase to avoid
+      // "setState called during build" when GameWidget's LayoutBuilder fires.
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) setState(() {});
+      });
     };
     game.onSynergyDiscovered = () {
       // Save discovered synergies
@@ -147,13 +200,36 @@ class _AppShellState extends State<AppShell> {
       _lastSpiritEarned = game.economy.stoneSpirit;
       _lastEnemiesKilled = game.enemiesKilled;
       _lastTowersPlaced = game.towersPlaced;
+      _lastBossesKilled = game.bossesKilled;
 
-      // Persist
-      _saveManager!.addStoneSpirit(_lastSpiritEarned);
-      _saveManager!.addSpiritEarned(_lastSpiritEarned);
+      // Truly completed waves: on loss, current wave wasn't finished
+      _lastClearedWaves = isVictory
+          ? game.waveSystem.currentWave
+          : (game.waveSystem.currentWave - 1).clamp(0, game.waveSystem.totalWaves);
+
+      // Run-end bonus calculation
+      final waveBonus = _lastClearedWaves * 2;
+      final killBonus = _lastEnemiesKilled ~/ 10;
+      final bossBonus = _lastBossesKilled * 25;
+      _lastRunEndBonus = waveBonus + killBonus + bossBonus;
+      _lastAdjustedBonus = isVictory
+          ? _lastRunEndBonus
+          : (_lastRunEndBonus * 0.5).round();
+
+      // Objective bonuses
+      _lastObjWaves = game.objectiveWaves;
+      _lastObjKills = game.objectiveKills;
+      _lastObjBoss = game.objectiveBoss;
+      _lastObjectiveBonus = game.objectiveBonusSpirit;
+
+      // Persist: in-run spirit + adjusted bonus + objective bonus (saved together, once)
+      final totalEarned = _lastSpiritEarned + _lastAdjustedBonus + _lastObjectiveBonus;
+      _saveManager!.addStoneSpirit(totalEarned);
+      _saveManager!.addSpiritEarned(totalEarned);
       _saveManager!.incrementRuns();
       _saveManager!.addKills(_lastEnemiesKilled);
-      _saveManager!.updateBestWave(_lastWaves);
+      _previousBestWave = _saveManager!.bestWave;
+      _saveManager!.updateBestWave(_lastClearedWaves);
       _saveManager!.addTowersPlaced(game.totalTowersPlacedThisRun);
       _saveManager!.addBossKills(game.bossesKilled);
       _saveManager!.updateBestPerfectWaves(game.bestPerfectWaves);
@@ -161,6 +237,11 @@ class _AppShellState extends State<AppShell> {
       // Update best difficulty on victory
       if (isVictory) {
         _saveManager!.updateBestDifficulty(game.difficulty.index);
+      }
+
+      // Mark onboarding complete after first run
+      if (!_saveManager!.onboardingCompleted) {
+        _saveManager!.completeOnboarding();
       }
 
       // Check achievements
@@ -184,7 +265,7 @@ class _AppShellState extends State<AppShell> {
           fit: StackFit.expand,
           children: [
             Image.asset(
-              'assets/images/ui/loading_bg.png',
+              'assets/images/ui/loading_bg.webp',
               fit: BoxFit.cover,
               errorBuilder: (_, __, ___) => const SizedBox.shrink(),
             ),
@@ -250,6 +331,7 @@ class _AppShellState extends State<AppShell> {
         return MetaScreen(
           stoneSpirit: _saveManager!.stoneSpirit,
           totalRuns: _saveManager!.totalRuns,
+          totalMetaUnlocks: _saveManager!.totalMetaUnlocks,
           unlockedLevels: {
             'savas': _saveManager!.metaSavas,
             'kesif': _saveManager!.metaKesif,
@@ -259,7 +341,8 @@ class _AppShellState extends State<AppShell> {
           onUnlock: (treeId, index) async {
             final tree = MetaTree.trees.firstWhere((t) => t.id == treeId);
             final node = tree.nodes[index];
-            await _saveManager!.unlockMetaNode(treeId, cost: node.cost);
+            final cost = MetaTree.effectiveCost(node.cost, _saveManager!.totalMetaUnlocks);
+            await _saveManager!.unlockMetaNode(treeId, cost: cost);
             AchievementSystem.checkAll(_saveManager!);
             setState(() {});
           },
@@ -295,7 +378,20 @@ class _AppShellState extends State<AppShell> {
           totalDamageDealt: _game?.totalDamageDealt ?? 0,
           difficultyName: _game?.difficulty.displayName ?? '',
           activeSynergies: _game?.activeSynergyNames ?? [],
+          bossesKilled: _lastBossesKilled,
+          clearedWaves: _lastClearedWaves,
+          runEndBonus: _lastRunEndBonus,
+          adjustedBonus: _lastAdjustedBonus,
+          objectiveBonus: _lastObjectiveBonus,
+          objWaves: _lastObjWaves,
+          objKills: _lastObjKills,
+          objBoss: _lastObjBoss,
+          suggestedUpgrades: _getSuggestedUpgrades(),
+          isFirstRun: _lastIsFirstRun,
+          bestWave: _saveManager!.bestWave,
+          isNewRecord: _lastClearedWaves > _previousBestWave,
           onContinue: _goToRunSetup,
+          onQuickRestart: _quickRestart,
           onMainMenu: _goToMainMenu,
         );
 
@@ -316,12 +412,14 @@ class _AppShellState extends State<AppShell> {
     final game = _game;
     if (game == null) return const SizedBox.shrink();
 
-    return Stack(
-      fit: StackFit.expand,
-      children: [
-        GameWidget(game: game),
-        // HUD overlay (only after game is loaded)
-        if (game.isReady) GameHud(
+    return DefaultTextStyle(
+      style: const TextStyle(decoration: TextDecoration.none),
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          GameWidget(game: game),
+          // HUD overlay (only after game is loaded)
+          if (game.isReady) GameHud(
           castleHp: game.castle.hp,
           maxCastleHp: game.castle.maxHp,
           gold: game.economy.gold,
@@ -345,6 +443,9 @@ class _AppShellState extends State<AppShell> {
             game.selectedTowerType = type;
             game.deselectPlacedTower();
             game.updatePlacementHighlight();
+            if (type != null) {
+              game.tutorialSystem.tryShow(TutorialTrigger.towerSelected);
+            }
             setState(() {});
           },
           onSellTower: () {
@@ -398,6 +499,14 @@ class _AppShellState extends State<AppShell> {
             game.tutorialSystem.dismiss();
             setState(() {});
           },
+          mergeCandidateCount: game.selectedPlacedTower != null
+              ? game.getMergeCandidates(game.selectedPlacedTower!).length
+              : 0,
+          activeMutations: game.mutations,
+          goldRejectCounter: game.goldRejectCounter,
+          objWaves: game.objectiveWaves,
+          objKills: game.objectiveKills,
+          objBoss: game.objectiveBoss,
         ),
         // Wave break overlay
         if (game.isReady && game.phase == GamePhase.waveBreak)
@@ -407,6 +516,7 @@ class _AppShellState extends State<AppShell> {
             gold: game.economy.gold,
             timeRemaining: game.breakTimeRemaining,
             wavePreview: game.nextWavePreview,
+            extraWavePreviews: game.extraWavePreviews,
             onStartNow: () => game.startNextWave(),
             showEnemyWeakness: game.showEnemyWeakness,
             loreMessage: _getLoreMessage(game.waveSystem.currentWave + 1),
@@ -430,6 +540,11 @@ class _AppShellState extends State<AppShell> {
             },
             pathCount: game.gameMap.enemyPaths.length,
             nextWavePattern: game.nextWavePathPattern,
+            buffChoices: game.pendingBuffChoices,
+            onBuffSelected: (buff) {
+              game.selectWaveBuff(buff);
+              setState(() {});
+            },
           ),
         // Pause overlay
         if (game.isReady && game.phase == GamePhase.paused)
@@ -449,7 +564,8 @@ class _AppShellState extends State<AppShell> {
               _goToMainMenu();
             },
           ),
-      ],
+        ],
+      ),
     );
   }
 
@@ -469,8 +585,15 @@ class _AppShellState extends State<AppShell> {
   }
 
   List<DifficultyTier> _unlockedDifficulties() {
+    final totalRuns = _saveManager!.totalRuns;
+    final bestDiff = _saveManager!.bestDifficulty; // index of highest difficulty beaten
     return DifficultyTier.values
-        .where((d) => d.runsToUnlock <= _saveManager!.totalRuns)
+        .where((d) {
+          // Unlocked by run count OR by beating the previous difficulty
+          if (d.runsToUnlock <= totalRuns) return true;
+          if (d.index <= bestDiff + 1) return true; // beat previous = unlock next
+          return false;
+        })
         .toList();
   }
 }
