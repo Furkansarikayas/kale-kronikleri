@@ -22,6 +22,12 @@ class MapGroundLayer extends PositionComponent {
   static final Paint _imgPaint = Paint()..filterQuality = FilterQuality.medium;
   double _time = 0;
 
+  // Padding to extend grass beyond grid (covers ultrawide screens)
+  static const double _padL = 350.0;
+  static const double _padR = 350.0;
+  static const double _padT = 110.0;
+  static const double _padB = 110.0;
+
   MapGroundLayer({required this.grid, required this.cellSize}) {
     priority = -1;
   }
@@ -39,14 +45,21 @@ class MapGroundLayer extends PositionComponent {
     final rows = GameConfig.gridRows;
     final mapW = cols * cellSize;
     final mapH = rows * cellSize;
+    final totalW = mapW + _padL + _padR;
+    final totalH = mapH + _padT + _padB;
 
     final recorder = ui.PictureRecorder();
     final canvas = Canvas(recorder);
-    final mapRect = Rect.fromLTWH(0, 0, mapW, mapH);
 
-    // 1. Base grass tiled across entire map
-    _tileOrFill(canvas, cache.grassTexture, mapRect,
+    // 1. Base grass tiled across ENTIRE padded area (extends beyond grid)
+    _tileOrFill(canvas, cache.grassTexture,
+        Rect.fromLTWH(0, 0, totalW, totalH),
         cache.currentBiome.groundBase);
+
+    // Translate so grid content renders at padded offset
+    canvas.save();
+    canvas.translate(_padL, _padT);
+    final mapRect = Rect.fromLTWH(0, 0, mapW, mapH);
 
     // 2. Blocked cells
     final blockedFallback =
@@ -97,8 +110,10 @@ class MapGroundLayer extends PositionComponent {
         ),
     );
 
+    canvas.restore(); // undo translate for grid content
+
     final picture = recorder.endRecording();
-    _cached = await picture.toImage(mapW.toInt(), mapH.toInt());
+    _cached = await picture.toImage(totalW.toInt(), totalH.toInt());
     picture.dispose();
   }
 
@@ -466,7 +481,7 @@ class MapGroundLayer extends PositionComponent {
   @override
   void render(Canvas canvas) {
     if (_cached != null) {
-      canvas.drawImage(_cached!, Offset.zero, _imgPaint);
+      canvas.drawImage(_cached!, const Offset(-_padL, -_padT), _imgPaint);
 
       // Animated spawn pulsing glow (rendered live, not cached)
       final pulse = (math.sin(_time * 2.5) * 0.5 + 0.5); // 0..1
