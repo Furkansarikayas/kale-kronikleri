@@ -16,8 +16,8 @@ void main() {
     final comp = WaveData.getWave(10, DifficultyTier.apprentice);
     expect(comp.any((e) => e.type == EnemyType.shadowLord), true);
   });
-  test('wave 20 has dragon emperor for difficulty I', () {
-    final comp = WaveData.getWave(20, DifficultyTier.apprentice);
+  test('wave 30 has dragon emperor (mega-boss every 30)', () {
+    final comp = WaveData.getWave(30, DifficultyTier.apprentice);
     expect(comp.any((e) => e.type == EnemyType.dragonEmperor), true);
   });
   test('enemy count increases', () {
@@ -32,19 +32,14 @@ void main() {
     expect(ws.currentWave, 1);
     expect(ws.currentComposition, isNotEmpty);
   });
-  test('WaveSystem completes after all waves', () {
+  test('WaveSystem infinite — waves never stop', () {
     final ws = WaveSystem(difficulty: DifficultyTier.apprentice);
-    for (int i = 0; i < 20; i++) ws.startNextWave();
-    expect(ws.isComplete, true);
+    for (int i = 0; i < 100; i++) ws.startNextWave();
+    expect(ws.currentWave, 100);
+    expect(ws.currentComposition, isNotEmpty);
   });
-  test('WaveSystem extendWaves allows more waves', () {
+  test('WaveSystem tierWaves matches difficulty', () {
     final ws = WaveSystem(difficulty: DifficultyTier.apprentice);
-    for (int i = 0; i < 20; i++) ws.startNextWave();
-    expect(ws.isComplete, true);
-    ws.extendWaves(5);
-    expect(ws.isComplete, false);
-    expect(ws.totalWaves, 25);
-    ws.startNextWave();
-    expect(ws.currentWave, 21);
+    expect(ws.tierWaves, 30);
   });
 }

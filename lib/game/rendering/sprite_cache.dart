@@ -46,7 +46,33 @@ class SpriteCache {
   // ---------------------------------------------------------------------------
 
   Future<void> initialize({BiomeData? biome}) async {
-    _currentBiome = biome ?? BiomeData.forest;
+    final newBiome = biome ?? BiomeData.forest;
+
+    // ROOT CAUSE FIX: Skip re-initialization if already initialized with
+    // the same biome. Previously, every new game disposed ALL cached
+    // ui.Image objects and re-generated 25+ images via picture.toImage().
+    // On second game with same biome, the GPU resources from disposed images
+    // may not be released before new toImage() allocations, causing the
+    // rasterizer to hang indefinitely → white screen freeze.
+    if (_initialized && _currentBiome.type == newBiome.type) {
+      debugPrint('[SpriteCache] Same biome (${newBiome.type.name}), reusing cache');
+      return;
+    }
+
+    debugPrint('[SpriteCache] Initializing for biome: ${newBiome.type.name} (was: ${_currentBiome.type.name}, initialized: $_initialized)');
+    _currentBiome = newBiome;
+
+    // Dispose old terrain textures to prevent memory leak on re-init
+    _grassTexture?.dispose();
+    _pathTexture?.dispose();
+    _blockedTexture?.dispose();
+    _spawnTexture?.dispose();
+    _castleTexture?.dispose();
+    _grassTexture = null;
+    _pathTexture = null;
+    _blockedTexture = null;
+    _spawnTexture = null;
+    _castleTexture = null;
 
     // Clear existing cache when re-initializing with a new biome
     for (final img in _cache.values) {
@@ -58,6 +84,7 @@ class SpriteCache {
     // Load terrain textures from assets, fall back to procedural generation
     _perlin = PerlinNoise(seed: 42);
     final biomeName = _currentBiome.type.name; // forest, desert, etc.
+    debugPrint('[SpriteCache] Loading terrain textures...');
     _grassTexture = await _loadTerrainAsset('$biomeName/grass.webp') ??
         await _renderTerrainTile(terrainSize, _paintTerrainGrass);
     _pathTexture = await _loadTerrainAsset('$biomeName/path.webp') ??
@@ -68,6 +95,7 @@ class SpriteCache {
         await _renderTerrainTile(256, _paintTerrainSpawn);
     _castleTexture = await _loadTerrainAsset('$biomeName/castle.webp') ??
         await _renderTerrainTile(terrainSize, _paintTerrainCastle);
+    debugPrint('[SpriteCache] Terrain textures done, generating tile cache...');
 
     for (int v = 0; v < 6; v++) {
       _cache['grass_$v'] = await _renderTile((c) => _paintGrass(c, v));
@@ -85,6 +113,7 @@ class SpriteCache {
     _cache['castle_ground'] = await _renderTile(_paintCastleGround);
 
     _initialized = true;
+    debugPrint('[SpriteCache] Initialization complete (${_cache.length} tiles cached)');
   }
 
   void dispose() {

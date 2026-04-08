@@ -54,6 +54,17 @@ class TowerSpriteGenerator {
         final branchImage = await _tryLoadPng(branchPath);
         if (branchImage != null) {
           _cache[branchKey] = branchImage;
+        } else {
+          // Fallback: use base T4 sprite so the tower never becomes invisible
+          final baseT4 = _cache[_cacheKey(type, 4)];
+          if (baseT4 != null) {
+            _cache[branchKey] = baseT4;
+          } else {
+            // Last resort: procedural T4 sprite
+            _cache[branchKey] = await _renderSprite((canvas) {
+              _paintTower(canvas, type, 4);
+            });
+          }
         }
       }
     }
@@ -75,7 +86,8 @@ class TowerSpriteGenerator {
       );
       final frame = await codec.getNextFrame();
       return frame.image;
-    } catch (_) {
+    } catch (e) {
+      debugPrint('TowerSprites: failed to load $path: $e');
       return null;
     }
   }

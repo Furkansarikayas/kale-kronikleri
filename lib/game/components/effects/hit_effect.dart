@@ -13,6 +13,13 @@ class HitEffect extends PositionComponent {
   static final Paint _fp = Paint();
   static final Paint _sp = Paint()..style = PaintingStyle.stroke;
 
+  // Shared RNG — avoids constructing new Random() per effect
+  static final math.Random _rng = math.Random();
+
+  // Pool tracking
+  static int totalCreated = 0;
+  static int totalActive = 0;
+
   HitEffect({
     required Vector2 pos,
     required Color color,
@@ -23,18 +30,18 @@ class HitEffect extends PositionComponent {
   }) : _life = maxLife,
        _isExplosion = false,
        super(position: pos.clone(), anchor: Anchor.center) {
-    final rng = math.Random();
+    totalCreated++;
     for (int i = 0; i < count; i++) {
-      final angle = rng.nextDouble() * math.pi * 2;
-      final spd = speed * (0.5 + rng.nextDouble() * 0.5);
-      final hue = (rng.nextDouble() - 0.5) * 30;
+      final angle = _rng.nextDouble() * math.pi * 2;
+      final spd = speed * (0.5 + _rng.nextDouble() * 0.5);
+      final hue = (_rng.nextDouble() - 0.5) * 30;
       _particles.add(_Particle(
         dx: math.cos(angle) * spd,
         dy: math.sin(angle) * spd,
-        size: size * (0.6 + rng.nextDouble() * 0.6),
+        size: size * (0.6 + _rng.nextDouble() * 0.6),
         color: _shiftHue(color, hue),
-        gravity: 20 + rng.nextDouble() * 40,
-        shape: rng.nextInt(3),
+        gravity: 20 + _rng.nextDouble() * 40,
+        shape: _rng.nextInt(3),
       ));
     }
   }
@@ -61,7 +68,7 @@ class HitEffect extends PositionComponent {
   }) : _life = maxLife,
        _isExplosion = true,
        super(position: pos.clone(), anchor: Anchor.center) {
-    final rng = math.Random();
+    totalCreated++;
     const colors = [
       Color(0xFFFF6600),
       Color(0xFFFF8800),
@@ -70,14 +77,14 @@ class HitEffect extends PositionComponent {
     ];
     for (int i = 0; i < count; i++) {
       final angle = i * math.pi * 2 / count;
-      final spd = speed * (0.6 + rng.nextDouble() * 0.4);
+      final spd = speed * (0.6 + _rng.nextDouble() * 0.4);
       _particles.add(_Particle(
         dx: math.cos(angle) * spd,
         dy: math.sin(angle) * spd,
-        size: size * (0.7 + rng.nextDouble() * 0.5),
-        color: colors[rng.nextInt(colors.length)],
+        size: size * (0.7 + _rng.nextDouble() * 0.5),
+        color: colors[_rng.nextInt(colors.length)],
         gravity: 30,
-        shape: rng.nextInt(2),
+        shape: _rng.nextInt(2),
       ));
     }
   }
@@ -104,6 +111,18 @@ class HitEffect extends PositionComponent {
 
   factory HitEffect.bossDeath({required Vector2 pos, Color color = const Color(0xFFFF0000)}) {
     return HitEffect(pos: pos, color: color, count: 12, speed: 100, size: 3.0, maxLife: 0.4);
+  }
+
+  @override
+  void onMount() {
+    super.onMount();
+    totalActive++;
+  }
+
+  @override
+  void onRemove() {
+    totalActive--;
+    super.onRemove();
   }
 
   @override
@@ -144,12 +163,12 @@ class HitEffect extends PositionComponent {
       canvas.drawCircle(Offset.zero, 8 * t, _fp);
     }
 
+    final alpha = (t * 255).round().clamp(0, 255);
     for (final p in _particles) {
-      final alpha = (t * 255).round().clamp(0, 255);
       final currentSize = p.size * (0.3 + t * 0.7);
 
       // Main particle — solid color, no gradient
-      _fp.color = p.color.withAlpha(alpha);
+      _fp.color = Color.fromARGB(alpha, (p.color.r * 255).round(), (p.color.g * 255).round(), (p.color.b * 255).round());
       switch (p.shape) {
         case 1: // Square
           canvas.drawRect(
@@ -172,10 +191,10 @@ class HitEffect extends PositionComponent {
   }
 
   static Color _shiftHue(Color color, double shift) {
-    final r = (color.red + shift).round().clamp(0, 255);
-    final g = (color.green + shift * 0.5).round().clamp(0, 255);
-    final b = (color.blue - shift * 0.3).round().clamp(0, 255);
-    return Color.fromARGB(color.alpha, r, g, b);
+    final r = (color.r * 255 + shift).round().clamp(0, 255);
+    final g = (color.g * 255 + shift * 0.5).round().clamp(0, 255);
+    final b = (color.b * 255 - shift * 0.3).round().clamp(0, 255);
+    return Color.fromARGB((color.a * 255).round(), r, g, b);
   }
 }
 
@@ -229,7 +248,7 @@ class ChainEffect extends PositionComponent {
     final end = (_to - position).toOffset();
 
     // Core line only (skip glow layer for performance)
-    _linePaint.color = _color.withAlpha(alpha);
+    _linePaint.color = Color.fromARGB(alpha, (_color.r * 255).round(), (_color.g * 255).round(), (_color.b * 255).round());
     _linePaint.strokeWidth = 1.5 * t;
     canvas.drawLine(Offset.zero, end, _linePaint);
   }

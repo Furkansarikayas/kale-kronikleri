@@ -11,6 +11,8 @@ class MainMenu extends StatefulWidget {
   final int totalRuns;
   final int bestWave;
   final int totalKills;
+  final String favoriteBuild;
+  final List<({String desc, double fraction, bool done, int reward})> dailyGoals;
 
   const MainMenu({
     super.key,
@@ -21,6 +23,8 @@ class MainMenu extends StatefulWidget {
     required this.totalRuns,
     this.bestWave = 0,
     this.totalKills = 0,
+    this.favoriteBuild = '',
+    this.dailyGoals = const [],
   });
 
   @override
@@ -119,6 +123,9 @@ class _MainMenuState extends State<MainMenu> with SingleTickerProviderStateMixin
                       const SizedBox(height: 6),
                       // Stats bar
                       _buildStatsBar(),
+                      // Daily goals + build identity
+                      if (widget.dailyGoals.isNotEmpty || widget.favoriteBuild.isNotEmpty)
+                        _buildDailyPanel(),
                     ],
                   ),
                 ),
@@ -233,6 +240,96 @@ class _MainMenuState extends State<MainMenu> with SingleTickerProviderStateMixin
         if (widget.totalKills > 0)
           _PremiumStatChip(imageAsset: 'assets/images/ui/stat_kills.webp', icon: Icons.dangerous, label: 'Toplam Öldürülen', value: '${widget.totalKills}'),
       ],
+    );
+  }
+
+  Widget _buildDailyPanel() {
+    return Padding(
+      padding: const EdgeInsets.only(top: 10),
+      child: GlassPanel(
+        padding: const EdgeInsets.all(10),
+        borderColor: _gold.withAlpha(60),
+        borderRadius: 10,
+        blur: 6,
+        child: SizedBox(
+          width: 280,
+          child: Column(
+            children: [
+              // Build identity
+              if (widget.favoriteBuild.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 6),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.shield, color: _gold.withAlpha(180), size: 12),
+                      const SizedBox(width: 4),
+                      Text(
+                        'Favori: ${widget.favoriteBuild}',
+                        style: TextStyle(color: _gold.withAlpha(200), fontSize: 10),
+                      ),
+                    ],
+                  ),
+                ),
+              // Daily goals
+              if (widget.dailyGoals.isNotEmpty) ...[
+                Row(
+                  children: [
+                    Icon(Icons.today, color: _gold.withAlpha(180), size: 11),
+                    const SizedBox(width: 4),
+                    Text('Günlük Görevler', style: TextStyle(color: _cream.withAlpha(140), fontSize: 9, letterSpacing: 1)),
+                  ],
+                ),
+                const SizedBox(height: 4),
+                for (final goal in widget.dailyGoals)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 3),
+                    child: Row(
+                      children: [
+                        Icon(
+                          goal.done ? Icons.check_circle : Icons.radio_button_unchecked,
+                          size: 10,
+                          color: goal.done ? _gold : _creamDim,
+                        ),
+                        const SizedBox(width: 4),
+                        Expanded(
+                          child: Text(
+                            goal.desc,
+                            style: TextStyle(
+                              color: goal.done ? _cream : _creamDim,
+                              fontSize: 9,
+                              decoration: goal.done ? TextDecoration.lineThrough : null,
+                            ),
+                          ),
+                        ),
+                        SizedBox(
+                          width: 40,
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(2),
+                            child: LinearProgressIndicator(
+                              value: goal.fraction,
+                              backgroundColor: _cream.withAlpha(15),
+                              color: goal.done ? _gold : _gold.withAlpha(100),
+                              minHeight: 3,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 4),
+                        Text(
+                          '+${goal.reward}',
+                          style: TextStyle(
+                            color: goal.done ? _gold : _creamDim,
+                            fontSize: 8,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+              ],
+            ],
+          ),
+        ),
+      ),
     );
   }
 

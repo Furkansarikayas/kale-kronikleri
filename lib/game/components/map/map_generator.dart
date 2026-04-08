@@ -12,7 +12,28 @@ class MapResult {
 class MapGenerator {
   MapGenerator._();
 
+  /// Minimum path length (A* cells) for a map to be considered playable.
+  /// Short paths = enemies reach castle too fast = unfair.
+  static const int _minPathLength = 14; // 12 cols * ~1.2
+
+  /// Minimum number of buildable cells adjacent to ANY path cell.
+  /// Too few = no tower spots = can't defend.
+  static const int _minTowerSpots = 6;
+
+  /// Maximum attempts before accepting whatever we have.
+  static const int _maxAttempts = 20;
+
   static MapResult generate({required int seed, int spawnCount = 1}) {
+    // Try multiple seeds to find a good map
+    for (int attempt = 0; attempt < _maxAttempts; attempt++) {
+      final result = _generateOnce(seed: seed + attempt, spawnCount: spawnCount);
+      if (_validateQuality(result)) return result;
+    }
+    // Fallback: return last attempt (will have direct path as safety net)
+    return _generateOnce(seed: seed + _maxAttempts, spawnCount: spawnCount);
+  }
+
+  static MapResult _generateOnce({required int seed, int spawnCount = 1}) {
     final rng = Random(seed);
     final rows = GameConfig.gridRows;
     final cols = GameConfig.gridColumns;
@@ -41,11 +62,13 @@ class MapGenerator {
       _carveZonedPath(grid, spawnPoints[i], castleEntry, rng, rows, cols, i, spawnPoints.length);
     }
 
-    // Blocked decoration
+    // Blocked decoration — only place far from paths
     for (int i = 0; i < (rows * cols * 0.05).round(); i++) {
       final r = rng.nextInt(rows);
       final c = 2 + rng.nextInt(cols - 4);
-      if (grid[r][c] == CellType.buildable) grid[r][c] = CellType.blocked;
+      if (grid[r][c] == CellType.buildable && !_isAdjacentToPath(grid, r, c, rows, cols)) {
+        grid[r][c] = CellType.blocked;
+      }
     }
 
     // Mark some path cells as pathBuildable
@@ -59,13 +82,80 @@ class MapGenerator {
       }
     }
 
-    // Validate paths
+    // Validate paths — ensure connectivity
     for (final spawn in spawnPoints) {
       final path = Pathfinding.findPath(grid: grid, start: spawn, end: castleEntry);
       if (path == null) _carveDirectPath(grid, spawn, castleEntry);
     }
 
     return MapResult(grid: grid, spawnPoints: spawnPoints, castleEntry: castleEntry);
+  }
+
+  /// Check if a cell is adjacent to a path/pathBuildable cell.
+  static bool _isAdjacentToPath(List<List<CellType>> grid, int r, int c, int rows, int cols) {
+    for (int dr = -1; dr <= 1; dr++) {
+      for (int dc = -1; dc <= 1; dc++) {
+        if (dr == 0 && dc == 0) continue;
+        final nr = r + dr, nc = c + dc;
+        if (nr >= 0 && nr < rows && nc >= 0 && nc < cols) {
+          final t = grid[nr][nc];
+          if (t == CellType.path || t == CellType.pathBuildable || t == CellType.spawn) {
+            return true;
+          }
+        }
+      }
+    }
+    return false;
+  }
+
+  /// Validates that the generated map is fair and playable.
+  static bool _validateQuality(MapResult result) {
+    final grid = result.grid;
+    final rows = grid.length;
+    final cols = grid[0].length;
+
+    // Check 1: Every spawn must have a path of minimum length
+    for (final spawn in result.spawnPoints) {
+      final path = Pathfinding.findPath(grid: grid, start: spawn, end: result.castleEntry);
+      if (path == null || path.length < _minPathLength) return false;
+    }
+
+    // Check 2: Count buildable cells adjacent to path — need enough tower spots
+    final towerSpots = <String>{};
+    for (int r = 0; r < rows; r++) {
+      for (int c = 0; c < cols; c++) {
+        if (grid[r][c] != CellType.buildable) continue;
+        // Check if this buildable cell is next to a path
+        bool nearPath = false;
+        for (int dr = -1; dr <= 1 && !nearPath; dr++) {
+          for (int dc = -1; dc <= 1 && !nearPath; dc++) {
+            if (dr == 0 && dc == 0) continue;
+            final nr = r + dr, nc = c + dc;
+            if (nr >= 0 && nr < rows && nc >= 0 && nc < cols) {
+              final t = grid[nr][nc];
+              if (t == CellType.path || t == CellType.pathBuildable) nearPath = true;
+            }
+          }
+        }
+        if (nearPath) towerSpots.add('$r,$c');
+      }
+    }
+    if (towerSpots.length < _minTowerSpots) return false;
+
+    // Check 3: Path should not hug the edge (row 0 or row max) for too long
+    // This prevents maps where path runs along top/bottom with no room for towers
+    for (final spawn in result.spawnPoints) {
+      final path = Pathfinding.findPath(grid: grid, start: spawn, end: result.castleEntry);
+      if (path == null) return false;
+      int edgeCells = 0;
+      for (final cell in path) {
+        if (cell.row == 0 || cell.row == rows - 1) edgeCells++;
+      }
+      // If more than 40% of path is on edge, reject
+      if (edgeCells > path.length * 0.4) return false;
+    }
+
+    return true;
   }
 
   /// Distributes spawn rows across vertical zones so paths are visually distinct.
@@ -118,7 +208,7 @@ class MapGenerator {
 
       if (inZonePhase) {
         // Bias horizontal movement to spread paths apart
-        if (rng.nextDouble() < 0.65) {
+        if (rng.nextDouble() < 0.55) {
           // Move horizontally
           dr = 0;
           dc = 1; // always toward castle
@@ -131,9 +221,14 @@ class MapGenerator {
           } else {
             dr = rng.nextBool() ? 1 : -1;
           }
-          // Random wander adds variety
+          // Random wander adds variety — but keep away from edges
           if (rng.nextDouble() < 0.4) {
             dr = rng.nextBool() ? 1 : -1;
+          }
+          // Clamp: avoid row 0 and row max (leave room for towers)
+          final nextRow = current.row + dr;
+          if (nextRow <= 0 || nextRow >= rows - 1) {
+            dr = -dr; // bounce back from edges
           }
         }
       } else {

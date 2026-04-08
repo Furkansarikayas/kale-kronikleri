@@ -83,7 +83,7 @@ class WaveBreak extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             Text(
-              'Dalga $nextWave / $totalWaves',
+              'Dalga $nextWave',
               style: const TextStyle(
                 color: _gold,
                 fontSize: 20,

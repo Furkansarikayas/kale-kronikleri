@@ -5,24 +5,17 @@ class WaveSystem {
   final DifficultyTier difficulty;
   final int? mapSeed;
   int _currentWave = 0;
-  int _extraWaves = 0;
   List<WaveEntry> _currentComposition = [];
 
   WaveSystem({required this.difficulty, this.mapSeed});
 
   int get currentWave => _currentWave;
-  int get totalWaves => difficulty.totalWaves + _extraWaves;
+  /// Tier milestone wave count (used for scaling reference, not as a cap).
+  int get tierWaves => difficulty.totalWaves;
   List<WaveEntry> get currentComposition => _currentComposition;
-  bool get isComplete => _currentWave >= totalWaves;
 
   void startNextWave() {
-    if (isComplete) return;
     _currentWave++;
     _currentComposition = WaveData.getWave(_currentWave, difficulty, seed: mapSeed);
-  }
-
-  /// Extend game by additional waves (infinite mode)
-  void extendWaves(int count) {
-    _extraWaves += count;
   }
 }

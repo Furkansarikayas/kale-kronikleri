@@ -90,18 +90,19 @@ class WaveData {
     // Helper: optionally vary a count.
     int v(int base) => rng != null ? _vary(base, rng) : base;
 
-    // Final boss wave
-    if (waveNumber == totalWaves) {
-      entries.add(const WaveEntry(type: EnemyType.dragonEmperor, count: 1, spawnDelay: 0));
-      entries.add(WaveEntry(type: EnemyType.darkKnight, count: v(3)));
-      entries.add(WaveEntry(type: EnemyType.healer, count: v(1 + totalWaves ~/ 15)));
-      entries.add(WaveEntry(type: EnemyType.soldier, count: v(5 + totalWaves ~/ 5)));
+    // Dragon Emperor mega-boss every 30 waves
+    if (waveNumber > 0 && waveNumber % 30 == 0) {
+      entries.add(const WaveEntry(type: EnemyType.dragonEmperor, count: 1, spawnDelay: 0.5));
+      entries.add(WaveEntry(type: EnemyType.darkKnight, count: v(3 + waveNumber ~/ 15)));
+      entries.add(WaveEntry(type: EnemyType.healer, count: v(1 + waveNumber ~/ 15)));
+      entries.add(WaveEntry(type: EnemyType.soldier, count: v(5 + waveNumber ~/ 5)));
       return entries;
     }
 
     // Mid-boss waves (every 10)
     if (waveNumber % 10 == 0) {
-      entries.add(const WaveEntry(type: EnemyType.shadowLord, count: 1, spawnDelay: 0));
+      // Boss delay 0.5s: separate boss spawn from wave-start effects to prevent frame spike
+      entries.add(const WaveEntry(type: EnemyType.shadowLord, count: 1, spawnDelay: 0.5));
       entries.add(WaveEntry(type: EnemyType.armoredGiant, count: v(2 + waveNumber ~/ 15)));
       entries.add(WaveEntry(type: EnemyType.healer, count: v(waveNumber ~/ 10)));
       entries.add(WaveEntry(type: EnemyType.soldier, count: v(4 + waveNumber ~/ 5)));

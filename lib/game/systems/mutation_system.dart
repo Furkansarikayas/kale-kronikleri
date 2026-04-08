@@ -5,7 +5,7 @@ enum MutationType {
   toughEnemies('Dayanıklı Düşmanlar', 'Düşman canı %40 artmış'),
   cheapTowers('Ucuz Kuleler', 'Kule maliyeti %25 azalmış'),
   expensiveTowers('Pahalı Kuleler', 'Kule maliyeti %30 artmış'),
-  richRewards('Zengin Ödüller', 'Altın ödülleri 2x'),
+  richRewards('Zengin Ödüller', 'Altın ödülleri %40 artmış'),
   shortWaves('Kısa Dalgalar', 'Dalga arası %50 kısa'),
   armoredAll('Zırhlı Ordu', 'Tüm düşmanlara +5 zırh'),
   bossRush('Boss Akını', 'Her 5 dalgada boss gelir'),
@@ -58,7 +58,7 @@ class MutationSystem {
   }
 
   static double goldRewardMultiplier(List<MutationType> mutations) {
-    return mutations.contains(MutationType.richRewards) ? 2.0 : 1.0;
+    return mutations.contains(MutationType.richRewards) ? 1.4 : 1.0;
   }
 
   static double wavePrepMultiplier(List<MutationType> mutations) {

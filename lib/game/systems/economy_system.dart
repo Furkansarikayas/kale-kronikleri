@@ -22,8 +22,8 @@ class EconomySystem {
   }
 
   void onWaveComplete(int waveNumber) {
-    earnStoneSpirit(waveNumber * 2);
-    // Gold bonus for surviving the wave
-    earnGold(15 + waveNumber * 5);
+    earnStoneSpirit(3); // flat 3 spirit per wave (was waveNumber × 2)
+    // Gold bonus for surviving the wave (nerfed: 8 + wave×2)
+    earnGold(8 + waveNumber * 2);
   }
 }

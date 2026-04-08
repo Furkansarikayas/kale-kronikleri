@@ -4,10 +4,10 @@ enum CellType { path, buildable, blocked, castle, spawn, pathBuildable }
 
 enum DifficultyTier {
   apprentice(displayName: 'Çırak', totalWaves: 30, hpMultiplier: 1.0, speedMultiplier: 1.0, spiritMultiplier: 1.0, runsToUnlock: 0, biomeType: BiomeType.forest),
-  knight(displayName: 'Şövalye', totalWaves: 40, hpMultiplier: 1.2, speedMultiplier: 1.0, spiritMultiplier: 1.5, runsToUnlock: 5, biomeType: BiomeType.desert),
-  lord(displayName: 'Lord', totalWaves: 50, hpMultiplier: 1.4, speedMultiplier: 1.2, spiritMultiplier: 2.5, runsToUnlock: 10, biomeType: BiomeType.snow),
-  king(displayName: 'Kral', totalWaves: 60, hpMultiplier: 1.6, speedMultiplier: 1.3, spiritMultiplier: 4.0, runsToUnlock: 20, biomeType: BiomeType.volcano),
-  legend(displayName: 'Efsane', totalWaves: 80, hpMultiplier: 2.0, speedMultiplier: 1.5, spiritMultiplier: 8.0, runsToUnlock: 40, biomeType: BiomeType.dark);
+  knight(displayName: 'Şövalye', totalWaves: 40, hpMultiplier: 1.2, speedMultiplier: 1.0, spiritMultiplier: 1.3, runsToUnlock: 5, biomeType: BiomeType.desert),
+  lord(displayName: 'Lord', totalWaves: 50, hpMultiplier: 1.4, speedMultiplier: 1.2, spiritMultiplier: 1.6, runsToUnlock: 10, biomeType: BiomeType.snow),
+  king(displayName: 'Kral', totalWaves: 60, hpMultiplier: 1.6, speedMultiplier: 1.3, spiritMultiplier: 2.0, runsToUnlock: 20, biomeType: BiomeType.volcano),
+  legend(displayName: 'Efsane', totalWaves: 80, hpMultiplier: 2.0, speedMultiplier: 1.5, spiritMultiplier: 3.0, runsToUnlock: 40, biomeType: BiomeType.dark);
 
   const DifficultyTier({
     required this.displayName,
@@ -34,15 +34,18 @@ class GameConfig {
   GameConfig._();
   static const int gridColumns = 12;
   static const int gridRows = 7;
-  static const int baseCastleHp = 60;
-  static const int startingGold = 150;
+  static const int baseCastleHp = 50;
+  static const int startingGold = 140;
   static const double sellRefundRatio = 0.65;
-  static const int baseTowerSlots = 10;
+  static const int baseTowerSlots = 8;
   static const double wavePrepTime = 15.0;
 
+  /// Percentage-based armor: each point of armor reduces damage by 0.8%.
+  /// 25 armor = 20% reduction, 50 armor = 40%, cap at 75% reduction.
   static int calculateDamage(int baseDamage, int armor) {
     if (baseDamage <= 0) return 0;
-    final result = baseDamage - armor;
+    final reduction = (armor * 0.008).clamp(0.0, 0.75);
+    final result = (baseDamage * (1.0 - reduction)).round();
     return result < 1 ? 1 : result;
   }
 }

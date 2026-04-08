@@ -15,8 +15,9 @@ class MetaNode {
 class MetaTreeDef {
   final String id;
   final String name;
+  final String subtitle;
   final List<MetaNode> nodes;
-  const MetaTreeDef({required this.id, required this.name, required this.nodes});
+  const MetaTreeDef({required this.id, required this.name, required this.subtitle, required this.nodes});
 }
 
 class MetaTree {
@@ -29,7 +30,7 @@ class MetaTree {
   }
 
   static const List<MetaTreeDef> trees = [
-    MetaTreeDef(id: 'savas', name: 'Savaş Ağacı', nodes: [
+    MetaTreeDef(id: 'savas', name: 'Savaş Ağacı', subtitle: 'Kule gücü ve savaş bonusları', nodes: [
       MetaNode(name: 'Kule Hafızası', description: 'Her runda +1 ekstra kule slotu', cost: 15),
       MetaNode(name: 'Demir İrade', description: 'Başlangıç canı %25 artar', cost: 25),
       MetaNode(name: 'Usta Komutan', description: 'Yükseltme maliyeti %20 azalır', cost: 40),
@@ -38,7 +39,7 @@ class MetaTree {
       MetaNode(name: 'Son Nefes', description: 'Can 1\'e düşünce 5sn yenilmezlik', cost: 80),
       MetaNode(name: 'Çelik Yumruk', description: 'Tüm fiziksel hasar %15 artar', cost: 100),
     ]),
-    MetaTreeDef(id: 'kesif', name: 'Keşif Ağacı', nodes: [
+    MetaTreeDef(id: 'kesif', name: 'Keşif Ağacı', subtitle: 'Bilgi avantajı ve keşif bonusları', nodes: [
       MetaNode(name: 'Şifre Çözücü', description: 'Tüm kuleler dalga 1\'den açık', cost: 15),
       MetaNode(name: 'Sinerji Arşivi', description: 'Keşfedilen sinerjiler haritada gösterilir', cost: 25),
       MetaNode(name: 'Düşman Kütüphanesi', description: 'Zayıflıklar baştan görünür', cost: 40),
@@ -47,7 +48,7 @@ class MetaTree {
       MetaNode(name: 'Harita Okuyucu', description: 'Sonraki 2 dalga önizleme', cost: 80),
       MetaNode(name: 'Arkeolog', description: 'Antik eser bulma şansı', cost: 100),
     ]),
-    MetaTreeDef(id: 'kale', name: 'Kale Ağacı', nodes: [
+    MetaTreeDef(id: 'kale', name: 'Kale Ağacı', subtitle: 'Savunma, iyileşme ve ekonomi', nodes: [
       MetaNode(name: 'Taş Duvarlar', description: 'Hasar emme +%30', cost: 15),
       MetaNode(name: 'Hazine Odaları', description: 'Her dalgada +8 bonus altın', cost: 25),
       MetaNode(name: 'Onarım Loncası', description: 'Dalgalar arası %15 can yenile', cost: 40),
@@ -56,7 +57,7 @@ class MetaTree {
       MetaNode(name: 'Kale Ruhu', description: 'Hasar alan kuleler %10 güçlenir', cost: 80),
       MetaNode(name: 'Antik Büyü', description: 'Kale çevresinde sürekli alan hasarı', cost: 100),
     ]),
-    MetaTreeDef(id: 'efsane', name: 'Efsane Ağacı', nodes: [
+    MetaTreeDef(id: 'efsane', name: 'Efsane Ağacı', subtitle: 'Güçlü yetenekler, çok koşu gerektirir', nodes: [
       MetaNode(name: 'Ejderha Ruhu', description: 'Ejderha efekti açılır', cost: 50, runGate: 10),
       MetaNode(name: 'Zaman Büküm', description: 'Dalga hızı ayarı', cost: 75, runGate: 25),
       MetaNode(name: 'Karanlık Antlaşma', description: 'Lanet sinerji bonusu', cost: 100, runGate: 40),

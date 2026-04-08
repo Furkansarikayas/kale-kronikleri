@@ -11,6 +11,10 @@ class SpellOverlay extends PositionComponent {
 
   double _timer = 0;
 
+  // Cached paints — avoid per-frame allocation
+  static final Paint _gradPaint = Paint();
+  static final Paint _tintPaint = Paint();
+
   SpellOverlay({
     required this.assetPath,
     required this.tintColor,
@@ -45,22 +49,23 @@ class SpellOverlay extends PositionComponent {
     // Radial gradient flash from center
     final center = Offset(size.x / 2, size.y / 2);
     final radius = math.max(size.x, size.y) * 0.7;
-    final grad = ui.Gradient.radial(
+    final tr = (tintColor.r * 255).round();
+    final tg = (tintColor.g * 255).round();
+    final tb = (tintColor.b * 255).round();
+    _gradPaint.shader = ui.Gradient.radial(
       center,
       radius,
       [
-        tintColor.withAlpha((opacity * 120).round()),
-        tintColor.withAlpha((opacity * 50).round()),
+        Color.fromARGB((opacity * 120).round(), tr, tg, tb),
+        Color.fromARGB((opacity * 50).round(), tr, tg, tb),
         Colors.transparent,
       ],
       [0.0, 0.5, 1.0],
     );
-    canvas.drawRect(rect, Paint()..shader = grad);
+    canvas.drawRect(rect, _gradPaint);
 
     // Edge vignette tint
-    canvas.drawRect(
-      rect,
-      Paint()..color = tintColor.withAlpha((opacity * 25).round()),
-    );
+    _tintPaint.color = Color.fromARGB((opacity * 25).round(), tr, tg, tb);
+    canvas.drawRect(rect, _tintPaint);
   }
 }

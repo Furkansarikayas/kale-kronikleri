@@ -4,6 +4,7 @@ import 'package:flame/components.dart';
 import 'package:flutter/material.dart';
 import '../../data/enemy_data.dart';
 import '../../data/game_config.dart';
+import '../../data/tower_data.dart';
 import '../../systems/pathfinding.dart';
 import '../../systems/elite_system.dart';
 import '../../systems/audio_system.dart';
@@ -30,6 +31,10 @@ class Enemy extends RectangleComponent {
   // Boss ability tracking
   double bossAbilityTimer = 0;
   bool abilitiesDisabled = false; // EMP effect
+  bool isEnraged = false; // Dragon emperor enrage at 50% HP
+
+  // Adaptation: takes 30% less damage from this tower type (null = no adaptation)
+  TowerType? adaptedAgainst;
 
   // Threat telegraph (set externally, ticks down)
   double telegraphTimer = 0;
@@ -55,6 +60,9 @@ class Enemy extends RectangleComponent {
   double _surfaceFlashTimer = 0;
   static const double _surfaceFlashDuration = 0.35;
 
+  // Last tower type that hit this enemy (for element kill effects)
+  TowerType? lastHitTowerType;
+
   // Animation
   double _animTimer = 0;
 
@@ -62,6 +70,44 @@ class Enemy extends RectangleComponent {
   static final Paint _fp = Paint();
   static final Paint _sp = Paint()..style = PaintingStyle.stroke;
   static final Paint _spritePaint = Paint()..filterQuality = FilterQuality.medium;
+
+  // Shared RNG — avoids constructing new Random() per hit
+  static final math.Random _rng = math.Random();
+
+  /// Debug flag: skip boss aura/shadow rendering (set from KaleGame debug flags)
+  static bool debugSkipBossAura = false;
+
+  // Pre-computed HP bar colors (21 stops, 0%→100% in 5% steps) — avoids Color.lerp per frame
+  static final List<Color> _hpBarColors = List.generate(21, (i) {
+    final ratio = i / 20.0;
+    if (ratio > 0.5) {
+      final t = (ratio - 0.5) * 2;
+      return Color.fromARGB(255,
+        (0xFF + (0x00 - 0xFF) * t).round().clamp(0, 255),
+        (0xDD + (0xFF - 0xDD) * t).round().clamp(0, 255),
+        (0x00 + (0x44 - 0x00) * t).round().clamp(0, 255));
+    } else {
+      final t = ratio * 2;
+      return Color.fromARGB(255,
+        (0xFF + (0xFF - 0xFF) * t).round().clamp(0, 255),
+        (0x22 + (0xDD - 0x22) * t).round().clamp(0, 255),
+        (0x00 + (0x00 - 0x00) * t).round().clamp(0, 255));
+    }
+  });
+
+  // Cached ColorFilters to avoid per-frame list + ColorFilter allocation
+  static final List<ColorFilter> _hitFlashFilters = List.generate(6, (i) {
+    final v = (i / 5.0) * 200;
+    return ColorFilter.matrix(<double>[
+      1, 0, 0, 0, v, 0, 1, 0, 0, v, 0, 0, 1, 0, v, 0, 0, 0, 1, 0,
+    ]);
+  });
+  static final List<ColorFilter> _deathTintFilters = List.generate(6, (i) {
+    final t = i / 5.0;
+    return ColorFilter.matrix(<double>[
+      1, 0, 0, 0, t * 80, 0, 1, 0, 0, -t * 25, 0, 0, 1, 0, -t * 25, 0, 0, 0, 1, 0,
+    ]);
+  });
 
   // Spawn materialization
   double _spawnTimer;
@@ -107,6 +153,8 @@ class Enemy extends RectangleComponent {
   int get castleDamage => baseStats.castleDamage;
   List<StatusEffect> get activeEffects => _effects;
   List<GridPos> get remainingPath => path.sublist(_pathIndex);
+  /// Remaining path length without allocating a sublist.
+  int get remainingPathLength => path.length - _pathIndex;
 
   double get currentSpeed {
     double speed = baseStats.speed;
@@ -117,15 +165,19 @@ class Enemy extends RectangleComponent {
     return speed.clamp(0.0, 10.0);
   }
 
+  int _cachedArmor = -1; // -1 = needs recalculation
   int get currentArmor {
+    if (_cachedArmor >= 0) return _cachedArmor;
     double armor = baseStats.armor.toDouble() + _bonusArmor;
     for (final e in _effects) {
       if (e.type == StatusType.curse) armor -= e.armorReduction;
     }
-    return armor.clamp(0, 999).round();
+    _cachedArmor = armor.clamp(0, 999).round();
+    return _cachedArmor;
   }
 
   bool get isWet => _effects.any((e) => e.type == StatusType.wet && !e.isExpired);
+  bool get hasSlowEffect => _effects.any((e) => e.type == StatusType.slow && !e.isExpired);
 
   void takeDamage(int rawDamage, {bool bypassArmor = false}) {
     if (_isDead) return;
@@ -134,9 +186,8 @@ class Enemy extends RectangleComponent {
     _hitFlashTimer = _hitFlashDuration;
     _hitScaleTimer = _hitScaleDuration;
     // Directional recoil: nudge backward along path + small random jitter
-    final rng = math.Random();
-    double recoilX = (rng.nextDouble() - 0.5) * 2.0;
-    double recoilY = (rng.nextDouble() - 0.5) * 1.5;
+    double recoilX = (_rng.nextDouble() - 0.5) * 2.0;
+    double recoilY = (_rng.nextDouble() - 0.5) * 1.5;
     if (_pathIndex < path.length - 1) {
       final next = path[math.min(_pathIndex + 1, path.length - 1)];
       final curr = path[_pathIndex];
@@ -175,6 +226,7 @@ class Enemy extends RectangleComponent {
   void applyEffect(StatusEffect effect) {
     _effects.removeWhere((e) => e.type == effect.type);
     _effects.add(effect);
+    _cachedArmor = -1; // invalidate
   }
 
   /// Start visual death animation. Enemy is already removed from game logic.
@@ -213,7 +265,9 @@ class Enemy extends RectangleComponent {
       final tickDamage = effect.update(dt);
       if (tickDamage > 0) takeDamage(tickDamage, bypassArmor: true);
     }
+    final prevLen = _effects.length;
     _effects.removeWhere((e) => e.isExpired);
+    if (_effects.length != prevLen) _cachedArmor = -1;
 
     // Burrower mechanic
     if (type == EnemyType.burrower) {
@@ -314,7 +368,7 @@ class Enemy extends RectangleComponent {
     // Footfall dust removed for performance
 
     // Boss ground shadow + danger aura (behind sprite, suppressed during spawn)
-    if (baseStats.isBoss && !isSpawning) {
+    if (baseStats.isBoss && !isSpawning && !debugSkipBossAura) {
       _renderBossGroundShadow(canvas);
       _renderBossAura(canvas);
     }
@@ -471,12 +525,7 @@ class Enemy extends RectangleComponent {
     }
     if (_hitFlashTimer > 0) {
       final flashT = (_hitFlashTimer / _hitFlashDuration).clamp(0.0, 1.0);
-      _spritePaint.colorFilter = ColorFilter.matrix(<double>[
-        1, 0, 0, 0, flashT * 200,
-        0, 1, 0, 0, flashT * 200,
-        0, 0, 1, 0, flashT * 200,
-        0, 0, 0, 1, 0,
-      ]);
+      _spritePaint.colorFilter = _hitFlashFilters[(flashT * 5).round().clamp(0, 5)];
     }
     canvas.drawImageRect(spriteSheet, src, dst, _spritePaint);
     canvas.restore();
@@ -633,19 +682,29 @@ class Enemy extends RectangleComponent {
   void _renderBossAura(Canvas canvas) {
     final center = Offset(cellSize / 2, cellSize / 2);
     final pulse = 0.3 + 0.15 * math.sin(_animTimer * 2.5);
+    final a = (pulse * 100).round().clamp(0, 120);
 
-    final Color auraColor;
-    if (type == EnemyType.dragonEmperor) {
-      auraColor = const Color(0xFFCC3300);
-    } else {
-      auraColor = const Color(0xFF6633AA);
-    }
-
-    // Single pulsing ring (simplified for performance)
-    _sp.color = auraColor.withAlpha((pulse * 100).round().clamp(0, 120));
+    _sp.color = type == EnemyType.dragonEmperor
+        ? Color.fromARGB(a, 0xCC, 0x33, 0x00)
+        : Color.fromARGB(a, 0x66, 0x33, 0xAA);
     _sp.strokeWidth = 2.0;
     _sp.strokeCap = StrokeCap.butt;
     canvas.drawCircle(center, cellSize * 0.6, _sp);
+
+    // ShadowLord debuff aura: translucent red radius showing tower debuff zone
+    if (type == EnemyType.shadowLord) {
+      final debuffRadius = cellSize * 3;
+      final debuffPulse = 0.06 + 0.03 * math.sin(_animTimer * 1.5);
+      final debuffAlpha = (debuffPulse * 255).round().clamp(0, 40);
+      // Filled translucent red zone
+      _fp.color = Color.fromARGB(debuffAlpha, 255, 30, 30);
+      canvas.drawCircle(center, debuffRadius, _fp);
+      // Red border ring
+      final ringAlpha = (debuffPulse * 400).round().clamp(0, 80);
+      _sp.color = Color.fromARGB(ringAlpha, 255, 50, 50);
+      _sp.strokeWidth = 1.5;
+      canvas.drawCircle(center, debuffRadius, _sp);
+    }
   }
 
   // ─── Issue #5: Death animation (enhanced) ──────────────────────────────────
@@ -707,12 +766,7 @@ class Enemy extends RectangleComponent {
     // Red tint increases as death progresses
     final redTint = (1.0 - t).clamp(0.0, 1.0);
     if (redTint > 0.15) {
-      _spritePaint.colorFilter = ColorFilter.matrix(<double>[
-        1, 0, 0, 0, redTint * 80,
-        0, 1, 0, 0, -redTint * 25,
-        0, 0, 1, 0, -redTint * 25,
-        0, 0, 0, 1, 0,
-      ]);
+      _spritePaint.colorFilter = _deathTintFilters[(redTint * 5).round().clamp(0, 5)];
     }
 
     canvas.drawImageRect(spriteSheet, src, dst, _spritePaint);
@@ -811,7 +865,10 @@ class Enemy extends RectangleComponent {
       case EliteModifier.splitting: glowColor = const Color(0xFFFF44FF); break;
       case null: glowColor = const Color(0xFFFFAA00); break;
     }
-    _fp.color = glowColor.withAlpha((glowAlpha * 255).round());
+    final gr = (glowColor.r * 255).round();
+    final gg = (glowColor.g * 255).round();
+    final gb = (glowColor.b * 255).round();
+    _fp.color = Color.fromARGB((glowAlpha * 255).round(), gr, gg, gb);
     canvas.drawCircle(center, cellSize * 0.5, _fp);
     // Crown
     final crownPath = Path()
@@ -830,7 +887,7 @@ class Enemy extends RectangleComponent {
     _sp.color = glowColor;
     _sp.strokeWidth = 1.2;
     _sp.strokeCap = StrokeCap.butt;
-    _fp.color = glowColor.withAlpha(120);
+    _fp.color = Color.fromARGB(120, gr, gg, gb);
     switch (eliteModifier) {
       case EliteModifier.fast:
         // Speed lines >>>
@@ -876,20 +933,23 @@ class Enemy extends RectangleComponent {
     final isBoss = baseStats.isBoss;
     final radius = cellSize * (isBoss ? 0.75 : 0.45);
 
-    // Simple pulsing ring for all enemies (simplified for performance)
+    // Extract RGB once to avoid repeated getter calls
+    final tr = (telegraphColor.r * 255).round();
+    final tg = (telegraphColor.g * 255).round();
+    final tb = (telegraphColor.b * 255).round();
+
     final pulse = (0.5 + 0.5 * math.sin(_animTimer * 10)).clamp(0.0, 1.0);
     final ringAlpha = (pulse * 100).round().clamp(0, 255);
-    _sp.color = telegraphColor.withAlpha(ringAlpha);
+    _sp.color = Color.fromARGB(ringAlpha, tr, tg, tb);
     _sp.strokeWidth = isBoss ? 2.5 : 1.2;
     _sp.strokeCap = StrokeCap.butt;
     canvas.drawCircle(center, radius * (0.6 + 0.4 * pulse), _sp);
 
     if (!isBoss) return;
 
-    // Boss: core glow only (simplified for performance)
     final p = telegraphProgress.clamp(0.0, 1.0);
     final coreAlpha = (pulse * 80 * (0.5 + p * 0.5)).round().clamp(0, 255);
-    _fp.color = telegraphColor.withAlpha(coreAlpha);
+    _fp.color = Color.fromARGB(coreAlpha, tr, tg, tb);
     canvas.drawCircle(center, radius * 0.3, _fp);
   }
 
@@ -992,12 +1052,9 @@ class Enemy extends RectangleComponent {
     _fp.color = const Color(0xBB000000);
     canvas.drawRRect(barBgRect, _fp);
 
-    // HP fill — solid color instead of gradient (much cheaper)
+    // HP fill — pre-computed color table (zero allocation per frame)
     if (hpRatio > 0) {
-      final barColor = hpRatio > 0.5
-          ? Color.lerp(const Color(0xFFFFDD00), const Color(0xFF00FF44), (hpRatio - 0.5) * 2)!
-          : Color.lerp(const Color(0xFFFF2200), const Color(0xFFFFDD00), hpRatio * 2)!;
-      _fp.color = barColor;
+      _fp.color = _hpBarColors[(hpRatio * 20).round().clamp(0, 20)];
       _fp.shader = null;
       canvas.drawRRect(
         RRect.fromRectAndRadius(

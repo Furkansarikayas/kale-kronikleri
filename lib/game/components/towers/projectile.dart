@@ -23,7 +23,10 @@ class Projectile extends CircleComponent {
   static const double _impactDuration = 0.15;
   final Vector2 _direction = Vector2(1, 0);
 
-  final List<Vector2> _trail = [];
+  // Pre-allocated trail circular buffer (avoids per-frame Vector2 allocation)
+  late final List<Vector2> _trail;
+  int _trailHead = 0;
+  int _trailCount = 0;
   final int _maxTrailLength;
 
   // Bounds for off-screen cleanup (200px margin)
@@ -36,6 +39,14 @@ class Projectile extends CircleComponent {
   static final Paint _sp = Paint()..style = PaintingStyle.stroke;
   static final Paint _tp = Paint()..strokeCap = StrokeCap.round;
 
+  // Pre-extracted RGB for trail rendering (avoid per-frame .withAlpha calls)
+  late final int _trailR;
+  late final int _trailG;
+  late final int _trailB;
+  late final int _baseR;
+  late final int _baseG;
+  late final int _baseB;
+
   Projectile({
     required Vector2 startPos,
     required this.target,
@@ -43,11 +54,11 @@ class Projectile extends CircleComponent {
     this.speed = 300.0,
     this.splashRadius = 0.0,
     double projectileRadius = 3.0,
-    int trailLength = 6,
+    int trailLength = 3,
     Color color = const Color(0xFFFFFFFF),
     this.shape = ProjectileShape.orb,
     this.trailStyle = TrailStyle.defaultTrail,
-  }) : trailColor = color.withAlpha(100),
+  }) : trailColor = Color.fromARGB(100, (color.r * 255).round(), (color.g * 255).round(), (color.b * 255).round()),
        _baseColor = color,
        _maxTrailLength = trailLength,
        super(
@@ -55,7 +66,15 @@ class Projectile extends CircleComponent {
     radius: projectileRadius,
     paint: Paint()..color = Colors.transparent,
     anchor: Anchor.center,
-  );
+  ) {
+    _trailR = (trailColor.r * 255).round();
+    _trailG = (trailColor.g * 255).round();
+    _trailB = (trailColor.b * 255).round();
+    _baseR = (color.r * 255).round();
+    _baseG = (color.g * 255).round();
+    _baseB = (color.b * 255).round();
+    _trail = List.generate(_maxTrailLength, (_) => Vector2.zero());
+  }
 
   bool get hasHit => _hit;
   bool get isDone => _outOfBounds || (_hit && _impactTimer >= _impactDuration);
@@ -70,8 +89,10 @@ class Projectile extends CircleComponent {
 
     _animTimer += dt;
 
-    _trail.add(position.clone());
-    if (_trail.length > _maxTrailLength) _trail.removeAt(0);
+    // Circular buffer — no allocation, no list shift
+    _trail[_trailHead].setFrom(position);
+    _trailHead = (_trailHead + 1) % _maxTrailLength;
+    if (_trailCount < _maxTrailLength) _trailCount++;
 
     final direction = target - position;
     final distance = direction.length;
@@ -117,7 +138,7 @@ class Projectile extends CircleComponent {
     switch (shape) {
       case ProjectileShape.orb:
         final r = radius * (1.5 + t * 4);
-        _fp.color = _baseColor.withAlpha(alpha);
+        _fp.color = Color.fromARGB(alpha, _baseR, _baseG, _baseB);
         canvas.drawCircle(Offset.zero, r, _fp);
 
       case ProjectileShape.bolt:
@@ -126,30 +147,22 @@ class Projectile extends CircleComponent {
         canvas.rotate(angle);
         final w = radius * (3 + t * 6);
         final h = radius * (1.5 + t * 2);
-        _fp.color = _baseColor.withAlpha(alpha);
+        _fp.color = Color.fromARGB(alpha, _baseR, _baseG, _baseB);
         canvas.drawOval(Rect.fromCenter(center: Offset.zero, width: w, height: h), _fp);
         canvas.restore();
 
       case ProjectileShape.heavy:
         final r = radius * (1 + t * 5);
-        _sp.color = _baseColor.withAlpha(alpha);
+        _sp.color = Color.fromARGB(alpha, _baseR, _baseG, _baseB);
         _sp.strokeWidth = radius * (1.0 - t * 0.7);
         canvas.drawCircle(Offset.zero, r, _sp);
     }
   }
 
   void _renderOrb(Canvas canvas) {
-    // Glow behind
-    _fp.color = _baseColor.withAlpha(25);
-    canvas.drawCircle(Offset.zero, radius * 2.0, _fp);
-
-    // Main body — solid color (no gradient)
+    // Main body — solid color
     _fp.color = _baseColor;
     canvas.drawCircle(Offset.zero, radius, _fp);
-
-    // Bright core
-    _fp.color = const Color(0x88FFFFFF);
-    canvas.drawCircle(Offset(-radius * 0.2, -radius * 0.2), radius * 0.4, _fp);
   }
 
   void _renderBolt(Canvas canvas) {
@@ -176,126 +189,73 @@ class Projectile extends CircleComponent {
   }
 
   void _renderHeavy(Canvas canvas) {
-    // Glow
-    _fp.color = _baseColor.withAlpha(35);
-    canvas.drawCircle(Offset.zero, radius * 2, _fp);
-
     // Main body — solid
     _fp.color = _baseColor;
     canvas.drawCircle(Offset.zero, radius, _fp);
 
     // Dark outer ring
-    _sp.color = _darken(_baseColor, 0.3).withAlpha(100);
+    _sp.color = Color.fromARGB(100, (_baseR * 0.7).round(), (_baseG * 0.7).round(), (_baseB * 0.7).round());
     _sp.strokeWidth = 1.0;
     canvas.drawCircle(Offset.zero, radius, _sp);
-
-    // Metallic highlight
-    _fp.color = const Color(0x66FFFFFF);
-    canvas.drawCircle(Offset(-radius * 0.25, -radius * 0.25), radius * 0.3, _fp);
   }
 
   void _renderTrail(Canvas canvas) {
-    if (_trail.length < 2) return;
+    if (_trailCount < 2) return;
+    final px = position.x;
+    final py = position.y;
+    final len = _trailCount;
 
-    for (int i = 0; i < _trail.length - 1; i++) {
-      final progress = i / _trail.length;
-      final fade = 1.0 - progress;
-      final p1 = (_trail[i] - position).toOffset();
-      final p2 = (_trail[i + 1] - position).toOffset();
+    for (int i = 0; i < len - 1; i++) {
+      final fade = 1.0 - i / len;
+      // Circular buffer index computation
+      final idx1 = (_trailHead - len + i) % _maxTrailLength;
+      final idx2 = (_trailHead - len + i + 1) % _maxTrailLength;
+      final p1 = Offset(_trail[idx1].x - px, _trail[idx1].y - py);
+      final p2 = Offset(_trail[idx2].x - px, _trail[idx2].y - py);
+      final fa = (fade * 255).round();
 
-      // All trail styles: outer glow + inner core using cached paints
-      late final Color outerColor;
-      late final Color innerColor;
-      late final double outerWidth;
-      late final double innerWidth;
+      // Single draw call per segment (inner core only — skip outer glow for performance)
+      late final Color coreColor;
+      late final double coreWidth;
 
       switch (trailStyle) {
         case TrailStyle.arrow:
-          final w = fade * radius * 0.7 + 0.3;
-          outerColor = trailColor.withAlpha((fade * 178).round().clamp(0, 255));
-          outerWidth = w * 1.2;
-          innerColor = Color.fromARGB((fade * 60).round().clamp(0, 255), 255, 255, 240);
-          innerWidth = 0.6;
-
+          coreColor = Color.fromARGB((fa * 0.7).round().clamp(0, 255), _trailR, _trailG, _trailB);
+          coreWidth = fade * radius * 0.7 + 0.3;
         case TrailStyle.fire:
-          final w = fade * radius + 0.5;
-          outerColor = Color.fromARGB((fade * 40).round().clamp(0, 255), 255, 100, 20);
-          outerWidth = w * 3;
-          innerColor = Color.fromARGB((fade * 160).round().clamp(0, 255), 255, 160, 40);
-          innerWidth = w * 0.8;
-
+          coreColor = Color.fromARGB((fa * 0.63).round().clamp(0, 255), 255, 160, 40);
+          coreWidth = (fade * radius + 0.5) * 0.8;
         case TrailStyle.ice:
-          final w = fade * radius + 0.4;
-          outerColor = Color.fromARGB((fade * 32).round().clamp(0, 255), 180, 230, 255);
-          outerWidth = w * 2.5;
-          innerColor = Color.fromARGB((fade * 140).round().clamp(0, 255), 200, 240, 255);
-          innerWidth = w * 0.7;
-
+          coreColor = Color.fromARGB((fa * 0.55).round().clamp(0, 255), 200, 240, 255);
+          coreWidth = (fade * radius + 0.4) * 0.7;
         case TrailStyle.lightning:
-          final w = fade * radius * 0.6 + 0.3;
-          outerColor = Color.fromARGB((fade * 100).round().clamp(0, 255), 255, 255, 100);
-          outerWidth = w * 2;
-          innerColor = Color.fromARGB((fade * 200).round().clamp(0, 255), 255, 255, 255);
-          innerWidth = 0.8;
-
+          coreColor = Color.fromARGB((fa * 0.78).round().clamp(0, 255), 255, 255, 255);
+          coreWidth = 0.8;
         case TrailStyle.poison:
-          final w = fade * radius + 0.6;
-          outerColor = Color.fromARGB((fade * 36).round().clamp(0, 255), 30, 200, 30);
-          outerWidth = w * 3;
-          innerColor = Color.fromARGB((fade * 130).round().clamp(0, 255), 80, 255, 80);
-          innerWidth = w * 0.9;
-
+          coreColor = Color.fromARGB((fa * 0.51).round().clamp(0, 255), 80, 255, 80);
+          coreWidth = (fade * radius + 0.6) * 0.9;
         case TrailStyle.water:
-          final w = fade * radius + 0.4;
-          outerColor = Color.fromARGB((fade * 32).round().clamp(0, 255), 80, 140, 255);
-          outerWidth = w * 2.5;
-          innerColor = Color.fromARGB((fade * 120).round().clamp(0, 255), 120, 180, 255);
-          innerWidth = w * 0.7;
-
+          coreColor = Color.fromARGB((fa * 0.47).round().clamp(0, 255), 120, 180, 255);
+          coreWidth = (fade * radius + 0.4) * 0.7;
         case TrailStyle.dark:
-          final w = fade * radius + 0.5;
-          outerColor = Color.fromARGB((fade * 48).round().clamp(0, 255), 50, 10, 80);
-          outerWidth = w * 3.5;
-          innerColor = Color.fromARGB((fade * 120).round().clamp(0, 255), 140, 50, 220);
-          innerWidth = w;
-
+          coreColor = Color.fromARGB((fa * 0.47).round().clamp(0, 255), 140, 50, 220);
+          coreWidth = fade * radius + 0.5;
         case TrailStyle.wizard:
-          final w = fade * radius + 0.5;
-          outerColor = Color.fromARGB((fade * 32).round().clamp(0, 255), 170, 50, 220);
-          outerWidth = w * 2.8;
-          innerColor = Color.fromARGB((fade * 140).round().clamp(0, 255), 200, 130, 255);
-          innerWidth = w * 0.8;
-
+          coreColor = Color.fromARGB((fa * 0.55).round().clamp(0, 255), 200, 130, 255);
+          coreWidth = (fade * radius + 0.5) * 0.8;
         case TrailStyle.holy:
-          final w = fade * radius + 0.4;
-          outerColor = Color.fromARGB((fade * 40).round().clamp(0, 255), 255, 240, 180);
-          outerWidth = w * 2.5;
-          innerColor = Color.fromARGB((fade * 160).round().clamp(0, 255), 255, 250, 220);
-          innerWidth = w * 0.8;
-
+          coreColor = Color.fromARGB((fa * 0.63).round().clamp(0, 255), 255, 250, 220);
+          coreWidth = (fade * radius + 0.4) * 0.8;
         case TrailStyle.cannon:
-          final w = fade * radius * 1.2 + 0.8;
-          outerColor = Color.fromARGB((fade * 44).round().clamp(0, 255), 80, 60, 40);
-          outerWidth = w * 3.5;
-          innerColor = trailColor.withAlpha((fade * 127).round().clamp(0, 255));
-          innerWidth = w * 0.8;
-
+          coreColor = Color.fromARGB((fa * 0.5).round().clamp(0, 255), _trailR, _trailG, _trailB);
+          coreWidth = (fade * radius * 1.2 + 0.8) * 0.8;
         case TrailStyle.defaultTrail:
-          final w = fade * radius + 0.5;
-          outerColor = trailColor.withAlpha((fade * 61).round().clamp(0, 255));
-          outerWidth = w * 3;
-          innerColor = trailColor.withAlpha((fade * 153).round().clamp(0, 255));
-          innerWidth = w;
+          coreColor = Color.fromARGB((fa * 0.6).round().clamp(0, 255), _trailR, _trailG, _trailB);
+          coreWidth = fade * radius + 0.5;
       }
 
-      // Draw outer glow
-      _tp.color = outerColor;
-      _tp.strokeWidth = outerWidth;
-      canvas.drawLine(p1, p2, _tp);
-
-      // Draw inner core
-      _tp.color = innerColor;
-      _tp.strokeWidth = innerWidth;
+      _tp.color = coreColor;
+      _tp.strokeWidth = coreWidth;
       canvas.drawLine(p1, p2, _tp);
     }
   }

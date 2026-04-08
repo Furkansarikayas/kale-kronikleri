@@ -5,6 +5,10 @@ class FloatingText extends TextComponent {
   double _life = 0.8;
   final double _speed;
 
+  // Pool tracking
+  static int totalCreated = 0;
+  static int totalActive = 0;
+
   FloatingText({
     required String text,
     required Vector2 pos,
@@ -21,12 +25,26 @@ class FloatingText extends TextComponent {
         color: isCritical ? const Color(0xFFFFD700) : color,
         fontSize: isCritical ? fontSize * 1.5 : fontSize,
         fontWeight: FontWeight.bold,
-        shadows: [
-          Shadow(color: const Color(0xCC000000), blurRadius: 3, offset: const Offset(1, 1)),
+        shadows: const [
+          Shadow(color: Color(0xCC000000), offset: Offset(1, 1)),
         ],
       ),
     ),
-  );
+  ) {
+    totalCreated++;
+  }
+
+  @override
+  void onMount() {
+    super.onMount();
+    totalActive++;
+  }
+
+  @override
+  void onRemove() {
+    totalActive--;
+    super.onRemove();
+  }
 
   @override
   void update(double dt) {

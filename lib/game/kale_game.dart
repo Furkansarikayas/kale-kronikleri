@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flame/components.dart';
 import 'package:flame/events.dart';
 import 'package:flame/game.dart';
@@ -38,12 +39,15 @@ import 'systems/event_system.dart';
 import 'systems/audio_system.dart';
 import 'systems/tutorial_system.dart';
 import 'systems/wave_buff_system.dart';
+import 'systems/wave_modifier_system.dart';
+import 'systems/spatial_grid.dart';
 import 'data/t4_branch_data.dart';
 import '../meta/artifact_system.dart';
 import 'rendering/sprite_cache.dart';
 import 'components/rendering/castle_sprites.dart';
 import 'components/rendering/tower_sprites.dart';
 import 'components/rendering/enemy_sprites.dart';
+import 'components/debug_overlay.dart';
 
 enum GamePhase { prep, waveActive, waveBreak, paused, gameOver }
 
@@ -87,11 +91,21 @@ class KaleGame extends FlameGame {
   int get towersPlaced => _towers.length;
   List<Tower> get towers => List.unmodifiable(_towers);
 
+  // Tracked projectile list (avoids O(n) whereType scans)
+  final List<Projectile> _projectiles = [];
+
+  // Spatial grid for O(1) range queries instead of O(N) enemy scans
+  final SpatialGrid _spatialGrid = SpatialGrid();
+
+  // Debug overlay (toggle with debugOverlayEnabled)
+  late final DebugOverlay _debugOverlay;
+
   // Enemy management
   final List<Enemy> _enemies = [];
   int _enemiesKilled = 0;
   int get enemiesKilled => _enemiesKilled;
-  int get enemiesAlive => _enemies.where((e) => !e.isDead && !e.reachedCastle).length;
+  int _cachedEnemiesAlive = 0;
+  int get enemiesAlive => _cachedEnemiesAlive;
 
   // Achievement tracking
   int _bossesKilled = 0;
@@ -181,6 +195,10 @@ class KaleGame extends FlameGame {
   int _killStreak = 0;
   double _killStreakTimer = 0;
   static const double _killStreakWindow = 1.5; // seconds to chain kills
+  int _bestKillStreak = 0;
+  int get bestKillStreak => _bestKillStreak;
+  int _totalPerfectWaves = 0;
+  int get totalPerfectWaves => _totalPerfectWaves;
 
   // Tower ambient presence
   double _towerAmbientTimer = 0;
@@ -201,12 +219,50 @@ class KaleGame extends FlameGame {
   late SpellSystem spellSystem;
   late final TutorialSystem tutorialSystem;
 
+  // ═══ Wave Modifier System ═══
+  WaveModifier _activeWaveModifier = WaveModifier.none;
+  WaveModifier get activeWaveModifier => _activeWaveModifier;
+
+  // ═══ Enemy Adaptation: dominant tower type tracking ═══
+  TowerType? _dominantTowerType;
+  static const int _adaptationThreshold = 3; // need 3+ of same type
+
+  // ═══ Build Identity Tracking ═══
+  String _currentBuildLabel = '';
+  String get currentBuildLabel => _currentBuildLabel;
+  bool _buildLabelAnnounced = false;
+  // Track most-used tower type for death screen summary
+  TowerType? _mostUsedTowerType;
+  TowerType? get mostUsedTowerType => _mostUsedTowerType;
+  // Track previously active synergy IDs for per-synergy discovery
+  final Set<int> _previousSynergyIds = {};
+  String _topSynergyName = '';
+  String get topSynergyName => _topSynergyName;
+
+  // ═══ Castle Attrition: escalating pressure after wave 15 ═══
+  static const int _attritionStartWave = 15;
+
   // Elite enemy RNG
   late math.Random _eliteRng;
 
   // Boss ability tracking
   final Map<Enemy, double> _bossAbilityTimers = {};
   bool _hasBossAlive = false;
+  final List<Enemy> _activeBosses = [];
+
+  // Staged boss spawn: spread boss intro across multiple frames
+  Enemy? _pendingBossSpawn;
+  int _bossSpawnStage = 0; // 0=idle, 1=entity created, 2=effects, 3=audio+abilities
+
+  // === BOSS DEBUG FLAGS — toggle to isolate freeze culprit ===
+  // Set any to true to DISABLE that subsystem during boss combat.
+  // Test on device: enable one at a time to find which removes the freeze.
+  bool debugDisableBossAura = false;       // boss aura + ground shadow rendering
+  bool debugDisableBossAbilities = false;  // boss special attacks (teleport/breath)
+  bool debugDisableBossAudio = false;      // boss-specific audio (bossRoar)
+  bool debugDisableBossEffects = false;    // hit effects during boss combat
+  bool debugDisableBossTexts = false;      // floating texts during boss combat
+  bool debugDisableTowerFire = false;      // all tower firing (nuclear option)
 
   // T4 branch selection
   Tower? _pendingT4Tower;
@@ -227,14 +283,9 @@ class KaleGame extends FlameGame {
   // Tower curse tracking (event)
   final Map<Tower, int> _cursedTowerWaves = {};
 
-  // Endless mode
-  bool _endlessMode = false;
-  bool get endlessMode => _endlessMode;
+  // Infinite wave tracking
   double _endlessScaling = 1.0;
-  int _endlessHighWave = 0;
-  int get endlessHighWave => _endlessHighWave;
-  bool _showEndlessPrompt = false;
-  bool get showEndlessPrompt => _showEndlessPrompt;
+  bool get showEndlessPrompt => false; // No prompt — waves are always infinite
 
   // Roguelike buff system (per-run)
   final RunBuffState runBuffs = RunBuffState();
@@ -249,6 +300,20 @@ class KaleGame extends FlameGame {
       castle.heal(runBuffs.castleHealPending);
       runBuffs.castleHealPending = 0;
     }
+    onStateChanged?.call();
+  }
+
+  // ═══ Wave 2 Tower Choice System ═══
+  // Player picks Fire OR SpikeWall at wave 2; unchosen unlocks at wave 4
+  TowerType? _wave2Choice;
+  TowerType? get wave2Choice => _wave2Choice;
+  bool _pendingTowerChoice = false;
+  bool get pendingTowerChoice => _pendingTowerChoice;
+  static const _wave2Options = [TowerType.fire, TowerType.spikeWall];
+
+  void selectWave2Tower(TowerType chosen) {
+    _wave2Choice = chosen;
+    _pendingTowerChoice = false;
     onStateChanged?.call();
   }
 
@@ -305,79 +370,167 @@ class KaleGame extends FlameGame {
   @override
   Color backgroundColor() => const Color(0xFF080C14);
 
+  /// Set when onLoad fails — read by AppShell to show error UI.
+  String? loadError;
+
   @override
   Future<void> onLoad() async {
-    await super.onLoad();
+    int lastStep = 0;
+    final sw = Stopwatch()..start();
+    try {
+      debugPrint('[KaleGame] [1] onLoad START (difficulty: ${difficulty.name}, biome: ${difficulty.biome.type.name})');
+      lastStep = 1;
+      await super.onLoad();
 
-    // Initialize sprite caches and audio in parallel for faster startup
-    await Future.wait([
-      SpriteCache.instance.initialize(biome: difficulty.biome),
-      CastleSpriteGenerator.instance.initialize(),
-      TowerSpriteGenerator.instance.initialize(),
-      EnemySpriteGenerator.instance.initialize(),
-      AudioSystem.instance.initialize(),
-    ]);
-    AudioSystem.instance.startMusic();
+      // [2] Initialize sprites — each with individual timeout detection
+      debugPrint('[KaleGame] [2] Starting sprite/audio initialization...');
+      lastStep = 2;
 
-    // Fill screen: zoom so _viewportHeight game units = screen height
-    // MaxViewport fills the entire widget, zoom controls world-to-screen scale
-    final zoom = size.y / _viewportHeight;
-    camera.viewfinder.zoom = zoom;
-    camera.viewfinder.anchor = Anchor.topLeft;
-    // Center grid horizontally for widescreen displays
-    final visibleWidth = size.x / zoom;
-    _cameraBaseX = (_gameWidth - visibleWidth) / 2;
-    camera.viewfinder.position = Vector2(_cameraBaseX, 0);
-    cellSize = fixedCellSize;
+      // Run each initializer individually so we can pinpoint which one hangs
+      final spriteSw = Stopwatch()..start();
 
-    // Screen shake effect
-    screenShake = ScreenShake()..enabled = initialScreenShakeEnabled;
-    add(screenShake);
+      debugPrint('[KaleGame] [2a] SpriteCache.initialize...');
+      await SpriteCache.instance.initialize(biome: difficulty.biome)
+          .timeout(const Duration(seconds: 15), onTimeout: () {
+        throw TimeoutException('[2a] SpriteCache.initialize hung after 15s');
+      });
+      debugPrint('[KaleGame] [2a] SpriteCache done (${spriteSw.elapsedMilliseconds}ms)');
 
-    // Multiple spawn paths based on difficulty
-    final spawnCount = difficulty == DifficultyTier.apprentice ? 2
-        : difficulty == DifficultyTier.knight ? 2
-        : difficulty == DifficultyTier.lord ? 3
-        : 3; // king/legend get 3 spawn points
-    gameMap = GameMap(cellSize: cellSize);
-    gameMap.generate(seed: mapSeed, spawnCount: spawnCount);
-    world.add(ParallaxBackground(biome: difficulty.biome));
-    world.add(gameMap);
-    _atmosphere = AtmosphereOverlay(
-      biomeType: difficulty.biome.type,
-    );
-    world.add(_atmosphere);
+      debugPrint('[KaleGame] [2b] CastleSpriteGenerator.initialize...');
+      await CastleSpriteGenerator.instance.initialize()
+          .timeout(const Duration(seconds: 15), onTimeout: () {
+        throw TimeoutException('[2b] CastleSpriteGenerator hung after 15s');
+      });
+      debugPrint('[KaleGame] [2b] CastleSprites done (${spriteSw.elapsedMilliseconds}ms)');
 
-    _dangerVignette = DangerVignette();
-    world.add(_dangerVignette);
+      debugPrint('[KaleGame] [2c] TowerSpriteGenerator.initialize...');
+      await TowerSpriteGenerator.instance.initialize()
+          .timeout(const Duration(seconds: 15), onTimeout: () {
+        throw TimeoutException('[2c] TowerSpriteGenerator hung after 15s');
+      });
+      debugPrint('[KaleGame] [2c] TowerSprites done (${spriteSw.elapsedMilliseconds}ms)');
 
-    castle = Castle(cellSize: cellSize);
-    world.add(castle);
+      debugPrint('[KaleGame] [2d] EnemySpriteGenerator.initialize...');
+      await EnemySpriteGenerator.instance.initialize()
+          .timeout(const Duration(seconds: 15), onTimeout: () {
+        throw TimeoutException('[2d] EnemySpriteGenerator hung after 15s');
+      });
+      debugPrint('[KaleGame] [2d] EnemySprites done (${spriteSw.elapsedMilliseconds}ms)');
 
-    // Tap handler in the world (receives world coordinates automatically)
-    world.add(_GridTapHandler(this));
+      debugPrint('[KaleGame] [2e] AudioSystem.initialize...');
+      await AudioSystem.instance.initialize()
+          .timeout(const Duration(seconds: 15), onTimeout: () {
+        throw TimeoutException('[2e] AudioSystem.initialize hung after 15s');
+      });
+      debugPrint('[KaleGame] [2e] Audio done (${spriteSw.elapsedMilliseconds}ms)');
 
-    economy = EconomySystem();
-    economy.difficultyMultiplier = difficulty.spiritMultiplier;
-    waveSystem = WaveSystem(difficulty: difficulty, mapSeed: mapSeed);
-    synergySystem = SynergySystem();
-    comboSystem = ComboSystem();
-    spellSystem = SpellSystem();
-    _eliteRng = math.Random(mapSeed);
+      debugPrint('[KaleGame] [2] ALL sprites loaded in ${spriteSw.elapsedMilliseconds}ms');
 
-    // Apply mutation effects to wave prep time
-    _mutationWavePrepMult = MutationSystem.wavePrepMultiplier(mutations);
-    _mutationGoldMult = MutationSystem.goldRewardMultiplier(mutations);
-    _mutationTowerCostMult = MutationSystem.towerCostMultiplier(mutations);
+      // [3] Verify sprite state
+      debugPrint('[KaleGame] [3] Verifying sprite cache state...');
+      lastStep = 3;
+      final shadowLordCached = EnemySpriteGenerator.instance.getWalkSheet(EnemyType.shadowLord) != null;
+      final dragonCached = EnemySpriteGenerator.instance.getWalkSheet(EnemyType.dragonEmperor) != null;
+      debugPrint('[KaleGame] [3] SpriteCache.initialized=${SpriteCache.instance.isInitialized}, '
+          'Castle=${CastleSpriteGenerator.instance.isInitialized}, '
+          'Tower=${TowerSpriteGenerator.instance.isInitialized}, '
+          'Enemy=${EnemySpriteGenerator.instance.isInitialized}, '
+          'bosses: shadowLord=$shadowLordCached dragon=$dragonCached');
+      AudioSystem.instance.startMusic();
 
-    // Apply meta tree bonuses
-    _applyMetaBonuses();
+      // [4] Camera setup
+      debugPrint('[KaleGame] [4] Camera setup (size: $size)');
+      lastStep = 4;
+      final zoom = size.y / _viewportHeight;
+      if (zoom <= 0 || !zoom.isFinite) {
+        throw StateError('[4] Invalid zoom: $zoom (size.y=${size.y}, viewportH=$_viewportHeight)');
+      }
+      camera.viewfinder.zoom = zoom;
+      camera.viewfinder.anchor = Anchor.topLeft;
+      final visibleWidth = size.x / zoom;
+      _cameraBaseX = (_gameWidth - visibleWidth) / 2;
+      camera.viewfinder.position = Vector2(_cameraBaseX, 0);
+      cellSize = fixedCellSize;
+      debugPrint('[KaleGame] [4] Camera done (zoom: ${zoom.toStringAsFixed(3)})');
 
-    _phase = GamePhase.prep;
-    _isReady = true;
-    tutorialSystem.tryShow(TutorialTrigger.gameStart);
-    onStateChanged?.call(); // notify Flutter to show HUD
+      // [5] World components
+      debugPrint('[KaleGame] [5] Creating world components...');
+      lastStep = 5;
+      screenShake = ScreenShake()..enabled = initialScreenShakeEnabled;
+      add(screenShake);
+
+      final spawnCount = difficulty == DifficultyTier.apprentice ? 2
+          : difficulty == DifficultyTier.knight ? 2
+          : difficulty == DifficultyTier.lord ? 3
+          : 3;
+      gameMap = GameMap(cellSize: cellSize);
+      gameMap.generate(seed: mapSeed, spawnCount: spawnCount);
+      world.add(ParallaxBackground(biome: difficulty.biome));
+      world.add(gameMap);
+      _atmosphere = AtmosphereOverlay(
+        biomeType: difficulty.biome.type,
+      );
+      world.add(_atmosphere);
+
+      _dangerVignette = DangerVignette();
+      world.add(_dangerVignette);
+
+      castle = Castle(cellSize: cellSize);
+      world.add(castle);
+      world.add(_GridTapHandler(this));
+      debugPrint('[KaleGame] [5] World components added');
+
+      // [6] Game systems
+      debugPrint('[KaleGame] [6] Initializing game systems...');
+      lastStep = 6;
+      economy = EconomySystem();
+      economy.difficultyMultiplier = difficulty.spiritMultiplier;
+      waveSystem = WaveSystem(difficulty: difficulty, mapSeed: mapSeed);
+      synergySystem = SynergySystem();
+      comboSystem = ComboSystem();
+      spellSystem = SpellSystem();
+      _eliteRng = math.Random(mapSeed);
+      _mutationWavePrepMult = MutationSystem.wavePrepMultiplier(mutations);
+      _mutationGoldMult = MutationSystem.goldRewardMultiplier(mutations);
+      _mutationTowerCostMult = MutationSystem.towerCostMultiplier(mutations);
+      debugPrint('[KaleGame] [6] Systems ready');
+
+      // [7] Meta bonuses
+      debugPrint('[KaleGame] [7] Applying meta bonuses: $metaLevels');
+      lastStep = 7;
+      _applyMetaBonuses();
+      debugPrint('[KaleGame] [7] Meta bonuses applied');
+
+      // [8] Final setup
+      debugPrint('[KaleGame] [8] Final setup...');
+      lastStep = 8;
+      _debugOverlay = DebugOverlay();
+      camera.viewport.add(_debugOverlay);
+
+      _phase = GamePhase.prep;
+      _isReady = true;
+      debugPrint('[KaleGame] [8] onLoad COMPLETE in ${sw.elapsedMilliseconds}ms — game is ready');
+      tutorialSystem.tryShow(TutorialTrigger.gameStart);
+      onStateChanged?.call();
+    } on TimeoutException catch (e) {
+      debugPrint('[KaleGame] TIMEOUT at step [$lastStep]: $e');
+      debugPrint('[KaleGame] Total elapsed: ${sw.elapsedMilliseconds}ms');
+      loadError = 'Yükleme zaman aşımı (adım $lastStep): $e';
+      _isReady = false;
+      onStateChanged?.call();
+    } catch (e, stack) {
+      debugPrint('[KaleGame] FAILED at step [$lastStep]: $e');
+      debugPrint('[KaleGame] Stack trace: $stack');
+      debugPrint('[KaleGame] Total elapsed: ${sw.elapsedMilliseconds}ms');
+      loadError = 'Adım $lastStep hatası: $e';
+      _isReady = false;
+      onStateChanged?.call();
+    }
   }
+
+  /// Toggle the debug FPS/entity overlay
+  bool get debugOverlayEnabled => _debugOverlay.enabled;
+  set debugOverlayEnabled(bool v) => _debugOverlay.enabled = v;
 
   void _applyMetaBonuses() {
     final savas = metaLevels['savas'] ?? 0;
@@ -420,7 +573,8 @@ class KaleGame extends FlameGame {
     if (efsane >= 4) _metaHolySynergyBonus = 0.25; // Işık Şampiyonu: +25% holy synergy
     if (efsane >= 5) _metaExtraArtifactChoice = true; // Kader Yazıcı: +1 artifact choice
     if (efsane >= 6) _metaUltimateSynergy = true; // Tanrıların Gazabı: ultimate synergy
-    if (efsane >= 7) _metaInfiniteMode = true; // Ebedi Kale: infinite mode
+    // Efsane 7 (Ebedi Kale) — infinite mode is now always on; bonus: +5% starting HP
+    if (efsane >= 7) _metaInfiniteHpBonus = 0.05;
   }
 
   bool get _metaSonNefes => (metaLevels['savas'] ?? 0) >= 6;
@@ -446,7 +600,7 @@ class KaleGame extends FlameGame {
   double _metaHolySynergyBonus = 0;
   bool _metaExtraArtifactChoice = false;
   bool _metaUltimateSynergy = false;
-  bool _metaInfiniteMode = false;
+  double _metaInfiniteHpBonus = 0;
   double _dragonSpiritTimer = 0;
   double _mutationWavePrepMult = 1.0;
   double _mutationGoldMult = 1.0;
@@ -563,6 +717,7 @@ class KaleGame extends FlameGame {
     // Remove source tower
     _towers.remove(source);
     _towerPositions.remove((col: source.col, row: source.row));
+    _spikeWallTimers.remove(source); // prevent dead tower reference leak
     source.removeFromParent();
 
     // Visual feedback: merge text + enhanced merge effect
@@ -605,6 +760,7 @@ class KaleGame extends FlameGame {
 
     _towers.remove(tower);
     _towerPositions.remove((col: tower.col, row: tower.row));
+    _spikeWallTimers.remove(tower); // prevent dead tower reference leak
     tower.removeFromParent();
 
     _recalculateSynergies();
@@ -692,42 +848,42 @@ class KaleGame extends FlameGame {
         // Check if this tower type is part of the synergy
         if (!synergy.definition.requiredTowers.contains(tower.type)) continue;
 
-        // Apply bonuses based on synergy type
+        // Apply bonuses based on synergy type (nerfed multipliers)
         switch (synergy.id) {
-          case 1: // Dondur-Patlat: 2x damage
-            tower.applySynergyBonus(damageMultiplier: 1.0 + 1.0 * synergyMult);
+          case 1: // Dondur-Patlat: 1.3x damage (was 2x)
+            tower.applySynergyBonus(damageMultiplier: 1.0 + 0.3 * synergyMult);
             break;
-          case 2: // Buhar Hasarı: +1 range, faster fire
-            tower.applySynergyBonus(rangeBonus: 1.0 * synergyMult, fireRateMultiplier: 0.8);
+          case 2: // Buhar Hasarı: +0.5 range, faster fire
+            tower.applySynergyBonus(rangeBonus: 0.5 * synergyMult, fireRateMultiplier: 0.85);
             break;
-          case 3: // Şok Dalgası: 2x damage
-            tower.applySynergyBonus(damageMultiplier: 1.0 + 1.0 * synergyMult);
+          case 3: // Şok Dalgası: 1.3x damage (was 2x)
+            tower.applySynergyBonus(damageMultiplier: 1.0 + 0.3 * synergyMult);
             break;
-          case 4: // Asit Tuzağı: +1.5 range
-            tower.applySynergyBonus(rangeBonus: 1.5 * synergyMult);
+          case 4: // Asit Tuzağı: +1.0 range (was +1.5)
+            tower.applySynergyBonus(rangeBonus: 1.0 * synergyMult);
             break;
-          case 5: // Yanık Asit: 1.5x damage
-            tower.applySynergyBonus(damageMultiplier: 1.0 + 0.5 * synergyMult);
+          case 5: // Yanık Asit: 1.25x damage (was 1.5x)
+            tower.applySynergyBonus(damageMultiplier: 1.0 + 0.25 * synergyMult);
             break;
-          case 6: // Denge Patlaması: AoE burst every 5s + 1.5x damage
-            tower.applySynergyBonus(damageMultiplier: 1.0 + 0.5 * synergyMult);
+          case 6: // Denge Patlaması: 1.25x damage (was 1.5x)
+            tower.applySynergyBonus(damageMultiplier: 1.0 + 0.25 * synergyMult);
             break;
           case 7: // Buz Hapsi: 3s full freeze on hit
-            tower.applySynergyBonus(rangeBonus: 0.5 * synergyMult);
+            tower.applySynergyBonus(rangeBonus: 0.3 * synergyMult);
             tower.synergyFreezeOnHit = true;
             break;
-          case 8: // Cehennem Hattı: 1.8x damage
-            tower.applySynergyBonus(damageMultiplier: 1.0 + 0.8 * synergyMult);
+          case 8: // Cehennem Hattı: 1.4x damage (was 1.8x)
+            tower.applySynergyBonus(damageMultiplier: 1.0 + 0.4 * synergyMult);
             break;
-          case 9: // Buzul Çağı: +2 range
-            tower.applySynergyBonus(rangeBonus: 2.0 * synergyMult);
+          case 9: // Buzul Çağı: +1.0 range (was +2)
+            tower.applySynergyBonus(rangeBonus: 1.0 * synergyMult);
             break;
-          case 10: // Kıyamet: 2.5x damage
-            tower.applySynergyBonus(damageMultiplier: 1.0 + 1.5 * synergyMult);
+          case 10: // Kıyamet: 1.5x damage (was 2.5x)
+            tower.applySynergyBonus(damageMultiplier: 1.0 + 0.5 * synergyMult);
             break;
-          case 11: // Tanrıların Gazabı: 3x damage (ultimate, requires meta unlock)
+          case 11: // Tanrıların Gazabı: 1.8x damage (was 3x, requires meta)
             if (_metaUltimateSynergy) {
-              tower.applySynergyBonus(damageMultiplier: 1.0 + 2.0 * synergyMult, rangeBonus: 1.5);
+              tower.applySynergyBonus(damageMultiplier: 1.0 + 0.8 * synergyMult, rangeBonus: 1.0);
             }
             break;
         }
@@ -739,6 +895,39 @@ class KaleGame extends FlameGame {
     _ultimateSynergyActive = _metaUltimateSynergy && active.any((s) => s.id == 11);
     _buzHapsiActive = active.any((s) => s.id == 7);
 
+    // ═══ Synergy Recognition: per-synergy discovery labels ═══
+    final currentIds = active.map((s) => s.id).toSet();
+    for (final synergy in active) {
+      if (!_previousSynergyIds.contains(synergy.id)) {
+        // New synergy discovered — show unique label + visual burst
+        final anchor = synergy.anchorPosition;
+        final pos = Vector2(
+          (anchor.col + 0.5) * cellSize,
+          (anchor.row + 0.5) * cellSize,
+        );
+        world.add(FloatingText(
+          text: synergy.name,
+          pos: pos + Vector2(0, -20),
+          color: const Color(0xFFFFD700),
+          fontSize: 12,
+          isCritical: true,
+        ));
+        _addEffect(HitEffect(
+          pos: pos,
+          color: const Color(0xFFFFD700),
+          count: 10,
+          speed: 70,
+          size: 2.5,
+          maxLife: 0.5,
+        ));
+        // Track top synergy for death screen
+        _topSynergyName = synergy.name;
+      }
+    }
+    _previousSynergyIds
+      ..clear()
+      ..addAll(currentIds);
+
     // Track synergy discovery
     if (active.isNotEmpty) {
       onSynergyDiscovered?.call();
@@ -749,9 +938,9 @@ class KaleGame extends FlameGame {
     for (final support in _towers) {
       if (support.type != TowerType.support) continue;
       // Support tower buffs adjacent (8-directional) towers
-      // +15% damage per support tier, +5% range per tier
-      final dmgBonus = 1.0 + 0.15 * support.tier;
-      final rangeBonus = 1.0 + 0.05 * support.tier;
+      // +8% damage per support tier, +3% range per tier (nerfed)
+      final dmgBonus = 1.0 + 0.08 * support.tier;
+      final rangeBonus = 1.0 + 0.03 * support.tier;
 
       for (final other in _towers) {
         if (other == support) continue;
@@ -775,7 +964,6 @@ class KaleGame extends FlameGame {
 
   void startNextWave() {
     if (_phase != GamePhase.prep && _phase != GamePhase.waveBreak) return;
-    if (waveSystem.isComplete) return;
 
     // Remove incoming warning if active
     _waveWarning?.removeFromParent();
@@ -799,9 +987,31 @@ class KaleGame extends FlameGame {
     _phase = GamePhase.waveActive;
     AudioSystem.instance.play(GameSound.waveStart);
 
+    // ═══ Wave Modifier: roll challenge for this wave ═══
+    _activeWaveModifier = WaveModifierSystem.roll(waveSystem.currentWave, mapSeed);
+    if (_activeWaveModifier != WaveModifier.none) {
+      world.add(FloatingText(
+        text: _activeWaveModifier.description,
+        pos: Vector2(_gameWidth / 2, _gameHeight * 0.3),
+        color: const Color(0xFFFF6600),
+        fontSize: 12,
+      ));
+    }
+
+    // ═══ Enemy Adaptation: compute dominant tower type ═══
+    _updateDominantTowerType();
+    _classifyBuild();
+
     // Wave start banner
     final hasBoss = _pendingSpawns.any((e) =>
         e.type == EnemyType.shadowLord || e.type == EnemyType.dragonEmperor);
+    if (hasBoss) {
+      debugPrint('WAVE_START boss wave ${waveSystem.currentWave}: '
+          'enemies=${_enemies.length} towers=${_towers.length} '
+          'texts=${FloatingText.totalActive} effects=${HitEffect.totalActive} '
+          'audio=${AudioSystem.instance.activePlayerCount}/${AudioSystem.instance.poolSize} '
+          'firstSpawnDelay=${_currentSpawnDelay}');
+    }
     world.add(WaveBanner(
       waveNumber: waveSystem.currentWave,
       worldSize: Vector2(_gameWidth, _gameHeight),
@@ -809,19 +1019,135 @@ class KaleGame extends FlameGame {
     ));
     _atmosphere.triggerEventPulse(0.8);
 
+    // ═══ Boss Info Card: show boss abilities before fight ═══
+    if (hasBoss) {
+      final hasShadow = _pendingSpawns.any((e) => e.type == EnemyType.shadowLord);
+      final hasDragon = _pendingSpawns.any((e) => e.type == EnemyType.dragonEmperor);
+      if (hasShadow) {
+        world.add(FloatingText(
+          text: 'SHADOW LORD',
+          pos: Vector2(_gameWidth / 2, _gameHeight * 0.25),
+          color: const Color(0xFFAA00FF),
+          fontSize: 13,
+        ));
+        world.add(FloatingText(
+          text: 'Yakındaki kuleleri zayıflatır | Işınlanır ve iyileşir',
+          pos: Vector2(_gameWidth / 2, _gameHeight * 0.25 + 18),
+          color: const Color(0xAACC88FF),
+          fontSize: 9,
+        ));
+      }
+      if (hasDragon) {
+        world.add(FloatingText(
+          text: 'DRAGON EMPEROR',
+          pos: Vector2(_gameWidth / 2, _gameHeight * 0.25 + (hasShadow ? 40 : 0)),
+          color: const Color(0xFFFF4400),
+          fontSize: 13,
+        ));
+        world.add(FloatingText(
+          text: 'Nefes saldırısı kaleye vurur | %50 HP altında öfkelenir',
+          pos: Vector2(_gameWidth / 2, _gameHeight * 0.25 + (hasShadow ? 58 : 18)),
+          color: const Color(0xAAFFAA88),
+          fontSize: 9,
+        ));
+      }
+    }
+
     if (waveSystem.currentWave == 1) tutorialSystem.tryShow(TutorialTrigger.firstWaveStart);
+
+    // ═══ Wave 2 Choice Impact Reinforcement (System 3) ═══
+    if (_wave2Choice != null && !hasBoss) {
+      final w = waveSystem.currentWave;
+      if (w == 3 && _wave2Choice == TowerType.fire) {
+        _showContextHint('Ateş kulesi zamanla yakar — gruplar için ideal!');
+      } else if (w == 3 && _wave2Choice == TowerType.spikeWall) {
+        _showContextHint('Diken Duvarı geçen düşmana hasar verir — dar geçitlerde güçlü!');
+      } else if (w == 4) {
+        final unchosen = _wave2Options.firstWhere((t) => t != _wave2Choice);
+        final name = TowerData.getStats(unchosen).name;
+        _showContextHint('$name artık kullanılabilir!');
+      }
+    }
+
+    // ═══ Choice Consequence Hints (System 4) ═══
+    if (!hasBoss && waveSystem.currentWave >= 3) {
+      final hasSwarm = _pendingSpawns.any((e) => e.count >= 8);
+      final hasArmored = _pendingSpawns.any((e) =>
+          e.type == EnemyType.troll || e.type == EnemyType.darkKnight);
+      final hasFast = _pendingSpawns.any((e) => e.type == EnemyType.cavalry);
+      if (hasSwarm && _currentBuildLabel == 'Yıkım Yapısı') {
+        _showContextHint('Kalabalık dalga! Yıkım yapısı tek hedefe odaklı — AoE düşün.');
+      } else if (hasArmored && _currentBuildLabel == 'Kontrol Yapısı') {
+        _showContextHint('Zırhlı düşmanlar! Kontrol yavaşlatır ama hasar kuleleri lazım.');
+      } else if (hasFast && _towers.every((t) => t.type != TowerType.ice && t.type != TowerType.spikeWall)) {
+        _showContextHint('Süvari dalgası! Buz veya Diken yavaşlatmada etkili.');
+      }
+    }
+
     onStateChanged?.call();
   }
 
-  static const int _maxActiveEnemies = 60;
-  static const int _maxActiveEffects = 20;
-  static const int _maxActiveTexts = 12;
-  static const int _maxActiveProjectiles = 80;
+  /// Show a brief contextual hint as floating text (non-intrusive).
+  void _showContextHint(String text) {
+    world.add(FloatingText(
+      text: text,
+      pos: Vector2(_gameWidth / 2, _gameHeight * 0.15),
+      color: const Color(0xAADDCCAA),
+      fontSize: 9,
+    ));
+  }
+
+  static const int _baseMaxEnemies = 60;
+  static const int _baseMaxProjectiles = 80;
+  // Dynamic caps that reduce in late waves for performance
+  int get _maxActiveEnemies {
+    final wave = waveSystem.currentWave;
+    if (wave >= 60) return 35;
+    if (wave >= 40) return 45;
+    return _baseMaxEnemies;
+  }
+  int get _maxActiveProjectiles {
+    final wave = waveSystem.currentWave;
+    if (wave >= 60) return 50;
+    if (wave >= 40) return 65;
+    return _baseMaxProjectiles;
+  }
+
+  // Per-frame creation caps (avoid O(n) whereType scans)
+  int _effectsThisFrame = 0;
+  int _textsThisFrame = 0;
+  int get _maxEffectsPerFrame => waveSystem.currentWave >= 40 ? 2 : 4;
+  int get _maxTextsPerFrame => waveSystem.currentWave >= 40 ? 1 : 3;
+  // Tighter caps during boss combat (sustained focus-fire = heavy object churn)
+  static const int _maxEffectsPerFrameBoss = 2;
+  static const int _maxTextsPerFrameBoss = 1;
+
+  // ═══ Boss Damage Batching ═══
+  // Accumulates all tower hits against a boss in one frame, then flushes once.
+  // Eliminates N×takeDamage, N×applyEffect, N×comboCheck, N×audio per frame.
+  int _bossBatchDamage = 0;
+  int _bossBatchHits = 0;
+  Enemy? _bossBatchTarget;
+  final List<Tower> _bossBatchTowers = [];
+  final List<int> _bossBatchDmgPerTower = [];
+  final Set<TowerType> _bossBatchTowerTypes = {};
+  bool _bossBatchHadSynergyFreeze = false;
+  bool _bossBatchHadCannon = false;
+
+  // ═══ Boss Batch Debug Stats (visible in debug overlay) ═══
+  int debugBossHitsThisFrame = 0;
+  int debugBossDamageFlushed = 0;
+  int debugBossEffectsMerged = 0;
+  bool debugBossBatchActive = false;
 
   void _spawnEnemy(EnemyType type) {
     if (gameMap.enemyPaths.isEmpty) return; // safety
     // Cap active enemies to prevent mobile performance collapse
     if (_enemies.length >= _maxActiveEnemies) return;
+
+    final isBossType = type == EnemyType.shadowLord || type == EnemyType.dragonEmperor;
+    final Stopwatch? sw = isBossType ? (Stopwatch()..start()) : null;
+
     // Pick path based on wave pattern
     final paths = gameMap.enemyPaths;
     final pathIdx = WavePathSelector.pickPath(
@@ -835,9 +1161,16 @@ class KaleGame extends FlameGame {
       cellSize: cellSize,
       difficulty: difficulty,
     );
-    // Wave-based HP scaling: +5% per wave after wave 1 (skip bosses, already tanky)
-    if (!enemy.baseStats.isBoss) {
-      final waveHpScale = 1.0 + (waveSystem.currentWave - 1) * 0.05;
+    if (sw != null) debugPrint('BOSS_SPAWN create: ${sw.elapsedMicroseconds}µs');
+
+    // Wave-based HP scaling: +12% per wave (normal), +6% (boss)
+    // Plus infinite-mode scaling that ramps every 5 waves
+    final wave = waveSystem.currentWave;
+    if (enemy.baseStats.isBoss) {
+      final bossHpScale = (1.0 + (wave - 1) * 0.06) * _endlessScaling;
+      enemy.scaleHp(bossHpScale);
+    } else {
+      final waveHpScale = (1.0 + (wave - 1) * 0.12) * _endlessScaling;
       enemy.scaleHp(waveHpScale);
     }
     // Roguelike buff: enemy speed reduction
@@ -853,6 +1186,22 @@ class KaleGame extends FlameGame {
     final bonusArmor = MutationSystem.bonusArmor(mutations);
     if (bonusArmor > 0) {
       enemy.addBonusArmor(bonusArmor);
+    }
+    // ═══ Wave Modifier effects on spawn ═══
+    switch (_activeWaveModifier) {
+      case WaveModifier.armoredSurge:
+        enemy.addBonusArmor(8);
+      case WaveModifier.speedRush:
+        enemy.applyEffect(StatusEffect.slow(factor: -0.4, duration: 999999.0));
+      case WaveModifier.iceImmune:
+        // Handled in combat: slow effects ignored
+        break;
+      default:
+        break;
+    }
+    // ═══ Enemy Adaptation: bonus armor vs dominant tower type ═══
+    if (_dominantTowerType != null && !enemy.baseStats.isBoss) {
+      enemy.adaptedAgainst = _dominantTowerType;
     }
     // Artifact: Gölge Pelerin (id 5) - First wave enemies 50% slow
     if (hasArtifact(5) && waveSystem.currentWave == 1) {
@@ -877,20 +1226,64 @@ class KaleGame extends FlameGame {
           break; // handled in _processEnemies
       }
     }
+    if (sw != null) debugPrint('BOSS_SPAWN setup: ${sw.elapsedMicroseconds}µs');
 
     _enemies.add(enemy);
     world.add(enemy);
+    if (sw != null) debugPrint('BOSS_SPAWN world.add: ${sw.elapsedMicroseconds}µs');
+
     tutorialSystem.tryShowEnemyWeakness(enemy.type);
-    // Boss spawn: dramatic entrance — micro-pause + shake + atmosphere surge
+    // Boss spawn: staged across multiple frames to prevent single-frame spike
     if (enemy.baseStats.isBoss) {
       _hasBossAlive = true;
-      triggerHitStop(0.03);
-      screenShake.shake(duration: 0.25, intensity: 3.0);
-      _atmosphere.triggerEventPulse(0.8);
+      _activeBosses.add(enemy);
+      // STAGE 1 (this frame): entity created and added to world — nothing else
+      // Effects, audio, and abilities deferred to next frames via _processBossSpawnStaging
+      _pendingBossSpawn = enemy;
+      _bossSpawnStage = 1;
+      enemy.abilitiesDisabled = true; // disable until stage 3
+      debugPrint('BOSS_SPAWN stage1 TOTAL: ${sw!.elapsedMicroseconds}µs '
+          'type=${enemy.type.name} enemies=${_enemies.length} '
+          'towers=${_towers.length} proj=${_projectiles.length} '
+          'texts=${FloatingText.totalActive} effects=${HitEffect.totalActive} '
+          'sprite_cached=${EnemySpriteGenerator.instance.getWalkSheet(type) != null}');
+    }
+  }
+
+  /// Staged boss spawn: spread intro effects across 3 frames to prevent spike.
+  void _processBossSpawnStaging() {
+    if (_pendingBossSpawn == null) return;
+    final boss = _pendingBossSpawn!;
+    if (boss.isDead) {
+      _pendingBossSpawn = null;
+      _bossSpawnStage = 0;
+      return;
+    }
+
+    _bossSpawnStage++;
+    switch (_bossSpawnStage) {
+      case 2:
+        // STAGE 2: visual effects (hitStop + screenShake + atmosphere)
+        triggerHitStop(0.03);
+        screenShake.shake(duration: 0.25, intensity: 3.0);
+        _atmosphere.triggerEventPulse(0.8);
+        debugPrint('BOSS_SPAWN stage2: visual effects applied');
+        break;
+      case 3:
+        // STAGE 3: audio + enable abilities
+        AudioSystem.instance.play(GameSound.bossRoar);
+        boss.abilitiesDisabled = false;
+        _pendingBossSpawn = null;
+        _bossSpawnStage = 0;
+        debugPrint('BOSS_SPAWN stage3: audio+abilities enabled, spawn complete');
+        break;
     }
   }
 
   // --- Game Loop ---
+
+  // Frame spike detection (boss combat debugging)
+  int _spikeLogCooldown = 0; // throttle: max 1 log per 60 frames
 
   @override
   void update(double dt) {
@@ -898,6 +1291,21 @@ class KaleGame extends FlameGame {
 
     if (!_isReady) return;
     if (_phase == GamePhase.paused || _phase == GamePhase.gameOver) return;
+
+    // Frame spike detection: log when frame > 33ms (< 30 FPS) during boss combat
+    if (_hasBossAlive && _spikeLogCooldown <= 0 && dt > 0.033) {
+      _spikeLogCooldown = 60; // suppress for 60 frames
+      debugPrint('SPIKE: ${(dt * 1000).toStringAsFixed(1)}ms '
+          'enemies:${_enemies.length} proj:${_projectiles.length} '
+          'towers:${_towers.length} texts:${FloatingText.totalActive} '
+          'effects:${HitEffect.totalActive} '
+          'audio:${AudioSystem.instance.activePlayerCount}/${AudioSystem.instance.poolSize}');
+    }
+    if (_spikeLogCooldown > 0) _spikeLogCooldown--;
+
+    // Reset per-frame creation counters
+    _effectsThisFrame = 0;
+    _textsThisFrame = 0;
 
     // Hit-stop micro freeze: tick with raw dt so feel is consistent across speeds
     if (_hitStopTimer > 0) {
@@ -913,7 +1321,7 @@ class KaleGame extends FlameGame {
     }
 
     if (_phase == GamePhase.waveBreak) {
-      if (_showEndlessPrompt) return; // wait for player decision
+      if (showEndlessPrompt) return; // never true in infinite mode
       final oldSec = _breakTimer.ceil();
       final oldBreak = _breakTimer;
       _breakTimer -= dt;
@@ -945,6 +1353,12 @@ class KaleGame extends FlameGame {
 
     if (_phase != GamePhase.waveActive) return;
 
+    // Process staged boss spawn (one stage per frame)
+    _processBossSpawnStaging();
+
+    // Rebuild spatial grid once per frame (all range queries use this)
+    _spatialGrid.rebuild(_enemies);
+
     // Spawn enemies
     _updateSpawning(dt);
 
@@ -954,20 +1368,24 @@ class KaleGame extends FlameGame {
     // Healer enemy mechanic
     _updateHealerEnemies(dt);
 
-    // Troll regeneration: heals 3 HP/sec
-    // Elite regenerating: also heals 3 HP/sec
+    // Troll regeneration: 1.5 HP/sec, capped at 60% maxHP
+    // Elite regenerating: 2 HP/sec
+    // Wave modifier regenWave: ALL enemies regen 1 HP/sec
     for (final enemy in _enemies) {
       if (enemy.isDead || enemy.reachedCastle) continue;
-      if (enemy.type == EnemyType.troll && enemy.hp < enemy.maxHp) {
-        enemy.heal((3 * dt).ceil());
+      if (enemy.type == EnemyType.troll && enemy.hp < (enemy.maxHp * 0.6).round()) {
+        enemy.heal((1.5 * dt).ceil());
       }
       if (enemy.isElite && enemy.eliteModifier == EliteModifier.regenerating && enemy.hp < enemy.maxHp) {
-        enemy.heal((3 * dt).ceil());
+        enemy.heal((2 * dt).ceil());
+      }
+      if (_activeWaveModifier == WaveModifier.regenWave && enemy.hp < enemy.maxHp) {
+        enemy.heal((1 * dt).ceil());
       }
     }
 
     // Boss special abilities
-    _updateBossAbilities(dt);
+    if (!debugDisableBossAbilities) _updateBossAbilities(dt);
 
     // Combo system tick
     comboSystem.update(dt);
@@ -1031,6 +1449,15 @@ class KaleGame extends FlameGame {
       }
     }
 
+    // Update debug overlay counters
+    _debugOverlay.enemyCount = _cachedEnemiesAlive;
+    _debugOverlay.projectileCount = _projectiles.length;
+    _debugOverlay.towerCount = _towers.length;
+    _debugOverlay.bossHits = debugBossHitsThisFrame;
+    _debugOverlay.bossDamage = debugBossDamageFlushed;
+    _debugOverlay.bossEffects = debugBossEffectsMerged;
+    _debugOverlay.bossBatchActive = debugBossBatchActive;
+
     // Check wave complete
     if (_pendingSpawns.isEmpty && _enemies.isEmpty) {
       _onWaveComplete();
@@ -1054,7 +1481,7 @@ class KaleGame extends FlameGame {
       _towerAmbientTimer += dt;
       if (_towerAmbientTimer >= _towerAmbientInterval) {
         _towerAmbientTimer = 0;
-        final tower = _towers[math.Random().nextInt(_towers.length)];
+        final tower = _towers[_damageTextRng.nextInt(_towers.length)];
         AudioSystem.instance.play(_towerAmbientSound(tower.type));
       }
     }
@@ -1064,6 +1491,8 @@ class KaleGame extends FlameGame {
     _dangerVignette.hpRatio = currentHpRatio;
     _atmosphere.hpRatio = currentHpRatio;
     _atmosphere.isBossWave = _hasBossAlive;
+    // Sync debug flag to enemy renderer
+    Enemy.debugSkipBossAura = debugDisableBossAura;
 
     // Screen shake (preserve horizontal centering offset)
     camera.viewfinder.position = Vector2(_cameraBaseX, 0) + screenShake.offset;
@@ -1090,19 +1519,27 @@ class KaleGame extends FlameGame {
 
   // --- Boss Special Abilities ---
   void _updateBossAbilities(double dt) {
-    for (final enemy in _enemies) {
+    if (_activeBosses.isEmpty) return;
+    for (final enemy in _activeBosses) {
       if (enemy.isDead || enemy.reachedCastle) continue;
-      if (!enemy.baseStats.isBoss) continue;
+      // EMP T4: re-enable abilities when slow effect expires
+      if (enemy.abilitiesDisabled && !enemy.hasSlowEffect) {
+        enemy.abilitiesDisabled = false;
+      }
       if (enemy.abilitiesDisabled) continue;
 
       enemy.bossAbilityTimer += dt;
 
+      // Enraged dragon fires abilities faster (3s instead of 5s)
+      final abilityCooldown = (enemy.isEnraged && enemy.type == EnemyType.dragonEmperor) ? 3.0 : 5.0;
+      final telegraphStart = abilityCooldown - 1.2;
+
       // Telegraph warning 1.2s before ability fires
-      if (enemy.bossAbilityTimer >= 3.8 && enemy.bossAbilityTimer < 5.0) {
-        _renderBossTelegraph(enemy, dt);
+      if (enemy.bossAbilityTimer >= telegraphStart && enemy.bossAbilityTimer < abilityCooldown) {
+        _renderBossTelegraph(enemy, dt, telegraphStart);
       }
 
-      if (enemy.bossAbilityTimer < 5.0) continue;
+      if (enemy.bossAbilityTimer < abilityCooldown) continue;
       enemy.bossAbilityTimer = 0;
 
       // Release frame: clear telegraph, add impact cues
@@ -1121,16 +1558,16 @@ class KaleGame extends FlameGame {
     }
   }
 
-  void _renderBossTelegraph(Enemy boss, double dt) {
+  void _renderBossTelegraph(Enemy boss, double dt, double telegraphStart) {
     final color = boss.type == EnemyType.dragonEmperor
         ? const Color(0xFFFF4400) : const Color(0xFFAA00FF);
     // Set visual telegraph on enemy with escalating progress
     boss.telegraphColor = color;
     boss.telegraphTimer = 0.2; // refresh each frame during window
-    boss.telegraphProgress = ((boss.bossAbilityTimer - 3.8) / 1.2).clamp(0.0, 1.0);
+    boss.telegraphProgress = ((boss.bossAbilityTimer - telegraphStart) / 1.2).clamp(0.0, 1.0);
 
-    // Only fire text + shake + atmosphere accent once when timer first crosses 3.8
-    if (boss.bossAbilityTimer - dt < 3.8) {
+    // Only fire text + shake + atmosphere accent once when timer first crosses telegraphStart
+    if (boss.bossAbilityTimer - dt < telegraphStart) {
       final warning = boss.type == EnemyType.dragonEmperor
           ? 'NEFES HAZIRLANIYOR!' : 'IŞINLANMA HAZIRLANIYOR!';
       world.add(FloatingText(
@@ -1147,34 +1584,48 @@ class KaleGame extends FlameGame {
   final Map<int, int> _bossSpawnCount = {}; // enemyId -> times spawned
 
   void _shadowLordAbility(Enemy shadowLord) {
-    // Teleport: advance on path + spawn soldiers (max 2 uses per boss)
+    // Teleport: advance on path + spawn minions + heal
     final spawnCount = _bossSpawnCount[shadowLord.enemyId] ?? 0;
     final remaining = shadowLord.remainingPath;
-    if (remaining.length > 4 && spawnCount < 2 && _enemies.length < _maxActiveEnemies) {
+    if (remaining.length > 4 && spawnCount < 3 && _enemies.length < _maxActiveEnemies) {
       _bossSpawnCount[shadowLord.enemyId] = spawnCount + 1;
-      // Spawn 2 soldiers at shadow lord's position
+      // Spawn shield bearers on 2nd+ use, soldiers first time
+      final spawnType = spawnCount >= 1 ? EnemyType.shieldBearer : EnemyType.soldier;
       for (int i = 0; i < 2; i++) {
-        final soldierPath = shadowLord.remainingPath;
-        if (soldierPath.length > 1) {
-          final soldier = EnemyFactory.create(
-            type: EnemyType.soldier,
-            path: soldierPath,
+        final minionPath = shadowLord.remainingPath;
+        if (minionPath.length > 1) {
+          final minion = EnemyFactory.create(
+            type: spawnType,
+            path: minionPath,
             cellSize: cellSize,
             difficulty: difficulty,
           );
-          _enemies.add(soldier);
-          world.add(soldier);
+          _enemies.add(minion);
+          world.add(minion);
         }
       }
     }
-    // Visual effect (always show teleport)
-    world.add(HitEffect(pos: shadowLord.position, color: const Color(0xFF8800AA), count: 8, speed: 50));
+    // Heal 10% of max HP on teleport
+    final healAmount = (shadowLord.maxHp * 0.10).round();
+    shadowLord.heal(healAmount);
+    // Visual effect
+    _addEffect(HitEffect(pos: shadowLord.position, color: const Color(0xFF8800AA), count: 8, speed: 50));
     world.add(FloatingText(
-      text: 'IŞINLANMA!',
+      text: 'IŞINLANMA! +$healAmount HP',
       pos: shadowLord.position + Vector2(0, -20),
       color: const Color(0xFFAA00FF),
       fontSize: 11,
     ));
+  }
+
+  /// ShadowLord passive: towers within 3 cells deal 25% less damage.
+  bool isShadowLordAuraActive(Vector2 towerPos) {
+    for (final enemy in _activeBosses) {
+      if (enemy.isDead || enemy.reachedCastle || enemy.type != EnemyType.shadowLord) continue;
+      final dist = (enemy.position - towerPos).length;
+      if (dist <= cellSize * 3) return true;
+    }
+    return false;
   }
 
   void _dragonEmperorAbility(Enemy dragon) {
@@ -1183,25 +1634,44 @@ class KaleGame extends FlameGame {
     final dragonPos = dragon.position;
     final direction = (castleCenter - dragonPos).normalized();
 
+    int disabledCount = 0;
     for (final tower in _towers) {
       if (tower.type == TowerType.spikeWall) continue;
       final towerCenter = tower.position + tower.size / 2;
-      // Check if tower is roughly in the breath line (within 2 cells wide, 4 cells ahead)
       final toTower = towerCenter - dragonPos;
       final projDist = toTower.dot(direction);
       if (projDist < 0 || projDist > cellSize * 4) continue;
       final perpDist = (toTower - direction * projDist).length;
       if (perpDist <= cellSize * 2) {
         tower.disableTimer = 3.0;
-        world.add(HitEffect.fire(pos: towerCenter));
+        _addEffect(HitEffect.fire(pos: towerCenter));
+        disabledCount++;
       }
     }
+    // Direct castle damage: breath scorches the castle for 3 HP
+    castle.takeDamage(3);
+    _damageTakenThisWave = true;
+    screenShake.shake(duration: 0.3, intensity: 5.0);
+
     world.add(FloatingText(
-      text: 'NEFES SALDIRISI!',
+      text: 'NEFES SALDIRISI! -3 HP',
       pos: dragonPos + Vector2(0, -25),
       color: const Color(0xFFFF4400),
       fontSize: 12,
     ));
+
+    // Enrage: when below 50% HP, speed up and abilities fire faster
+    if (!dragon.isEnraged && dragon.hp < dragon.maxHp * 0.5) {
+      dragon.isEnraged = true;
+      dragon.applyEffect(StatusEffect.slow(factor: -0.5, duration: 999999.0)); // negative = speed boost
+      world.add(FloatingText(
+        text: 'ÖFKE MODU!',
+        pos: dragonPos + Vector2(0, -40),
+        color: const Color(0xFFFF0000),
+        fontSize: 14,
+        isCritical: true,
+      ));
+    }
   }
 
   // --- Castle Spells ---
@@ -1237,7 +1707,7 @@ class KaleGame extends FlameGame {
           enemy.takeDamage(dmg, bypassArmor: true);
           enemy.applyEffect(StatusEffect.burn(dps: 5, duration: 3.0));
           if (fireEffects < 10) {
-            world.add(HitEffect.fire(pos: enemy.position));
+            _addEffect(HitEffect.fire(pos: enemy.position));
             fireEffects++;
           }
         }
@@ -1254,7 +1724,7 @@ class KaleGame extends FlameGame {
           if (enemy.isDead || enemy.reachedCastle) continue;
           enemy.applyEffect(StatusEffect.slow(factor: 0.7, duration: 3.0));
           if (iceEffects < 10) {
-            world.add(HitEffect.ice(pos: enemy.position));
+            _addEffect(HitEffect.ice(pos: enemy.position));
             iceEffects++;
           }
         }
@@ -1266,9 +1736,9 @@ class KaleGame extends FlameGame {
         ));
         break;
       case SpellType.castleRepair:
-        castle.heal((castle.maxHp * 0.20).round());
+        castle.heal((castle.maxHp * 0.10).round());
         world.add(FloatingText(
-          text: '+%20 HP',
+          text: '+%10 HP',
           pos: castle.position + Vector2(0, -30),
           color: const Color(0xFF00FF44),
           fontSize: 14,
@@ -1319,8 +1789,7 @@ class KaleGame extends FlameGame {
     if (!economy.trySpend(50)) return;
     _merchantAvailable = false;
     // Grant a random artifact-like bonus
-    final rng = math.Random();
-    final bonusType = rng.nextInt(3);
+    final bonusType = _damageTextRng.nextInt(3);
     switch (bonusType) {
       case 0: // Damage boost all towers
         for (final tower in _towers) {
@@ -1346,23 +1815,6 @@ class KaleGame extends FlameGame {
     onStateChanged?.call();
   }
 
-  // --- Endless Mode ---
-  void continueToEndless() {
-    _endlessMode = true;
-    _showEndlessPrompt = false;
-    waveSystem.extendWaves(5);
-    _breakTimer = GameConfig.wavePrepTime * _mutationWavePrepMult;
-    _phase = GamePhase.waveBreak;
-    onStateChanged?.call();
-  }
-
-  void declineEndless() {
-    _showEndlessPrompt = false;
-    _phase = GamePhase.gameOver;
-    AudioSystem.instance.play(GameSound.victory);
-    onGameOver?.call(true);
-  }
-
   void _updateSpawning(double dt) {
     if (_pendingSpawns.isEmpty) return;
 
@@ -1385,6 +1837,29 @@ class KaleGame extends FlameGame {
   }
 
   void _updateTowerCombat(double dt) {
+    if (_hasBossAlive && debugDisableTowerFire) return; // debug: skip ALL tower combat
+
+    // Reset boss damage batch for this frame
+    _bossBatchDamage = 0;
+    _bossBatchHits = 0;
+    _bossBatchTarget = null;
+    _bossBatchTowers.clear();
+    _bossBatchDmgPerTower.clear();
+    _bossBatchTowerTypes.clear();
+    _bossBatchHadSynergyFreeze = false;
+
+    // Reset debug stats for this frame
+    debugBossHitsThisFrame = 0;
+    debugBossDamageFlushed = 0;
+    debugBossEffectsMerged = 0;
+    debugBossBatchActive = false;
+    _bossBatchHadCannon = false;
+
+    // ═══ ShadowLord Aura Visual: update tower debuff flag ═══
+    for (final tower in _towers) {
+      tower.shadowAuraAffected = isShadowLordAuraActive(tower.position + tower.size / 2);
+    }
+
     for (final tower in _towers) {
       // Spike walls deal contact damage to enemies on same cell
       if (tower.type == TowerType.spikeWall) {
@@ -1394,40 +1869,44 @@ class KaleGame extends FlameGame {
 
       if (!tower.canFire()) continue;
 
-      // Find target based on tower's targeting mode
+      // Target caching: only re-scan when needed (every 200ms or target invalid)
       Enemy? target;
-      double bestScore = double.infinity;
-      for (final enemy in _enemies) {
-        if (enemy.isDead || enemy.reachedCastle || enemy.isBurrowed) continue;
-        if (!tower.isInRange(enemy.position)) continue;
-        double score;
-        switch (tower.targetingMode) {
-          case TargetingMode.nearest:
-            final cx = tower.position.x + tower.size.x / 2 - enemy.position.x;
-            final cy = tower.position.y + tower.size.y / 2 - enemy.position.y;
-            score = cx * cx + cy * cy;
-            break;
-          case TargetingMode.first:
-            // Lowest remaining path = closest to castle
-            score = enemy.remainingPath.length.toDouble();
-            break;
-          case TargetingMode.strongest:
-            // Negative HP so highest HP gets lowest score
-            score = -enemy.hp.toDouble();
-            break;
+      if (tower.needsRetarget(dt)) {
+        // Use spatial grid for range query instead of full enemy list scan
+        final tcx = tower.position.x + tower.size.x / 2;
+        final tcy = tower.position.y + tower.size.y / 2;
+        final rangePx = tower.currentRange * tower.cellSize;
+        final candidates = _spatialGrid.queryRange(tcx, tcy, rangePx);
+
+        double bestScore = double.infinity;
+        for (int i = 0; i < candidates.length; i++) {
+          final enemy = candidates[i];
+          double score;
+          switch (tower.targetingMode) {
+            case TargetingMode.nearest:
+              final dx = tcx - enemy.position.x;
+              final dy = tcy - enemy.position.y;
+              score = dx * dx + dy * dy;
+            case TargetingMode.first:
+              score = enemy.remainingPathLength.toDouble();
+            case TargetingMode.strongest:
+              score = -enemy.hp.toDouble();
+          }
+          if (score < bestScore) {
+            bestScore = score;
+            target = enemy;
+          }
         }
-        if (score < bestScore) {
-          bestScore = score;
-          target = enemy;
-        }
+        tower.setCachedTarget(target);
+      } else {
+        target = tower.cachedTarget;
       }
 
       if (target != null) {
         final proj = tower.tryFire(target.position);
         if (proj != null) {
-          if (world.children.whereType<Projectile>().length >= _maxActiveProjectiles) {
-            // Skip visual projectile but still apply damage below
-          } else {
+          if (_projectiles.length < _maxActiveProjectiles) {
+            _projectiles.add(proj);
             world.add(proj);
           }
           AudioSystem.instance.play(GameSound.towerFire);
@@ -1439,35 +1918,46 @@ class KaleGame extends FlameGame {
               intensity: atkProfile.shakeIntensity,
             );
           }
-          // Instant hit for simplicity (projectile visual only)
-          _applyTowerDamage(tower, target);
 
-          // Cannon AoE splash: 50% damage to enemies within 1.5 cells
+          if (target.baseStats.isBoss) {
+            // ═══ BATCHED: accumulate boss damage, defer all processing ═══
+            _bossBatchAccumulate(tower, target);
+          } else {
+            // ═══ DIRECT: per-hit processing for normal enemies ═══
+            _applyTowerDamage(tower, target);
+          }
+
+          // Cannon AoE splash still targets OTHER enemies individually
           if (tower.type == TowerType.cannon) {
             _applyCannonSplash(tower, target);
           }
-
-          // Wizard chain: hit 2 additional targets at 50% damage
+          // Wizard chain still targets OTHER enemies individually
           if (tower.type == TowerType.wizard) {
             _applyWizardChain(tower, target);
+          }
+          // Lightning T4 Path A (Tanrı Öfkesi): chain to 4 nearby enemies
+          if (tower.type == TowerType.lightning && tower.t4Branch == T4BranchPath.pathA) {
+            _applyLightningChain(tower, target);
           }
         }
       }
     }
 
-    // Clean up projectiles after impact flash finishes (no toList allocation)
-    final projectiles = world.children.whereType<Projectile>();
-    final toRemove = <Projectile>[];
-    for (final p in projectiles) {
+    // ═══ Flush boss batch: 1 damage call, 1 visual, 1 audio, 1 combo check ═══
+    if (_bossBatchTarget != null && _bossBatchHits > 0) {
+      _bossBatchFlush();
+    }
+
+    // Clean up projectiles using tracked list (O(n) on tracked list, not all children)
+    _projectiles.removeWhere((p) {
       if (p.isDone ||
           p.position.x < -200 || p.position.x > _gameWidth + 200 ||
           p.position.y < -200 || p.position.y > _gameHeight + 200) {
-        toRemove.add(p);
+        p.removeFromParent();
+        return true;
       }
-    }
-    for (final p in toRemove) {
-      p.removeFromParent();
-    }
+      return false;
+    });
   }
 
   // Spike wall contact damage tracking
@@ -1483,31 +1973,24 @@ class KaleGame extends FlameGame {
 
     final cx = spikeWall.position.x + spikeWall.size.x / 2;
     final cy = spikeWall.position.y + spikeWall.size.y / 2;
-    final threshSq = cellSize * 0.8 * cellSize * 0.8;
-    for (final enemy in _enemies) {
-      if (enemy.isDead || enemy.reachedCastle || enemy.isBurrowed) continue;
-      final dx = cx - enemy.position.x;
-      final dy = cy - enemy.position.y;
-      if (dx * dx + dy * dy <= threshSq) {
-        enemy.takeDamage(spikeWall.currentDamage);
-      }
+    final contactRange = cellSize * 0.8;
+    // Use spatial grid for contact range query
+    final nearby = _spatialGrid.queryRange(cx, cy, contactRange);
+    for (int i = 0; i < nearby.length; i++) {
+      nearby[i].takeDamage(spikeWall.currentDamage);
     }
   }
 
   void _applyCannonSplash(Tower cannon, Enemy primaryTarget) {
     final splashRadius = cellSize * 1.5;
-    final splashRadiusSq = splashRadius * splashRadius;
     final splashDamage = (cannon.currentDamage * 0.5).round();
-    world.add(HitEffect.explosion(pos: primaryTarget.position, radius: splashRadius));
-    final px = primaryTarget.position.x;
-    final py = primaryTarget.position.y;
-    for (final enemy in _enemies) {
-      if (enemy == primaryTarget || enemy.isDead || enemy.reachedCastle || enemy.isBurrowed) continue;
-      final dx = px - enemy.position.x;
-      final dy = py - enemy.position.y;
-      if (dx * dx + dy * dy <= splashRadiusSq) {
-        enemy.takeDamage(splashDamage);
-      }
+    _addEffect(HitEffect.explosion(pos: primaryTarget.position, radius: splashRadius));
+    // Use spatial grid instead of full enemy scan
+    final nearby = _spatialGrid.queryRangeExcluding(
+      primaryTarget.position.x, primaryTarget.position.y, splashRadius, primaryTarget,
+    );
+    for (int i = 0; i < nearby.length; i++) {
+      nearby[i].takeDamage(splashDamage);
     }
   }
 
@@ -1520,22 +2003,17 @@ class KaleGame extends FlameGame {
     if (_darkKnightAuraTimer < 0.5) return;
     _darkKnightAuraTimer = 0;
 
-    final darkKnights = _enemies.where(
-      (e) => !e.isDead && !e.reachedCastle && e.type == EnemyType.darkKnight,
-    );
-    if (darkKnights.isEmpty) return;
-
-    final rangeSquared = (cellSize * 2.0) * (cellSize * 2.0);
-    for (final dk in darkKnights) {
-      for (final other in _enemies) {
-        if (other == dk || other.isDead || other.reachedCastle) continue;
+    final auraRange = cellSize * 2.0;
+    for (final dk in _enemies) {
+      if (dk.isDead || dk.reachedCastle || dk.type != EnemyType.darkKnight) continue;
+      // Use spatial grid for nearby enemies
+      final nearby = _spatialGrid.queryRange(dk.position.x, dk.position.y, auraRange);
+      for (int i = 0; i < nearby.length; i++) {
+        final other = nearby[i];
+        if (other == dk) continue;
         if (_darkKnightBuffed.contains(other)) continue;
-        final dx = dk.position.x - other.position.x;
-        final dy = dk.position.y - other.position.y;
-        if (dx * dx + dy * dy <= rangeSquared) {
-          other.addBonusArmor(5);
-          _darkKnightBuffed.add(other);
-        }
+        other.addBonusArmor(5);
+        _darkKnightBuffed.add(other);
       }
     }
   }
@@ -1585,25 +2063,21 @@ class KaleGame extends FlameGame {
         _dengePatlamasiTimer = 0;
         final anchor = dengePatlamasiSynergy.first.anchorPosition;
         final burstCenter = Vector2((anchor.col + 0.5) * cellSize, (anchor.row + 0.5) * cellSize);
-        final burstRange = cellSize * 3.5; // 3.5 cell radius
+        final burstRange = cellSize * 3.5;
         final burstDmg = 20 + waveSystem.currentWave * 4;
-        final burstRangeSquared = burstRange * burstRange;
+        // Use spatial grid
+        final nearby = _spatialGrid.queryRange(burstCenter.x, burstCenter.y, burstRange);
         int effectCount = 0;
-        for (final enemy in _enemies) {
-          if (enemy.isDead || enemy.reachedCastle || enemy.isBurrowed) continue;
-          final dx = burstCenter.x - enemy.position.x;
-          final dy = burstCenter.y - enemy.position.y;
-          if (dx * dx + dy * dy <= burstRangeSquared) {
-            enemy.takeDamage(burstDmg, bypassArmor: true);
-            if (effectCount < 8) {
-              _showDamageText(enemy.position, burstDmg);
-              world.add(HitEffect.explosion(pos: enemy.position, radius: 15));
-              effectCount++;
-            }
+        for (int i = 0; i < nearby.length; i++) {
+          final enemy = nearby[i];
+          enemy.takeDamage(burstDmg, bypassArmor: true);
+          if (effectCount < 8) {
+            _showDamageText(enemy.position, burstDmg);
+            _addEffect(HitEffect.explosion(pos: enemy.position, radius: 15));
+            effectCount++;
           }
         }
-        // Visual burst at the synergy anchor
-        world.add(HitEffect.explosion(pos: burstCenter, radius: 30));
+        _addEffect(HitEffect.explosion(pos: burstCenter, radius: 30));
       }
     } else {
       _dengePatlamasiTimer = 0;
@@ -1623,7 +2097,7 @@ class KaleGame extends FlameGame {
           // Limit visual effects to prevent frame drops
           if (effectCount < 8) {
             _showDamageText(enemy.position, dmg);
-            world.add(HitEffect.explosion(pos: enemy.position, radius: 20));
+            _addEffect(HitEffect.explosion(pos: enemy.position, radius: 20));
             effectCount++;
           }
         }
@@ -1644,7 +2118,7 @@ class KaleGame extends FlameGame {
           enemy.applyEffect(StatusEffect.curse(duration: 4.0, armorReduce: 10));
           if (effectCount < 8) {
             _showDamageText(enemy.position, dmg);
-            world.add(HitEffect.explosion(pos: enemy.position, radius: 25));
+            _addEffect(HitEffect.explosion(pos: enemy.position, radius: 25));
             effectCount++;
           }
         }
@@ -1662,14 +2136,12 @@ class KaleGame extends FlameGame {
 
     final ccx = castle.position.x + castle.size.x / 2;
     final ccy = castle.position.y + castle.size.y / 2;
-    final rangeSq = cellSize * 3.0 * cellSize * 3.0;
-    for (final enemy in _enemies) {
-      if (enemy.isDead || enemy.reachedCastle || enemy.isBurrowed) continue;
-      final dx = ccx - enemy.position.x;
-      final dy = ccy - enemy.position.y;
-      if (dx * dx + dy * dy <= rangeSq) {
-        enemy.takeDamage(5 + waveSystem.currentWave, bypassArmor: true);
-      }
+    final aoeRange = cellSize * 3.0;
+    // Use spatial grid
+    final nearby = _spatialGrid.queryRange(ccx, ccy, aoeRange);
+    final dmg = 5 + waveSystem.currentWave;
+    for (int i = 0; i < nearby.length; i++) {
+      nearby[i].takeDamage(dmg, bypassArmor: true);
     }
   }
 
@@ -1682,8 +2154,7 @@ class KaleGame extends FlameGame {
     if (_enemies.isEmpty) return;
 
     // Pick a random synergy effect to apply
-    final rng = math.Random();
-    final effect = rng.nextInt(4);
+    final effect = _damageTextRng.nextInt(4);
     switch (effect) {
       case 0: // Freeze all enemies briefly
         for (final enemy in _enemies) {
@@ -1702,7 +2173,7 @@ class KaleGame extends FlameGame {
           if (enemy.isDead || enemy.reachedCastle || enemy.isBurrowed) continue;
           final dmg = 15 + waveSystem.currentWave * 2;
           enemy.takeDamage(dmg, bypassArmor: true);
-          world.add(HitEffect.explosion(pos: enemy.position, radius: 12));
+          _addEffect(HitEffect.explosion(pos: enemy.position, radius: 12));
         }
         break;
       case 3: // Curse all enemies (armor reduction)
@@ -1734,21 +2205,41 @@ class KaleGame extends FlameGame {
     // Dragon breath: line of fire from castle, damages all enemies in a wide area
     final dcx = castle.position.x + castle.size.x / 2;
     final dcy = castle.position.y + castle.size.y / 2;
-    final dragonRangeSq = cellSize * 8 * cellSize * 8;
+    final dragonRange = cellSize * 8;
+    // Use spatial grid
+    final nearby = _spatialGrid.queryRange(dcx, dcy, dragonRange);
+    final dmg = 10 + waveSystem.currentWave * 2;
     int dragonEffects = 0;
-    for (final enemy in _enemies) {
-      if (enemy.isDead || enemy.reachedCastle || enemy.isBurrowed) continue;
-      final dx = dcx - enemy.position.x;
-      final dy = dcy - enemy.position.y;
-      if (dx * dx + dy * dy <= dragonRangeSq) {
-        final dmg = 10 + waveSystem.currentWave * 2;
-        enemy.takeDamage(dmg, bypassArmor: true);
-        enemy.applyEffect(StatusEffect.burn(dps: 5, duration: 3.0));
-        if (dragonEffects < 6) {
-          world.add(HitEffect.fire(pos: enemy.position));
-          dragonEffects++;
-        }
+    for (int i = 0; i < nearby.length; i++) {
+      final enemy = nearby[i];
+      enemy.takeDamage(dmg, bypassArmor: true);
+      enemy.applyEffect(StatusEffect.burn(dps: 5, duration: 3.0));
+      if (dragonEffects < 6) {
+        _addEffect(HitEffect.fire(pos: enemy.position));
+        dragonEffects++;
       }
+    }
+  }
+
+  void _applyLightningChain(Tower tower, Enemy primaryTarget) {
+    // T4 Path A "Tanrı Öfkesi": chain to 4 nearby enemies
+    final chainRange = cellSize * 2.5;
+    final chainDamage = (tower.currentDamage * 0.6).round();
+    int chains = 0;
+    const maxChains = 4;
+    const chainColor = Color(0xFFFFD700); // lightning gold
+
+    final nearby = _spatialGrid.queryRangeExcluding(
+      primaryTarget.position.x, primaryTarget.position.y, chainRange, primaryTarget,
+    );
+    for (int i = 0; i < nearby.length; i++) {
+      if (chains >= maxChains) break;
+      final enemy = nearby[i];
+      // Lightning wet bonus applies to chain too
+      final actualDmg = enemy.isWet ? chainDamage * 2 : chainDamage;
+      enemy.takeDamage(actualDmg);
+      world.add(ChainEffect(from: primaryTarget.position, to: enemy.position, color: chainColor));
+      chains++;
     }
   }
 
@@ -1760,23 +2251,151 @@ class KaleGame extends FlameGame {
     final maxChains = wizard.t4Branch == T4BranchPath.pathA ? 5 : (2 + (wizard.tier > 2 ? 1 : 0)); // Archmage: 5 chains
     const chainColor = Color(0xFF9966FF); // wizard purple
 
-    final ptx = primaryTarget.position.x;
-    final pty = primaryTarget.position.y;
-    final chainRangeSq = chainRange * chainRange;
-    for (final enemy in _enemies) {
+    // Use spatial grid for chain targets
+    final nearby = _spatialGrid.queryRangeExcluding(
+      primaryTarget.position.x, primaryTarget.position.y, chainRange, primaryTarget,
+    );
+    for (int i = 0; i < nearby.length; i++) {
       if (chains >= maxChains) break;
-      if (enemy == primaryTarget || enemy.isDead || enemy.reachedCastle || enemy.isBurrowed) continue;
-      final dx = ptx - enemy.position.x;
-      final dy = pty - enemy.position.y;
-      if (dx * dx + dy * dy <= chainRangeSq) {
-        enemy.takeDamage(chainDamage);
-        world.add(ChainEffect(from: primaryTarget.position, to: enemy.position, color: chainColor));
-        chains++;
+      final enemy = nearby[i];
+      enemy.takeDamage(chainDamage);
+      world.add(ChainEffect(from: primaryTarget.position, to: enemy.position, color: chainColor));
+      chains++;
+    }
+  }
+
+  // ═══ Boss Damage Batch: Accumulate ═══
+  // Calculates damage for this tower→boss hit and stores it without processing.
+  void _bossBatchAccumulate(Tower tower, Enemy boss) {
+    int damage = (tower.currentDamage * runBuffs.damageMultiplier).round();
+    if (_metaEarlyWaveDamageBonus > 0 && waveSystem.currentWave <= 3) {
+      damage = (damage * (1.0 + _metaEarlyWaveDamageBonus)).round();
+    }
+    if (_metaPhysicalDamageBonus > 0 &&
+        (tower.type == TowerType.arrow || tower.type == TowerType.cannon || tower.type == TowerType.spikeWall)) {
+      damage = (damage * (1.0 + _metaPhysicalDamageBonus)).round();
+    }
+    damage = (damage * _artifactBossDamageMultiplier).round();
+    // Lightning wet bonus
+    if (tower.type == TowerType.lightning && boss.isWet) {
+      damage *= 2;
+    }
+    // Holy bonus vs undead/shadow
+    if (tower.type == TowerType.holy &&
+        (boss.type == EnemyType.undead || boss.type == EnemyType.darkKnight || boss.type == EnemyType.shadowLord)) {
+      damage = (damage * 1.5).round();
+    }
+
+    _bossBatchDamage += damage;
+    _bossBatchHits++;
+    _bossBatchTarget = boss;
+    _bossBatchTowers.add(tower);
+    _bossBatchDmgPerTower.add(damage);
+    _bossBatchTowerTypes.add(tower.type);
+    if (tower.synergyFreezeOnHit) _bossBatchHadSynergyFreeze = true;
+    if (tower.type == TowerType.cannon) _bossBatchHadCannon = true;
+  }
+
+  // ═══ Boss Damage Batch: Flush ═══
+  // Processes all accumulated damage as a SINGLE event:
+  //   1 takeDamage, 1 hit effect, 1 floating text, 1 audio, 1 combo check.
+  void _bossBatchFlush() {
+    final boss = _bossBatchTarget!;
+    final totalDmg = _bossBatchDamage;
+
+    // Populate debug stats
+    debugBossHitsThisFrame = _bossBatchHits;
+    debugBossDamageFlushed = totalDmg;
+    debugBossEffectsMerged = _bossBatchTowerTypes.length;
+    debugBossBatchActive = true;
+
+    // --- 1. Per-tower stat tracking (no game logic, just counters) ---
+    for (int i = 0; i < _bossBatchTowers.length; i++) {
+      final dmg = _bossBatchDmgPerTower[i];
+      _totalDamageDealt += dmg;
+      _bossBatchTowers[i].totalDamageDealt += dmg;
+    }
+
+    // --- 2. Single damage application ---
+    final willKill = boss.hp > 0 && boss.hp <= totalDmg;
+    boss.takeDamage(totalDmg); // 1 call instead of N
+
+    // --- 3. Deduplicated status effects (1 per type, not N) ---
+    for (final towerType in _bossBatchTowerTypes) {
+      switch (towerType) {
+        case TowerType.ice:
+          boss.applyEffect(StatusEffect.slow(factor: 0.4, duration: 2.0 * _artifactSlowDurationMultiplier));
+        case TowerType.fire:
+          boss.applyEffect(StatusEffect.burn(dps: 4, duration: 3.0));
+        case TowerType.poison:
+          boss.applyEffect(StatusEffect.poison(dps: 3, duration: 5.0));
+        case TowerType.water:
+          boss.applyEffect(StatusEffect.wet(duration: 3.0));
+        case TowerType.dark:
+          boss.applyEffect(StatusEffect.curse(armorReduce: 8, duration: 4.0));
+        default:
+          break; // arrow/cannon/lightning/holy: no persistent effect
+      }
+    }
+
+    // --- 4. Synergy freeze (once, not per-tower) ---
+    if (_bossBatchHadSynergyFreeze && !boss.isDead) {
+      boss.applyEffect(StatusEffect.slow(factor: 1.0, duration: 3.0));
+    }
+
+    // --- 5. Single visual feedback ---
+    // One combined damage text
+    _showDamageText(boss.position, totalDmg);
+    // One hit effect (pick visually prominent color based on tower mix)
+    final effectColor = _bossBatchTowerTypes.contains(TowerType.fire)
+        ? const Color(0xFFFF4500)
+        : _bossBatchTowerTypes.contains(TowerType.ice)
+            ? const Color(0xFF87CEEB)
+            : _bossBatchTowerTypes.contains(TowerType.lightning)
+                ? const Color(0xFFFFD700)
+                : const Color(0xFFFFAA44);
+    _addEffect(HitEffect(pos: boss.position, color: effectColor, count: 6, speed: 55, maxLife: 0.25));
+
+    // --- 6. Lightning T4 specials (chain + EMP on boss) ---
+    for (final tower in _bossBatchTowers) {
+      if (tower.type != TowerType.lightning) continue;
+      if (tower.t4Branch == T4BranchPath.pathA) {
+        _applyLightningChain(tower, boss);
+      } else if (tower.t4Branch == T4BranchPath.pathB) {
+        boss.abilitiesDisabled = true;
+        boss.applyEffect(StatusEffect.slow(factor: 0.2, duration: 4.0));
+      }
+    }
+
+    // --- 7. Kill handling ---
+    if (willKill || boss.isDead) {
+      _addEffect(HitEffect(pos: boss.position, color: const Color(0xFFFFFFFF), count: 6, speed: 65, size: 2.5, maxLife: 0.18));
+      triggerHitStop(0.07);
+      for (final tower in _bossBatchTowers) {
+        tower.kills++;
+        // T4 Phoenix heal on kill
+        if (tower.type == TowerType.fire && tower.t4Branch == T4BranchPath.pathB) {
+          castle.heal(3 + waveSystem.currentWave);
+        }
+      }
+    }
+    // Cannon hit-stop once (not per-cannon)
+    else if (_bossBatchHadCannon) {
+      triggerHitStop(0.02);
+    }
+
+    // --- 8. Single combo check (after all effects applied) ---
+    if (!boss.isDead) {
+      final combo = comboSystem.checkCombos(boss.activeEffects, boss.enemyId);
+      if (combo != null) {
+        _applyCombo(combo, boss);
       }
     }
   }
 
+  // ═══ Non-boss: original per-hit damage (unchanged) ═══
   void _applyTowerDamage(Tower tower, Enemy enemy) {
+    enemy.lastHitTowerType = tower.type;
     int damage = (tower.currentDamage * runBuffs.damageMultiplier).round();
 
     // Meta: Savaş Çığlığı - +30% damage first 3 waves
@@ -1788,10 +2407,13 @@ class KaleGame extends FlameGame {
         (tower.type == TowerType.arrow || tower.type == TowerType.cannon || tower.type == TowerType.spikeWall)) {
       damage = (damage * (1.0 + _metaPhysicalDamageBonus)).round();
     }
-
-    // Artifact: Boss damage +35%
-    if (enemy.baseStats.isBoss) {
-      damage = (damage * _artifactBossDamageMultiplier).round();
+    // ═══ Enemy Adaptation: 30% damage reduction vs dominant tower type ═══
+    if (enemy.adaptedAgainst == tower.type) {
+      damage = (damage * 0.7).round();
+    }
+    // ═══ ShadowLord Aura: 25% damage reduction for nearby towers ═══
+    if (isShadowLordAuraActive(tower.position + tower.size / 2)) {
+      damage = (damage * 0.75).round();
     }
 
     _totalDamageDealt += damage;
@@ -1804,53 +2426,58 @@ class KaleGame extends FlameGame {
     switch (tower.type) {
       case TowerType.ice:
         enemy.takeDamage(damage);
-        enemy.applyEffect(StatusEffect.slow(factor: 0.4, duration: 2.0 * _artifactSlowDurationMultiplier));
-        world.add(HitEffect.ice(pos: enemy.position));
+        if (_activeWaveModifier != WaveModifier.iceImmune) {
+          enemy.applyEffect(StatusEffect.slow(factor: 0.4, duration: 2.0 * _artifactSlowDurationMultiplier));
+        }
+        _addEffect(HitEffect.ice(pos: enemy.position));
         break;
       case TowerType.fire:
         enemy.takeDamage(damage);
         enemy.applyEffect(StatusEffect.burn(dps: 4, duration: 3.0));
-        world.add(HitEffect.fire(pos: enemy.position));
+        _addEffect(HitEffect.fire(pos: enemy.position));
         break;
       case TowerType.poison:
         enemy.takeDamage(damage);
         enemy.applyEffect(StatusEffect.poison(dps: 3, duration: 5.0));
-        world.add(HitEffect.poison(pos: enemy.position));
+        _addEffect(HitEffect.poison(pos: enemy.position));
         break;
       case TowerType.water:
         enemy.takeDamage(damage);
         enemy.applyEffect(StatusEffect.wet(duration: 3.0));
-        world.add(HitEffect(pos: enemy.position, color: const Color(0xFF4169E1), count: 5, speed: 40));
+        _addEffect(HitEffect(pos: enemy.position, color: const Color(0xFF4169E1), count: 5, speed: 40));
         break;
       case TowerType.dark:
         enemy.takeDamage(damage);
         enemy.applyEffect(StatusEffect.curse(armorReduce: 8, duration: 4.0));
-        world.add(HitEffect(pos: enemy.position, color: const Color(0xFF8B00FF), count: 6, speed: 45));
+        _addEffect(HitEffect(pos: enemy.position, color: const Color(0xFF8B00FF), count: 6, speed: 45));
         break;
       case TowerType.lightning:
         final actualDmg = enemy.isWet ? damage * 2 : damage;
         enemy.takeDamage(actualDmg);
-        world.add(HitEffect.lightning(pos: enemy.position));
+        _addEffect(HitEffect.lightning(pos: enemy.position));
+        // T4 Path B (EMP Darbesi): disable enemy abilities for 4 seconds
+        if (tower.t4Branch == T4BranchPath.pathB && enemy.baseStats.isBoss) {
+          enemy.abilitiesDisabled = true;
+          enemy.applyEffect(StatusEffect.slow(factor: 0.2, duration: 4.0));
+        }
         break;
       case TowerType.holy:
         final holyBonus = (enemy.type == EnemyType.undead || enemy.type == EnemyType.darkKnight || enemy.type == EnemyType.shadowLord)
             ? (damage * 0.5).round()
             : 0;
         enemy.takeDamage(damage + holyBonus);
-        world.add(HitEffect(pos: enemy.position, color: const Color(0xFFFFFACD), count: 7, speed: 55));
+        _addEffect(HitEffect(pos: enemy.position, color: const Color(0xFFFFFACD), count: 7, speed: 55));
         break;
       default:
         // Arrow / cannon / spikeWall: sharper spark
         enemy.takeDamage(damage);
-        world.add(HitEffect(pos: enemy.position, color: const Color(0xFFEEDDCC), count: 5, speed: 50, size: 2.0, maxLife: 0.25));
+        _addEffect(HitEffect(pos: enemy.position, color: const Color(0xFFEEDDCC), count: 5, speed: 50, size: 2.0, maxLife: 0.25));
         break;
     }
     // Killing blow: extra impact burst + hit-stop + kill shake
     if (willKill) {
-      world.add(HitEffect(pos: enemy.position, color: const Color(0xFFFFFFFF), count: 6, speed: 65, size: 2.5, maxLife: 0.18));
-      if (enemy.baseStats.isBoss) {
-        triggerHitStop(0.07);
-      } else if (enemy.isElite) {
+      _addEffect(HitEffect(pos: enemy.position, color: const Color(0xFFFFFFFF), count: 6, speed: 65, size: 2.5, maxLife: 0.18));
+      if (enemy.isElite) {
         triggerHitStop(0.05);
         screenShake.shake(duration: 0.12, intensity: 2.0);
       } else {
@@ -1866,7 +2493,7 @@ class KaleGame extends FlameGame {
     // Buz Hapsi synergy: full freeze (100% slow) for 3 seconds on hit
     if (tower.synergyFreezeOnHit && !enemy.isDead) {
       enemy.applyEffect(StatusEffect.slow(factor: 1.0, duration: 3.0));
-      world.add(HitEffect.ice(pos: enemy.position));
+      _addEffect(HitEffect.ice(pos: enemy.position));
     }
 
     // Combo system check
@@ -1882,12 +2509,65 @@ class KaleGame extends FlameGame {
       castle.heal(3 + waveSystem.currentWave);
     }
 
-    // T4 special: Siege (cannon pathB) - 2x damage vs boss
-    // Already handled through dmgMult, no extra needed
-
     if (willKill || enemy.isDead) {
       tower.kills++;
     }
+  }
+
+  // ═══ Enemy Adaptation: find player's most-used tower type ═══
+  void _updateDominantTowerType() {
+    if (_towers.isEmpty) { _dominantTowerType = null; return; }
+    final counts = <TowerType, int>{};
+    for (final t in _towers) {
+      counts[t.type] = (counts[t.type] ?? 0) + 1;
+    }
+    TowerType? dominant;
+    int maxCount = 0;
+    for (final entry in counts.entries) {
+      if (entry.value > maxCount) {
+        maxCount = entry.value;
+        dominant = entry.key;
+      }
+    }
+    _dominantTowerType = (maxCount >= _adaptationThreshold) ? dominant : null;
+
+    // Track most-used tower type (for death screen)
+    _mostUsedTowerType = dominant;
+  }
+
+  /// Classify player's build archetype based on tower composition.
+  void _classifyBuild() {
+    if (_towers.length < 3) { _currentBuildLabel = ''; return; }
+    final counts = <TowerType, int>{};
+    for (final t in _towers) {
+      counts[t.type] = (counts[t.type] ?? 0) + 1;
+    }
+    // Group by archetype
+    final archetypes = <String, int>{
+      'Ateş Yapısı': (counts[TowerType.fire] ?? 0) + (counts[TowerType.cannon] ?? 0),
+      'Kontrol Yapısı': (counts[TowerType.ice] ?? 0) + (counts[TowerType.spikeWall] ?? 0) + (counts[TowerType.water] ?? 0),
+      'Yıkım Yapısı': (counts[TowerType.lightning] ?? 0) + (counts[TowerType.wizard] ?? 0),
+      'Zehir Yapısı': (counts[TowerType.poison] ?? 0) + (counts[TowerType.dark] ?? 0),
+      'Destek Yapısı': (counts[TowerType.support] ?? 0) + (counts[TowerType.holy] ?? 0),
+    };
+    String? best;
+    int bestCount = 0;
+    for (final e in archetypes.entries) {
+      if (e.value > bestCount) { bestCount = e.value; best = e.key; }
+    }
+    final newLabel = (bestCount >= 2) ? (best ?? '') : '';
+    if (newLabel.isNotEmpty && newLabel != _currentBuildLabel && !_buildLabelAnnounced) {
+      _buildLabelAnnounced = true;
+      _atmosphere.triggerEventPulse(0.6);
+      world.add(FloatingText(
+        text: newLabel,
+        pos: Vector2(_gameWidth / 2, _gameHeight * 0.22),
+        color: const Color(0xFFFFD700),
+        fontSize: 13,
+        isCritical: true,
+      ));
+    }
+    _currentBuildLabel = newLabel;
   }
 
   void _applyCombo(ComboType combo, Enemy enemy) {
@@ -1898,16 +2578,16 @@ class KaleGame extends FlameGame {
       case ComboType.frozen:
         // Full freeze for 5 seconds + 50% bonus damage marker
         enemy.applyEffect(StatusEffect.slow(factor: 1.0, duration: 5.0));
-        world.add(HitEffect.ice(pos: enemy.position));
+        _addEffect(HitEffect.ice(pos: enemy.position));
         world.add(FloatingText(
           text: 'DONMUŞ!', pos: enemy.position + Vector2(0, -20),
           color: const Color(0xFF22CCEE), fontSize: 12, isCritical: true,
         ));
         break;
       case ComboType.meltdown:
-        // 3x combined DPS burn+poison
-        enemy.applyEffect(StatusEffect.burn(dps: 15, duration: 4.0));
-        world.add(HitEffect.fire(pos: enemy.position));
+        // Burn+poison combo (nerfed)
+        enemy.applyEffect(StatusEffect.burn(dps: 8, duration: 3.0));
+        _addEffect(HitEffect.fire(pos: enemy.position));
         world.add(FloatingText(
           text: 'ERİME!', pos: enemy.position + Vector2(0, -20),
           color: const Color(0xFFFF6600), fontSize: 12, isCritical: true,
@@ -1916,7 +2596,7 @@ class KaleGame extends FlameGame {
       case ComboType.soulShatter:
         // Zero armor for 5 seconds
         enemy.applyEffect(StatusEffect.curse(armorReduce: 999, duration: 5.0));
-        world.add(HitEffect(pos: enemy.position, color: const Color(0xFF8800FF), count: 8, speed: 50));
+        _addEffect(HitEffect(pos: enemy.position, color: const Color(0xFF8800FF), count: 8, speed: 50));
         world.add(FloatingText(
           text: 'RUH PARÇALAMA!', pos: enemy.position + Vector2(0, -20),
           color: const Color(0xFF8800FF), fontSize: 12, isCritical: true,
@@ -1925,45 +2605,96 @@ class KaleGame extends FlameGame {
     }
   }
 
+  // Reusable lists for _processEnemies (avoid per-frame allocation)
+  final List<Enemy> _peToRemove = [];
+  final List<Enemy> _peToSpawn = [];
+
   void _processEnemies() {
-    final toRemove = <Enemy>[];
-    final toSpawn = <Enemy>[];
+    _peToRemove.clear();
+    _peToSpawn.clear();
+    final toRemove = _peToRemove;
+    final toSpawn = _peToSpawn;
     for (final enemy in _enemies) {
       if (enemy.isDead) {
         double goldMult = _mutationGoldMult * runBuffs.goldMultiplier;
         if (enemy.baseStats.isBoss && _metaBossGoldMultiplier > 1.0) {
           goldMult *= _metaBossGoldMultiplier;
         }
+        // Hard cap total gold multiplier to prevent economy explosion
+        if (goldMult > 3.0) goldMult = 3.0;
         final goldEarned = (enemy.goldReward * goldMult).round();
         economy.earnGold(goldEarned);
         _enemiesKilled++;
-        AudioSystem.instance.play(enemy.baseStats.isBoss ? GameSound.bossRoar : GameSound.enemyDeath);
+        if (!(enemy.baseStats.isBoss && debugDisableBossAudio)) {
+          AudioSystem.instance.play(enemy.baseStats.isBoss ? GameSound.bossRoar : GameSound.enemyDeath);
+        }
         AudioSystem.instance.play(GameSound.goldEarn);
         if (enemy.baseStats.isBoss) {
           _bossesKilled++;
-          _hasBossAlive = false;
+          _activeBosses.remove(enemy);
+          _hasBossAlive = _activeBosses.isNotEmpty;
         }
         // Kill streak tracking
         _killStreak++;
         _killStreakTimer = _killStreakWindow;
+        if (_killStreak > _bestKillStreak) _bestKillStreak = _killStreak;
         if (_killStreak >= 3) {
-          // Bonus gold for kill streaks
           final streakBonus = _killStreak;
           economy.earnGold(streakBonus);
         }
-        // Death particle effect (scaled by enemy significance)
+        // ═══ Kill Combo Milestones ═══
+        if (_killStreak == 5) {
+          _atmosphere.triggerEventPulse(0.4);
+          world.add(FloatingText(
+            text: 'COMBO x5!',
+            pos: Vector2(_gameWidth / 2, _gameHeight * 0.35),
+            color: const Color(0xFFFF8800),
+            fontSize: 14,
+            isCritical: true,
+          ));
+        } else if (_killStreak == 10) {
+          screenShake.shake(duration: 0.15, intensity: 3.0);
+          _atmosphere.triggerEventPulse(0.7);
+          world.add(FloatingText(
+            text: 'RAMPAGE!',
+            pos: Vector2(_gameWidth / 2, _gameHeight * 0.35),
+            color: const Color(0xFFFF2200),
+            fontSize: 16,
+            isCritical: true,
+          ));
+        } else if (_killStreak == 20) {
+          screenShake.shake(duration: 0.2, intensity: 4.0);
+          _atmosphere.triggerEventPulse(1.0);
+          world.add(FloatingText(
+            text: 'UNSTOPPABLE!',
+            pos: Vector2(_gameWidth / 2, _gameHeight * 0.35),
+            color: const Color(0xFFFFDD00),
+            fontSize: 18,
+            isCritical: true,
+          ));
+        }
+        // ═══ Element-specific Kill Effects ═══
         if (enemy.baseStats.isBoss) {
-          world.add(HitEffect.bossDeath(pos: enemy.position));
+          _addEffect(HitEffect.bossDeath(pos: enemy.position));
           screenShake.shake(duration: 0.35, intensity: 8.0);
           triggerHitStop(0.07);
           _atmosphere.triggerEventPulse(1.2);
           _atmosphere.triggerRelease(1.5);
         } else if (enemy.isElite) {
-          world.add(HitEffect.death(pos: enemy.position, color: const Color(0xFFFF6600)));
+          _addEffect(HitEffect.death(pos: enemy.position, color: const Color(0xFFFF6600)));
+          triggerHitStop(0.03); // mini hitstop for elites
         } else {
-          world.add(HitEffect.death(pos: enemy.position));
+          // Element kill: use color of the last tower that hit this enemy
+          final killColor = enemy.lastHitTowerType != null
+              ? _elementKillColor(enemy.lastHitTowerType!)
+              : null;
+          if (killColor != null) {
+            _addEffect(HitEffect.death(pos: enemy.position, color: killColor));
+          } else {
+            _addEffect(HitEffect.death(pos: enemy.position));
+          }
         }
-        // Show gold earned text on all kills (easy enemies get smaller text)
+        // Show gold earned text (easy enemies get smaller text)
         final isEasy = enemy.baseStats.difficulty == EnemyDifficulty.easy && _killStreak < 3;
         final streakText = _killStreak >= 3 ? ' x$_killStreak!' : '';
         world.add(FloatingText(
@@ -1972,6 +2703,10 @@ class KaleGame extends FlameGame {
           color: _killStreak >= 5 ? const Color(0xFFFF4444) : _killStreak >= 3 ? const Color(0xFFFF8800) : const Color(0xFFFFD700),
           fontSize: _killStreak >= 5 ? 13 : _killStreak >= 3 ? 11 : isEasy ? 7 : 9,
         ));
+        // Wave Modifier: death explosion damages castle
+        if (_activeWaveModifier == WaveModifier.deathExplosion && !enemy.baseStats.isBoss) {
+          castle.takeDamage(1);
+        }
         // Elite splitting: spawn 2 copies on death
         if (enemy.isElite && enemy.eliteModifier == EliteModifier.splitting && enemy.baseStats.splitCount == 0) {
           final remainingPath = enemy.remainingPath;
@@ -2034,19 +2769,19 @@ class KaleGame extends FlameGame {
             intensity: (dmg * 1.5).clamp(2.0, 8.0).toDouble(),
           );
         }
-        // Goblin steals gold when reaching castle
-        if (enemy.type == EnemyType.goblin) {
-          final stolen = (10 + waveSystem.currentWave * 2).clamp(0, 30).clamp(0, economy.gold);
-          if (stolen > 0) {
-            economy.trySpend(stolen);
-            _goldStolen += stolen;
-          }
+        // Gold loss on castle breach (reduced for balance)
+        final goldPenalty = enemy.type == EnemyType.goblin
+            ? (8 + waveSystem.currentWave).clamp(0, 30).clamp(0, economy.gold)
+            : (3 + waveSystem.currentWave ~/ 2).clamp(0, 15).clamp(0, economy.gold);
+        if (goldPenalty > 0) {
+          economy.trySpend(goldPenalty);
+          _goldStolen += goldPenalty;
         }
         toRemove.add(enemy);
       }
     }
+    // Clean up per-enemy tracked state and trigger death/remove visuals
     for (final enemy in toRemove) {
-      _enemies.remove(enemy);
       _cavalryDashTimers.remove(enemy);
       _darkKnightBuffed.remove(enemy);
       _bossAbilityTimers.remove(enemy);
@@ -2057,10 +2792,21 @@ class KaleGame extends FlameGame {
         enemy.removeFromParent(); // Reached castle, remove immediately
       }
     }
+    // Batch remove — O(n) instead of O(n²) from repeated .remove() calls
+    if (toRemove.isNotEmpty) {
+      final removeSet = toRemove.toSet();
+      _enemies.removeWhere((e) => removeSet.contains(e));
+    }
     for (final enemy in toSpawn) {
       _enemies.add(enemy);
       world.add(enemy);
     }
+    // Update cached count
+    int alive = 0;
+    for (final e in _enemies) {
+      if (!e.isDead && !e.reachedCastle) alive++;
+    }
+    _cachedEnemiesAlive = alive;
     if (toRemove.isNotEmpty) onStateChanged?.call();
   }
 
@@ -2069,36 +2815,22 @@ class KaleGame extends FlameGame {
     if (_healerTickTimer < 1.0) return;
     _healerTickTimer = 0;
 
-    // Iterate without .toList() allocation
-    bool hasHealers = false;
-    for (final e in _enemies) {
-      if (!e.isDead && !e.reachedCastle && e.type == EnemyType.healer) {
-        hasHealers = true;
-        break;
-      }
-    }
-    if (!hasHealers) return;
-    final healers = _enemies.where(
-      (e) => !e.isDead && !e.reachedCastle && e.type == EnemyType.healer,
-    );
-
-    final rangeSquared = (cellSize * 2.0) * (cellSize * 2.0);
-    for (final healer in healers) {
+    final healRange = cellSize * 2.0;
+    for (final healer in _enemies) {
+      if (healer.isDead || healer.reachedCastle || healer.type != EnemyType.healer) continue;
+      // Use spatial grid for nearby allies
+      final nearby = _spatialGrid.queryRange(healer.position.x, healer.position.y, healRange);
+      final healAmount = _activeWaveModifier == WaveModifier.fastHealers ? 4 : 2;
       int healed = 0;
-      for (final other in _enemies) {
-        if (other == healer || other.isDead || other.reachedCastle) continue;
-        if (other.hp >= other.maxHp) continue;
-        final dx = healer.position.x - other.position.x;
-        final dy = healer.position.y - other.position.y;
-        if (dx * dx + dy * dy <= rangeSquared) {
-          other.heal(5);
-          healed++;
-        }
+      for (int i = 0; i < nearby.length; i++) {
+        final other = nearby[i];
+        if (other == healer || other.hp >= other.maxHp) continue;
+        other.heal(healAmount);
+        healed++;
       }
-      // Single floating text per healer instead of per-target
       if (healed > 0) {
         world.add(FloatingText(
-          text: '+${5 * healed}',
+          text: '+${healAmount * healed}',
           pos: healer.position + Vector2(0, -10),
           color: const Color(0xFF00FF00),
           fontSize: 8,
@@ -2115,12 +2847,49 @@ class KaleGame extends FlameGame {
       isPerfect: !_damageTakenThisWave,
     ));
     AudioSystem.instance.play(GameSound.waveComplete);
+    AudioSystem.instance.resetStats(); // reset debug counters per wave
+
+    // ═══ Castle Attrition: escalating wear after wave 15 ═══
+    // Every 5 waves after 15, castle takes (wave/10) damage
+    final w = waveSystem.currentWave;
+    if (w >= _attritionStartWave && w % 5 == 0) {
+      final attritionDmg = (w ~/ 10).clamp(1, 5);
+      castle.takeDamage(attritionDmg);
+      world.add(FloatingText(
+        text: 'Kale yıpranması -$attritionDmg',
+        pos: castle.position + Vector2(0, -25),
+        color: const Color(0xFFFF4444),
+        fontSize: 10,
+      ));
+    }
+
+    // Clear wave modifier
+    _activeWaveModifier = WaveModifier.none;
+
+    // Wave-end sweep: clear all per-enemy tracking maps
     _bossSpawnCount.clear();
     _darkKnightBuffed.clear();
     _cavalryDashTimers.clear();
+    _bossAbilityTimers.clear();
+    _activeBosses.clear();
+    _hasBossAlive = false;
+
+    // Clear stale projectiles that might still be in-flight
+    for (final p in _projectiles) {
+      p.removeFromParent();
+    }
+    _projectiles.clear();
+
+    // Invalidate all tower target caches for fresh start
+    // Stagger retarget timers so towers don't all re-scan on the same frame
+    for (int i = 0; i < _towers.length; i++) {
+      _towers[i].setCachedTarget(null);
+      _towers[i].staggerRetargetTimer(i * 0.02); // 20ms stagger per tower
+    }
     if (waveSystem.currentWave == 1) tutorialSystem.tryShow(TutorialTrigger.firstWaveComplete);
     // Track perfect waves (no damage taken)
     if (!_damageTakenThisWave) {
+      _totalPerfectWaves++;
       _consecutivePerfectWaves++;
       if (_consecutivePerfectWaves > _bestPerfectWaves) {
         _bestPerfectWaves = _consecutivePerfectWaves;
@@ -2146,8 +2915,7 @@ class KaleGame extends FlameGame {
     }
     // Meta: Hazine Avcısı - bonus gold room chance
     if (_metaBonusGoldRoom > 0) {
-      final rng = math.Random();
-      if (rng.nextDouble() < _metaBonusGoldRoom) {
+      if (_damageTextRng.nextDouble() < _metaBonusGoldRoom) {
         final bonus = 20 + waveSystem.currentWave * 3;
         economy.earnGold(bonus);
       }
@@ -2158,8 +2926,7 @@ class KaleGame extends FlameGame {
     }
     // Meta: Arkeolog - ancient artifact bonus gold chance
     if (_metaAncientArtifactChance > 0) {
-      final rng = math.Random();
-      if (rng.nextDouble() < _metaAncientArtifactChance) {
+      if (_damageTextRng.nextDouble() < _metaAncientArtifactChance) {
         final bonus = 50 + waveSystem.currentWave * 5;
         economy.earnGold(bonus);
       }
@@ -2179,6 +2946,32 @@ class KaleGame extends FlameGame {
         color: const Color(0xFFFFD700),
         fontSize: 11,
       ));
+    }
+
+    // ═══ Tower Unlock Notifications ═══
+    if (!_metaAllTowersUnlocked) {
+      final nextWave = waveSystem.currentWave + 1;
+      final newTowers = TowerData.allTypes.where((t) {
+        final stats = TowerData.getStats(t);
+        return stats.unlockWave == nextWave;
+      }).toList();
+      double yOffset = 0;
+      for (final tower in newTowers) {
+        final stats = TowerData.getStats(tower);
+        world.add(FloatingText(
+          text: '${stats.name} Açıldı!',
+          pos: Vector2(_gameWidth / 2, _gameHeight * 0.4 + yOffset),
+          color: const Color(0xFF44DDFF),
+          fontSize: 12,
+        ));
+        world.add(FloatingText(
+          text: stats.roleHint,
+          pos: Vector2(_gameWidth / 2, _gameHeight * 0.4 + yOffset + 16),
+          color: const Color(0xAABBDDEE),
+          fontSize: 9,
+        ));
+        yOffset += 36;
+      }
     }
 
     // Decrement tower curse counters
@@ -2225,31 +3018,17 @@ class KaleGame extends FlameGame {
       }
     }
 
-    // Endless scaling: +10% per 5 waves in endless mode
-    if (_endlessMode && waveSystem.currentWave % 5 == 0) {
+    // Infinite scaling: +10% every 5 waves (applied to enemy HP at spawn)
+    if (waveSystem.currentWave % 5 == 0) {
       _endlessScaling += 0.10;
     }
-    if (_endlessMode) {
-      _endlessHighWave = waveSystem.currentWave;
+
+    // ═══ Wave 2 Tower Choice: offer after wave 1 ═══
+    if (waveSystem.currentWave == 1 && _wave2Choice == null && !_metaAllTowersUnlocked) {
+      _pendingTowerChoice = true;
     }
 
-    if (waveSystem.isComplete) {
-      if (_metaInfiniteMode) {
-        // Show endless mode prompt
-        _showEndlessPrompt = true;
-        _breakTimer = 999; // wait for player decision
-        _phase = GamePhase.waveBreak;
-        onStateChanged?.call();
-        return;
-      } else {
-        _phase = GamePhase.gameOver;
-        AudioSystem.instance.play(GameSound.victory);
-        onGameOver?.call(true);
-        return;
-      }
-    }
-
-    // Roguelike buff selection every 2 waves
+    // Roguelike buff selection every 5 waves
     if (WaveBuffSystem.shouldOfferBuff(waveSystem.currentWave)) {
       _pendingBuffChoices = WaveBuffSystem.getChoices(
         rng: math.Random(mapSeed + waveSystem.currentWave),
@@ -2389,8 +3168,22 @@ class KaleGame extends FlameGame {
   List<String> get activeSynergyNames =>
       synergySystem.activeSynergies.map((s) => s.name).toList();
 
-  List<TowerType> get availableTowers =>
-      TowerData.availableAt(waveSystem.currentWave, allUnlocked: _metaAllTowersUnlocked);
+  List<TowerType> get availableTowers {
+    final base = TowerData.availableAt(waveSystem.currentWave, allUnlocked: _metaAllTowersUnlocked);
+    if (_metaAllTowersUnlocked || _wave2Choice != null) {
+      // If choice made, hide unchosen tower until wave 4
+      if (_wave2Choice != null && waveSystem.currentWave < 4) {
+        final unchosen = _wave2Options.firstWhere((t) => t != _wave2Choice);
+        return base.where((t) => t != unchosen).toList();
+      }
+      return base;
+    }
+    // Before choice: hide both wave-2 options
+    if (waveSystem.currentWave >= 2 && waveSystem.currentWave < 4) {
+      return base.where((t) => !_wave2Options.contains(t)).toList();
+    }
+    return base;
+  }
 
   int adjustedTowerCost(TowerType type) =>
       (TowerData.getStats(type).cost * _mutationTowerCostMult * runBuffs.towerCostMultiplier).round();
@@ -2398,7 +3191,6 @@ class KaleGame extends FlameGame {
   /// Preview of next wave composition
   List<WaveEntry> get nextWavePreview {
     final next = waveSystem.currentWave + 1;
-    if (next > waveSystem.totalWaves) return [];
     return WaveData.getWave(next, difficulty, seed: mapSeed);
   }
 
@@ -2408,7 +3200,6 @@ class KaleGame extends FlameGame {
     final previews = <List<WaveEntry>>[];
     for (int i = 2; i <= _metaPreviewWaves; i++) {
       final waveNum = waveSystem.currentWave + i;
-      if (waveNum > waveSystem.totalWaves) break;
       previews.add(WaveData.getWave(waveNum, difficulty, seed: mapSeed));
     }
     return previews;
@@ -2429,9 +3220,27 @@ class KaleGame extends FlameGame {
   // Shared RNG for damage text offsets (avoid per-call allocation)
   static final math.Random _damageTextRng = math.Random();
 
+  Color _elementKillColor(TowerType type) {
+    switch (type) {
+      case TowerType.fire: return const Color(0xFFFF5511);
+      case TowerType.ice: return const Color(0xFF22CCEE);
+      case TowerType.lightning: return const Color(0xFFFFDD00);
+      case TowerType.poison: return const Color(0xFF33FF33);
+      case TowerType.water: return const Color(0xFF00BBCC);
+      case TowerType.dark: return const Color(0xFF8833DD);
+      case TowerType.holy: return const Color(0xFFFFDD66);
+      case TowerType.cannon: return const Color(0xFFFF6633);
+      default: return const Color(0xFFFF8844);
+    }
+  }
+
   void _showDamageText(Vector2 pos, int damage) {
-    // Limit active floating texts to prevent GPU overload
-    if (world.children.whereType<FloatingText>().length >= _maxActiveTexts) return;
+    if (_hasBossAlive && debugDisableBossTexts) return;
+    // Smart filtering: skip tiny damage numbers to reduce visual noise
+    if (damage < 5 && _damageTextRng.nextDouble() > 0.3) return;
+    final cap = _hasBossAlive ? _maxTextsPerFrameBoss : _maxTextsPerFrame;
+    if (_textsThisFrame >= cap) return;
+    _textsThisFrame++;
 
     final isCritical = damage >= 30;
     final color = damage >= 30
@@ -2449,9 +3258,12 @@ class KaleGame extends FlameGame {
     ));
   }
 
-  /// Add a HitEffect only if under the active limit
+  /// Add a HitEffect only if under the per-frame limit
   void _addEffect(HitEffect effect) {
-    if (world.children.whereType<HitEffect>().length >= _maxActiveEffects) return;
+    if (_hasBossAlive && debugDisableBossEffects) return; // debug: skip all effects during boss
+    final cap = _hasBossAlive ? _maxEffectsPerFrameBoss : _maxEffectsPerFrame;
+    if (_effectsThisFrame >= cap) return;
+    _effectsThisFrame++;
     world.add(effect);
   }
 

@@ -22,18 +22,18 @@ class WaveBuffSystem {
   WaveBuffSystem._();
 
   /// How often (in waves) buff choices are presented.
-  static const int selectionInterval = 2;
+  static const int selectionInterval = 5;
 
   /// All possible buffs that can be offered.
   static const List<WaveBuff> _allBuffs = [
-    WaveBuff(id: 'dmg_boost', name: 'Hasar Artışı', description: '+%20 tüm kule hasarı', icon: '⚔️', value: 0.20),
-    WaveBuff(id: 'speed_boost', name: 'Hızlı Atış', description: '+%15 saldırı hızı', icon: '⚡', value: 0.15),
-    WaveBuff(id: 'slow_enemy', name: 'Yavaşlat', description: 'Düşmanlar %15 yavaş', icon: '🐢', value: 0.15),
-    WaveBuff(id: 'cheap_tower', name: 'Ucuz Kule', description: 'Kule maliyeti %20 düşük', icon: '💰', value: 0.20),
-    WaveBuff(id: 'range_boost', name: 'Geniş Menzil', description: '+%15 kule menzili', icon: '🎯', value: 0.15),
-    WaveBuff(id: 'castle_heal', name: 'Kale Onarımı', description: 'Kale +10 HP', icon: '🏰', value: 10),
-    WaveBuff(id: 'gold_boost', name: 'Altın Avcısı', description: '+%25 altın kazancı', icon: '🪙', value: 0.25),
-    WaveBuff(id: 'crit_boost', name: 'Kritik Vuruş', description: '+%10 kritik şans', icon: '💥', value: 0.10),
+    WaveBuff(id: 'dmg_boost', name: 'Hasar Artışı', description: '+%10 tüm kule hasarı', icon: '⚔️', value: 0.10),
+    WaveBuff(id: 'speed_boost', name: 'Hızlı Atış', description: '+%10 saldırı hızı', icon: '⚡', value: 0.10),
+    WaveBuff(id: 'slow_enemy', name: 'Yavaşlat', description: 'Düşmanlar %10 yavaş', icon: '🐢', value: 0.10),
+    WaveBuff(id: 'cheap_tower', name: 'Ucuz Kule', description: 'Kule maliyeti %15 düşük', icon: '💰', value: 0.15),
+    WaveBuff(id: 'range_boost', name: 'Geniş Menzil', description: '+%10 kule menzili', icon: '🎯', value: 0.10),
+    WaveBuff(id: 'castle_heal', name: 'Kale Onarımı', description: 'Kale +4 HP', icon: '🏰', value: 4),
+    WaveBuff(id: 'gold_boost', name: 'Altın Avcısı', description: '+%15 altın kazancı', icon: '🪙', value: 0.15),
+    WaveBuff(id: 'crit_boost', name: 'Kritik Vuruş', description: '+%5 kritik şans', icon: '💥', value: 0.05),
   ];
 
   /// Returns true if a buff selection should be shown after [waveNumber].
@@ -77,7 +77,8 @@ class RunBuffState {
       case 'castle_heal':
         castleHealPending += buff.value.round();
       case 'gold_boost':
-        goldMultiplier += buff.value;
+        // Cap gold boost at 3 stacks (max +75%)
+        if (goldMultiplier < 1.75) goldMultiplier += buff.value;
       case 'crit_boost':
         critBonus += buff.value;
     }

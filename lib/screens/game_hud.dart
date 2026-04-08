@@ -6,6 +6,7 @@ import '../game/data/t4_branch_data.dart';
 import '../game/components/towers/tower.dart';
 import '../game/systems/spell_system.dart';
 import '../game/systems/mutation_system.dart';
+import '../game/systems/wave_buff_system.dart';
 import 'widgets/glass_panel.dart';
 
 class GameHud extends StatefulWidget {
@@ -67,6 +68,16 @@ class GameHud extends StatefulWidget {
   final bool objKills;
   final bool objBoss;
 
+  // Active run buffs
+  final List<WaveBuff> activeBuffs;
+
+  // Wave 2 tower choice
+  final bool pendingTowerChoice;
+  final ValueChanged<TowerType>? onTowerChoice;
+
+  // Build identity label
+  final String buildLabel;
+
   const GameHud({
     super.key,
     required this.castleHp,
@@ -112,6 +123,10 @@ class GameHud extends StatefulWidget {
     this.objWaves = false,
     this.objKills = false,
     this.objBoss = false,
+    this.activeBuffs = const [],
+    this.pendingTowerChoice = false,
+    this.onTowerChoice,
+    this.buildLabel = '',
   });
 
   @override
@@ -128,9 +143,11 @@ class _GameHudState extends State<GameHud> with TickerProviderStateMixin {
   late AnimationController _pulseController;
   late AnimationController _goldFlashController;
   late AnimationController _goldRejectController;
+  late AnimationController _buffPulseController;
   int _prevGold = 0;
   int _goldDelta = 0;
   int _prevRejectCounter = 0;
+  int _prevBuffCount = 0;
 
   @override
   void initState() {
@@ -148,7 +165,12 @@ class _GameHudState extends State<GameHud> with TickerProviderStateMixin {
       vsync: this,
       duration: const Duration(milliseconds: 350),
     );
+    _buffPulseController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 600),
+    );
     _prevRejectCounter = widget.goldRejectCounter;
+    _prevBuffCount = widget.activeBuffs.length;
   }
 
   @override
@@ -163,6 +185,12 @@ class _GameHudState extends State<GameHud> with TickerProviderStateMixin {
       _goldRejectController.forward(from: 0);
       _prevRejectCounter = widget.goldRejectCounter;
     }
+    if (widget.activeBuffs.length != _prevBuffCount) {
+      if (widget.activeBuffs.length > _prevBuffCount) {
+        _buffPulseController.forward(from: 0);
+      }
+      _prevBuffCount = widget.activeBuffs.length;
+    }
   }
 
   @override
@@ -170,6 +198,7 @@ class _GameHudState extends State<GameHud> with TickerProviderStateMixin {
     _pulseController.dispose();
     _goldFlashController.dispose();
     _goldRejectController.dispose();
+    _buffPulseController.dispose();
     super.dispose();
   }
 
@@ -193,6 +222,8 @@ class _GameHudState extends State<GameHud> with TickerProviderStateMixin {
         ),
         if (widget.pendingT4Tower != null)
           _buildT4BranchOverlay(widget.pendingT4Tower!),
+        if (widget.pendingTowerChoice)
+          _buildTowerChoiceOverlay(),
       ],
     );
   }
@@ -271,7 +302,15 @@ class _GameHudState extends State<GameHud> with TickerProviderStateMixin {
                   ],
                   const SizedBox(width: 5),
                   _buildObjectives(),
+                  if (widget.buildLabel.isNotEmpty) ...[
+                    const SizedBox(width: 5),
+                    _buildBuildLabel(),
+                  ],
                   const Spacer(),
+                  if (widget.activeBuffs.isNotEmpty) ...[
+                    _buildActiveBuffs(),
+                    const SizedBox(width: 4),
+                  ],
                   if (widget.activeMutations.isNotEmpty) ...[
                     _buildMutationBadge(),
                     const SizedBox(width: 4),
@@ -434,7 +473,7 @@ class _GameHudState extends State<GameHud> with TickerProviderStateMixin {
           const Icon(Icons.waves, color: Color(0xFF6699CC), size: 12),
           const SizedBox(width: 3),
           Text(
-            '${widget.currentWave}/${widget.totalWaves}',
+            'Dalga ${widget.currentWave}',
             style: const TextStyle(color: _cream, fontSize: 11, fontWeight: FontWeight.bold),
           ),
         ],
@@ -509,6 +548,33 @@ class _GameHudState extends State<GameHud> with TickerProviderStateMixin {
     );
   }
 
+  Widget _buildBuildLabel() {
+    final color = _buildLabelColor(widget.buildLabel);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(colors: [color.withAlpha(40), color.withAlpha(20)]),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: color.withAlpha(100)),
+      ),
+      child: Text(
+        widget.buildLabel,
+        style: TextStyle(color: color, fontSize: 9, fontWeight: FontWeight.bold),
+      ),
+    );
+  }
+
+  Color _buildLabelColor(String label) {
+    switch (label) {
+      case 'Ateş Yapısı': return const Color(0xFFFF5511);
+      case 'Kontrol Yapısı': return const Color(0xFF22CCEE);
+      case 'Yıkım Yapısı': return const Color(0xFFFFDD00);
+      case 'Zehir Yapısı': return const Color(0xFF33FF33);
+      case 'Destek Yapısı': return const Color(0xFFFFDD66);
+      default: return _gold;
+    }
+  }
+
   Widget _objDot(IconData icon, bool done, String label) {
     return Tooltip(
       message: '$label${done ? ' ✓' : ''}',
@@ -529,6 +595,80 @@ class _GameHudState extends State<GameHud> with TickerProviderStateMixin {
           color: done ? _gold : _cream.withAlpha(60),
         ),
       ),
+    );
+  }
+
+  Widget _buildActiveBuffs() {
+    // Count stacks per buff id
+    final counts = <String, int>{};
+    final buffMap = <String, WaveBuff>{};
+    for (final buff in widget.activeBuffs) {
+      counts[buff.id] = (counts[buff.id] ?? 0) + 1;
+      buffMap[buff.id] = buff;
+    }
+    return AnimatedBuilder(
+      animation: _buffPulseController,
+      builder: (context, child) {
+        final pulse = _buffPulseController.value;
+        final glowAlpha = pulse < 1.0 ? ((1.0 - pulse) * 120).round() : 0;
+        final scale = pulse < 0.3 ? 1.0 + pulse * 0.3 : 1.0;
+        return Transform.scale(
+          scale: scale,
+          child: Container(
+            decoration: glowAlpha > 0
+                ? BoxDecoration(
+                    boxShadow: [BoxShadow(color: Color.fromARGB(glowAlpha, 255, 215, 0), blurRadius: 12)],
+                  )
+                : null,
+            child: child,
+          ),
+        );
+      },
+      child: Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        for (final entry in counts.entries)
+          Tooltip(
+            message: '${buffMap[entry.key]!.name}${entry.value > 1 ? ' x${entry.value}' : ''}\n${buffMap[entry.key]!.description}',
+            child: Container(
+              margin: const EdgeInsets.only(right: 2),
+              width: 20,
+              height: 20,
+              decoration: BoxDecoration(
+                color: _gold.withAlpha(30),
+                borderRadius: BorderRadius.circular(4),
+                border: Border.all(color: _gold.withAlpha(80)),
+              ),
+              child: Stack(
+                children: [
+                  Center(
+                    child: Text(
+                      buffMap[entry.key]!.icon,
+                      style: const TextStyle(fontSize: 11),
+                    ),
+                  ),
+                  if (entry.value > 1)
+                    Positioned(
+                      right: 0,
+                      bottom: 0,
+                      child: Container(
+                        padding: const EdgeInsets.all(1),
+                        decoration: BoxDecoration(
+                          color: _gold,
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: Text(
+                          'x${entry.value}',
+                          style: TextStyle(color: _bgDark, fontSize: 7, fontWeight: FontWeight.bold),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ),
+      ],
+    ),
     );
   }
 
@@ -757,12 +897,30 @@ class _GameHudState extends State<GameHud> with TickerProviderStateMixin {
               Flexible(child: _buildTowerGrid()),
             const SizedBox(width: 6),
             if (!widget.isWaveActive)
-              _buildStartWaveButton()
+              _buildStartWaveColumn()
             else
               _buildWaveActiveIndicator(),
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildStartWaveColumn() {
+    final nextUnlock = TowerData.nextUnlock(widget.currentWave);
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        if (nextUnlock != null)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 3),
+            child: Text(
+              '${nextUnlock.name}: ${nextUnlock.wavesUntil} dalga',
+              style: TextStyle(color: _gold.withAlpha(160), fontSize: 8),
+            ),
+          ),
+        _buildStartWaveButton(),
+      ],
     );
   }
 
@@ -1229,6 +1387,84 @@ class _GameHudState extends State<GameHud> with TickerProviderStateMixin {
             ),
           );
         }).toList(),
+      ),
+    );
+  }
+
+  Widget _buildTowerChoiceOverlay() {
+    final fireStats = TowerData.getStats(TowerType.fire);
+    final spikeStats = TowerData.getStats(TowerType.spikeWall);
+    return Container(
+      color: const Color(0xBB000000),
+      child: Center(
+        child: GlassPanel(
+          padding: const EdgeInsets.all(20),
+          borderRadius: 12,
+          borderColor: _gold,
+          child: SizedBox(
+            width: 320,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  'Yeni Kule Seç',
+                  style: TextStyle(
+                    color: _gold,
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    shadows: [Shadow(color: _gold.withAlpha(80), blurRadius: 6)],
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'Seçmediğin kule Dalga 4\'te açılır',
+                  style: TextStyle(color: _cream.withAlpha(140), fontSize: 10),
+                ),
+                const SizedBox(height: 14),
+                Row(
+                  children: [
+                    Expanded(child: _buildTowerChoiceCard(
+                      TowerType.fire, fireStats.name, fireStats.roleHint,
+                      const Color(0xFFFF5511), Icons.local_fire_department,
+                    )),
+                    const SizedBox(width: 10),
+                    Expanded(child: _buildTowerChoiceCard(
+                      TowerType.spikeWall, spikeStats.name, spikeStats.roleHint,
+                      const Color(0xFF888888), Icons.fence,
+                    )),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTowerChoiceCard(TowerType type, String name, String role, Color color, IconData icon) {
+    return GestureDetector(
+      onTap: () => widget.onTowerChoice?.call(type),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [color.withAlpha(40), const Color(0xFF1A1510)],
+          ),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: color.withAlpha(120)),
+        ),
+        child: Column(
+          children: [
+            Icon(icon, color: color, size: 28),
+            const SizedBox(height: 8),
+            Text(name, style: TextStyle(color: _cream, fontSize: 13, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 4),
+            Text(role, style: TextStyle(color: _cream.withAlpha(160), fontSize: 9), textAlign: TextAlign.center),
+          ],
+        ),
       ),
     );
   }

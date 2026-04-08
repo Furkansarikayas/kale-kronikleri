@@ -23,6 +23,24 @@ class Castle extends RectangleComponent {
   int _cachedHpTextMax = -1;
   TextPainter? _cachedHpPainter;
 
+  // Cached paint and ColorFilters for render (avoid per-frame allocation)
+  static final Paint _castlePaint = Paint()..filterQuality = FilterQuality.medium;
+  static final List<ColorFilter> _castleHitFilters = List.generate(6, (i) {
+    final t = (i + 1) / 6.0;
+    return ColorFilter.matrix(<double>[
+      1, 0, 0, 0, t * 120, 0, 1, 0, 0, -t * 30, 0, 0, 1, 0, -t * 30, 0, 0, 0, 1, 0,
+    ]);
+  });
+  static final List<ColorFilter> _castleHealFilters = List.generate(6, (i) {
+    final t = (i + 1) / 6.0;
+    return ColorFilter.matrix(<double>[
+      1, 0, 0, 0, -t * 20, 0, 1, 0, 0, t * 100, 0, 0, 1, 0, -t * 15, 0, 0, 0, 1, 0,
+    ]);
+  });
+  static const ColorFilter _castleDamagePhase1 = ColorFilter.matrix(<double>[
+    1, 0, 0, 0, 12, 0, 1, 0, 0, 6, 0, 0, 1, 0, -5, 0, 0, 0, 1, 0,
+  ]);
+
   Castle({required double cellSize, int? maxHp})
       : _hp = maxHp ?? GameConfig.baseCastleHp,
         maxHp = maxHp ?? GameConfig.baseCastleHp,
@@ -82,47 +100,25 @@ class Castle extends RectangleComponent {
         0, 0, sprite.width.toDouble(), sprite.height.toDouble(),
       );
       final dst = Rect.fromLTWH(0, 0, w, h);
-      final paint = Paint()..filterQuality = FilterQuality.medium;
+      _castlePaint.colorFilter = null;
 
       // Hit flash: brief red pulse on damage (highest priority)
       if (_hitFlashTimer > 0) {
         final flashT = (_hitFlashTimer / _hitFlashDuration).clamp(0.0, 1.0);
-        paint.colorFilter = ColorFilter.matrix(<double>[
-          1, 0, 0, 0, flashT * 120,
-          0, 1, 0, 0, -flashT * 30,
-          0, 0, 1, 0, -flashT * 30,
-          0, 0, 0, 1, 0,
-        ]);
+        _castlePaint.colorFilter = _castleHitFilters[(flashT * 5).round().clamp(0, 5)];
       } else if (_healFlashTimer > 0) {
-        // Heal flash: brief green pulse on recovery
         final healT = (_healFlashTimer / _healFlashDuration).clamp(0.0, 1.0);
-        paint.colorFilter = ColorFilter.matrix(<double>[
-          1, 0, 0, 0, -healT * 20,
-          0, 1, 0, 0, healT * 100,
-          0, 0, 1, 0, -healT * 15,
-          0, 0, 0, 1, 0,
-        ]);
+        _castlePaint.colorFilter = _castleHealFilters[(healT * 5).round().clamp(0, 5)];
       } else if (phase == 2) {
-        // Critical damage: pulsing red-orange tint
+        // Critical damage: pulsing red-orange tint — use quantized brightness
         final dangerPulse = 0.3 + 0.2 * math.sin(_animTimer * 3.0);
-        final tintIntensity = dangerPulse * 35;
-        paint.colorFilter = ColorFilter.matrix(<double>[
-          1, 0, 0, 0, tintIntensity,
-          0, 1, 0, 0, -tintIntensity * 0.2,
-          0, 0, 1, 0, -tintIntensity * 0.3,
-          0, 0, 0, 1, 0,
-        ]);
+        final idx = (dangerPulse * 5).round().clamp(0, 5);
+        _castlePaint.colorFilter = _castleHitFilters[idx];
       } else if (phase == 1) {
-        // Moderate damage: subtle warm amber tint
-        paint.colorFilter = const ColorFilter.matrix(<double>[
-          1, 0, 0, 0, 12,
-          0, 1, 0, 0, 6,
-          0, 0, 1, 0, -5,
-          0, 0, 0, 1, 0,
-        ]);
+        _castlePaint.colorFilter = _castleDamagePhase1;
       }
 
-      canvas.drawImageRect(sprite, src, dst, paint);
+      canvas.drawImageRect(sprite, src, dst, _castlePaint);
     }
 
     // Dynamic overlays that animate every frame

@@ -7,6 +7,7 @@ import '../../data/game_config.dart';
 import '../../data/t4_branch_data.dart';
 import '../../data/attack_profiles.dart';
 import '../effects/synergy_particles.dart';
+import '../enemies/enemy.dart';
 import '../rendering/tower_sprites.dart';
 import 'projectile.dart';
 
@@ -30,6 +31,7 @@ class Tower extends RectangleComponent {
 
   // Curse debuff
   double curseDebuffMult = 1.0; // 0.7 when cursed
+  bool shadowAuraAffected = false; // ShadowLord aura debuff visual
   double _synergyDamageMultiplier = 1.0;
   double _synergyRangeBonus = 0.0;
   double _synergyFireRateMultiplier = 1.0;
@@ -50,6 +52,43 @@ class Tower extends RectangleComponent {
   TargetingMode targetingMode = TargetingMode.nearest;
 
   SynergyParticles? _synergyParticles;
+
+  // Target caching — avoids full enemy scan every frame
+  Enemy? _cachedTarget;
+  double _retargetTimer = 0;
+  static const double retargetInterval = 0.20; // re-scan every 200ms
+
+  /// Get current cached target (may be null/stale).
+  Enemy? get cachedTarget => _cachedTarget;
+
+  /// Set a new cached target from external targeting logic.
+  void setCachedTarget(Enemy? target) {
+    _cachedTarget = target;
+    _retargetTimer = 0;
+  }
+
+  /// Pre-offset the retarget timer so towers don't all scan on the same frame.
+  void staggerRetargetTimer(double offset) {
+    _retargetTimer = offset;
+  }
+
+  /// Returns true if the tower needs a new target scan.
+  bool needsRetarget(double dt) {
+    _retargetTimer += dt;
+    // Retarget if: no target, target dead/gone/out-of-range, or timer expired
+    if (_cachedTarget != null) {
+      if (_cachedTarget!.isDead || _cachedTarget!.reachedCastle || !isInRange(_cachedTarget!.position)) {
+        _cachedTarget = null;
+        return true;
+      }
+    }
+    if (_cachedTarget == null) return true;
+    if (_retargetTimer >= retargetInterval) {
+      _retargetTimer = 0;
+      return true;
+    }
+    return false;
+  }
 
   // Animation state
   double _animTimer = 0;
@@ -76,6 +115,14 @@ class Tower extends RectangleComponent {
   static final Paint _fp = Paint();
   static final Paint _sp = Paint()..style = PaintingStyle.stroke;
   static final Paint _imgPaint = Paint()..filterQuality = FilterQuality.medium;
+
+  // Cached brightness ColorFilters (quantized to 10 levels, 0-100 brightness)
+  static final List<ColorFilter> _brightnessFilters = List.generate(10, (i) {
+    final v = (i + 1) * 10.0;
+    return ColorFilter.matrix(<double>[
+      1, 0, 0, 0, v, 0, 1, 0, 0, v, 0, 0, 1, 0, v, 0, 0, 0, 1, 0,
+    ]);
+  });
 
   AttackProfile get attackProfile => AttackProfile.get(type);
 
@@ -355,33 +402,17 @@ class Tower extends RectangleComponent {
         // Tier-up brightness pulse (overrides shimmer while active)
         if (_tierUpTimer > 0) {
           final upT = (_tierUpTimer / _tierUpDuration).clamp(0.0, 1.0);
-          final brightness = upT * 80;
-          _imgPaint.colorFilter = ColorFilter.matrix(<double>[
-            1, 0, 0, 0, brightness,
-            0, 1, 0, 0, brightness,
-            0, 0, 1, 0, brightness,
-            0, 0, 0, 1, 0,
-          ]);
+          final idx = (upT * 8).round().clamp(0, 9); // 0-80 brightness → indices 0-8
+          _imgPaint.colorFilter = _brightnessFilters[idx];
         }
         // T3+ shimmer: periodic brightness pulse (T4 gets branch-colored)
         else if (_tier >= 3) {
           final shimmer = math.sin(_animTimer * 1.8 + 2.0) * 0.5 + 0.5;
           final shimmerAmount = shimmer * (_tier == 4 ? 25.0 : 20.0);
           if (shimmerAmount > 5.0) {
-            double sR = shimmerAmount, sG = shimmerAmount, sB = shimmerAmount;
-            if (_tier == 4) {
-              if (t4Branch == T4BranchPath.pathA) {
-                sB *= 0.3; // warm gold: suppress blue
-              } else {
-                sR *= 0.4; // cool blue: suppress red
-              }
-            }
-            _imgPaint.colorFilter = ColorFilter.matrix(<double>[
-              1, 0, 0, 0, sR,
-              0, 1, 0, 0, sG,
-              0, 0, 1, 0, sB,
-              0, 0, 0, 1, 0,
-            ]);
+            // Use closest cached brightness filter (uniform brightness only)
+            final idx = (shimmerAmount / 10).round().clamp(0, 9);
+            _imgPaint.colorFilter = _brightnessFilters[idx];
           }
         }
 
@@ -607,6 +638,17 @@ class Tower extends RectangleComponent {
     if (curseDebuffMult < 1.0) {
       _fp.color = const Color(0xFFAA00AA);
       canvas.drawCircle(Offset(cellSize / 2, -cellSize * 0.3), 4, _fp);
+    }
+
+    // 8. ShadowLord aura debuff: red pulse + slow-down feel
+    if (shadowAuraAffected) {
+      final redPulse = 0.15 + 0.1 * math.sin(_animTimer * 4);
+      final redAlpha = (redPulse * 255).round().clamp(0, 60);
+      _fp.color = Color.fromARGB(redAlpha, 255, 30, 30);
+      canvas.drawRect(Rect.fromLTWH(0, 0, cellSize, cellSize), _fp);
+      // Small debuff icon
+      _fp.color = const Color(0xBBFF3333);
+      canvas.drawCircle(Offset(cellSize - 6, -4), 3, _fp);
     }
   }
 

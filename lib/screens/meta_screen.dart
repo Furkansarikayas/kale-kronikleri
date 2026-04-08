@@ -54,47 +54,64 @@ class _MetaScreenState extends State<MetaScreen> {
           ),
         ],
       ),
-      body: Row(
+      body: Column(
         children: [
-          // Tree tabs
-          SizedBox(
-            width: 150,
-            child: ListView(
-              children: MetaTree.trees.map((tree) {
-                final isSelected = tree.id == _selectedTreeId;
-                final level = widget.unlockedLevels[tree.id] ?? 0;
-                return ListTile(
-                  selected: isSelected,
-                  selectedTileColor: _gold.withAlpha(30),
-                  leading: SizedBox(
-                    width: 24,
-                    height: 24,
-                    child: Image.asset(
-                      'assets/images/ui/meta_${tree.id}_1.webp',
-                      fit: BoxFit.contain,
-                      errorBuilder: (_, __, ___) => Icon(_treeIcon(tree.id), color: isSelected ? _gold : _cream.withAlpha(120), size: 20),
-                    ),
-                  ),
-                  title: Text(
-                    tree.name,
-                    style: TextStyle(
-                      color: isSelected ? _gold : _cream,
-                      fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                      fontSize: 13,
-                    ),
-                  ),
-                  subtitle: Text(
-                    '$level / ${tree.nodes.length}',
-                    style: TextStyle(color: _cream.withAlpha(80), fontSize: 10),
-                  ),
-                  onTap: () => setState(() => _selectedTreeId = tree.id),
-                );
-              }).toList(),
+          // Info banner
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            color: _gold.withAlpha(15),
+            child: Text(
+              'Her koşuda kazandığın Ruh ile kalıcı güçlendirmeler aç. Bu bonuslar tüm gelecek koşularda geçerli olur.',
+              style: TextStyle(color: _cream.withAlpha(180), fontSize: 11),
+              textAlign: TextAlign.center,
             ),
           ),
-          const VerticalDivider(color: _gold, width: 1),
-          // Node list
-          Expanded(child: _buildNodeList()),
+          Expanded(
+            child: Row(
+              children: [
+                // Tree tabs
+                SizedBox(
+                  width: 150,
+                  child: ListView(
+                    children: MetaTree.trees.map((tree) {
+                      final isSelected = tree.id == _selectedTreeId;
+                      final level = widget.unlockedLevels[tree.id] ?? 0;
+                      return ListTile(
+                        selected: isSelected,
+                        selectedTileColor: _gold.withAlpha(30),
+                        leading: SizedBox(
+                          width: 24,
+                          height: 24,
+                          child: Image.asset(
+                            'assets/images/ui/meta_${tree.id}_1.webp',
+                            fit: BoxFit.contain,
+                            errorBuilder: (_, __, ___) => Icon(_treeIcon(tree.id), color: isSelected ? _gold : _cream.withAlpha(120), size: 20),
+                          ),
+                        ),
+                        title: Text(
+                          tree.name,
+                          style: TextStyle(
+                            color: isSelected ? _gold : _cream,
+                            fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                            fontSize: 13,
+                          ),
+                        ),
+                        subtitle: Text(
+                          '$level / ${tree.nodes.length}',
+                          style: TextStyle(color: _cream.withAlpha(80), fontSize: 10),
+                        ),
+                        onTap: () => setState(() => _selectedTreeId = tree.id),
+                      );
+                    }).toList(),
+                  ),
+                ),
+                const VerticalDivider(color: _gold, width: 1),
+                // Node list
+                Expanded(child: _buildNodeList()),
+              ],
+            ),
+          ),
         ],
       ),
     );
@@ -139,8 +156,33 @@ class _MetaScreenState extends State<MetaScreen> {
 
     return ListView.builder(
       padding: const EdgeInsets.all(16),
-      itemCount: tree.nodes.length,
+      itemCount: tree.nodes.length + 1, // +1 for header
       itemBuilder: (context, index) {
+        // Tree header with subtitle
+        if (index == 0) {
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(tree.name, style: const TextStyle(color: _gold, fontSize: 18, fontWeight: FontWeight.bold)),
+                const SizedBox(height: 4),
+                Text(tree.subtitle, style: TextStyle(color: _cream.withAlpha(140), fontSize: 12)),
+                if (tree.id == 'efsane')
+                  Padding(
+                    padding: const EdgeInsets.only(top: 4),
+                    child: Text(
+                      'Bu ağaçtaki yetenekler belirli sayıda koşu tamamlamayı gerektirir.',
+                      style: TextStyle(color: Colors.orange.withAlpha(180), fontSize: 11),
+                    ),
+                  ),
+                const SizedBox(height: 8),
+                Divider(color: _gold.withAlpha(40)),
+              ],
+            ),
+          );
+        }
+        index -= 1; // adjust for header
         final node = tree.nodes[index];
         final isUnlocked = index < unlockedLevel;
         final isNext = index == unlockedLevel;

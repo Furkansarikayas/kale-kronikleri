@@ -35,7 +35,7 @@ class SpellSystem {
     SpellDef(
       type: SpellType.castleRepair,
       name: 'Kale Onarımı',
-      description: 'Kale HP %20 iyileştir',
+      description: 'Kale HP %10 iyileştir',
       cooldown: 50.0,
       unlockWave: 8,
     ),

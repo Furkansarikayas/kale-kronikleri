@@ -3,6 +3,7 @@ import 'achievements.dart';
 
 class SaveManager {
   final SharedPreferences _prefs;
+  SharedPreferences get prefs => _prefs;
   SaveManager._(this._prefs);
 
   static Future<SaveManager> create() async {
@@ -79,6 +80,18 @@ class SaveManager {
   int get bestPerfectWaves => _prefs.getInt('best_perfect_waves') ?? 0;
   Future<void> updateBestPerfectWaves(int count) async {
     if (count > bestPerfectWaves) await _prefs.setInt('best_perfect_waves', count);
+  }
+
+  // --- Persistent build memory ---
+
+  int get favoriteTowerIndex => _prefs.getInt('favorite_tower') ?? -1;
+  Future<void> updateFavoriteTower(int index) async {
+    if (index >= 0) await _prefs.setInt('favorite_tower', index);
+  }
+
+  String get favoriteBuild => _prefs.getString('favorite_build') ?? '';
+  Future<void> updateFavoriteBuild(String label) async {
+    if (label.isNotEmpty) await _prefs.setString('favorite_build', label);
   }
 
   // --- Achievement unlocks ---
