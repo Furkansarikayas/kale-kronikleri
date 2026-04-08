@@ -43,3 +43,27 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# Android release signing
+*.jks
+key.properties
+android/key.properties
+android/app/keystore.jks
+
+# Flutter generated
+.flutter-plugins
+.flutter-plugins-dependencies
+.dart_tool/
+*.dart_tool/
+
+# Screenshots in project root (dev artifacts, not for version control)
+ss_*.png
+ss.png
+ss[0-9].png
+screenshot*.png
+screen*.png
+emulator_screenshot.png
+ui.xml
+
+# Superpowers brainstorm sessions
+.superpowers/

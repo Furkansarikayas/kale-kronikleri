@@ -148,6 +148,8 @@ class _GameHudState extends State<GameHud> with TickerProviderStateMixin {
   int _goldDelta = 0;
   int _prevRejectCounter = 0;
   int _prevBuffCount = 0;
+  TowerCategory? _selectedCategory;
+  TowerType? _previewTower;
 
   @override
   void initState() {
@@ -1577,146 +1579,407 @@ class _GameHudState extends State<GameHud> with TickerProviderStateMixin {
     );
   }
 
+  Color _categoryColor(TowerCategory cat) {
+    switch (cat) {
+      case TowerCategory.damage: return const Color(0xFFFF5544);
+      case TowerCategory.control: return const Color(0xFF22CCEE);
+      case TowerCategory.defense: return const Color(0xFF88AA55);
+      case TowerCategory.magic: return const Color(0xFFAA44DD);
+    }
+  }
+
+  IconData _categoryIcon(TowerCategory cat) {
+    switch (cat) {
+      case TowerCategory.damage: return Icons.local_fire_department;
+      case TowerCategory.control: return Icons.ac_unit;
+      case TowerCategory.defense: return Icons.shield;
+      case TowerCategory.magic: return Icons.auto_awesome;
+    }
+  }
+
   Widget _buildTowerGrid() {
-    final towers = widget.availableTowers;
-    // Use Row instead of ListView so empty gaps between cards
-    // pass touches through to the game map below.
-    return SizedBox(
-      height: 62,
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          for (int index = 0; index < towers.length; index++) ...[
-            if (index > 0) const SizedBox(width: 5),
-            _buildTowerCard(towers[index]),
+    final allAvailable = widget.availableTowers;
+    final categories = TowerData.availableCategories(widget.currentWave);
+
+    // Auto-select first category if none selected or current one has no towers
+    if (_selectedCategory == null || !categories.contains(_selectedCategory)) {
+      _selectedCategory = categories.isNotEmpty ? categories.first : null;
+    }
+
+    final filteredTowers = _selectedCategory != null
+        ? allAvailable.where((t) => TowerData.getCategory(t) == _selectedCategory).toList()
+        : allAvailable;
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Preview panel when a tower is long-pressed
+        if (_previewTower != null)
+          _buildTowerPreview(_previewTower!),
+        // Category tabs
+        SizedBox(
+          height: 22,
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              for (final cat in categories) ...[
+                _buildCategoryTab(cat),
+                const SizedBox(width: 3),
+              ],
+            ],
+          ),
+        ),
+        const SizedBox(height: 3),
+        // Tower cards in selected category
+        SizedBox(
+          height: 68,
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              for (int i = 0; i < filteredTowers.length; i++) ...[
+                if (i > 0) const SizedBox(width: 5),
+                _buildTowerCard(filteredTowers[i]),
+              ],
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildCategoryTab(TowerCategory cat) {
+    final isActive = _selectedCategory == cat;
+    final color = _categoryColor(cat);
+    final count = widget.availableTowers.where((t) => TowerData.getCategory(t) == cat).length;
+
+    return GestureDetector(
+      onTap: () => setState(() {
+        _selectedCategory = cat;
+        _previewTower = null;
+      }),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+        decoration: BoxDecoration(
+          color: isActive ? color.withAlpha(40) : const Color(0xFF14141C),
+          borderRadius: BorderRadius.circular(6),
+          border: Border.all(
+            color: isActive ? color.withAlpha(180) : Colors.grey[700]!.withAlpha(60),
+            width: isActive ? 1.5 : 0.5,
+          ),
+          boxShadow: isActive
+              ? [BoxShadow(color: color.withAlpha(30), blurRadius: 6)]
+              : null,
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(_categoryIcon(cat), size: 10,
+              color: isActive ? color : Colors.grey[500]),
+            const SizedBox(width: 3),
+            Text(
+              cat.label,
+              style: TextStyle(
+                color: isActive ? color : Colors.grey[500],
+                fontSize: 9,
+                fontWeight: isActive ? FontWeight.bold : FontWeight.normal,
+              ),
+            ),
+            const SizedBox(width: 2),
+            Text(
+              '$count',
+              style: TextStyle(
+                color: isActive ? color.withAlpha(160) : Colors.grey[600],
+                fontSize: 7,
+              ),
+            ),
           ],
-        ],
+        ),
       ),
+    );
+  }
+
+  Widget _buildTowerPreview(TowerType tower) {
+    final stats = TowerData.getStats(tower);
+    final tColor = _towerTypeColor(tower);
+    final canAfford = widget.gold >= stats.cost;
+    final hasSlot = widget.towersPlaced < widget.towerSlots;
+    // Find synergies for this tower
+    final synergies = SynergyData.all.where((s) =>
+      s.requiredTowers.contains(tower)).toList();
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 4),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(10),
+        child: BackdropFilter(
+          filter: ui.ImageFilter.blur(sigmaX: 8, sigmaY: 8),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            decoration: BoxDecoration(
+              color: const Color(0xCC0D0D15),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: tColor.withAlpha(120)),
+              boxShadow: [BoxShadow(color: tColor.withAlpha(20), blurRadius: 8)],
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Row(
+                  children: [
+                    Text(stats.name,
+                      style: TextStyle(color: tColor, fontSize: 12, fontWeight: FontWeight.bold)),
+                    const Spacer(),
+                    Text('${stats.cost}g',
+                      style: TextStyle(
+                        color: canAfford ? _gold : Colors.red[300],
+                        fontSize: 11, fontWeight: FontWeight.bold)),
+                    const SizedBox(width: 8),
+                    GestureDetector(
+                      onTap: () => setState(() => _previewTower = null),
+                      child: Icon(Icons.close, color: _cream.withAlpha(120), size: 14),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 3),
+                // Stats row
+                Row(
+                  children: [
+                    _buildStatChip(Icons.flash_on, '${stats.damage}', 'Hasar', const Color(0xFFFF8844)),
+                    const SizedBox(width: 8),
+                    _buildStatChip(Icons.radar, '${stats.range}', 'Menzil', const Color(0xFF44AAFF)),
+                    const SizedBox(width: 8),
+                    _buildStatChip(Icons.speed, '${stats.fireRate}s', 'Hız', const Color(0xFF44DD88)),
+                    const Spacer(),
+                    // Place button
+                    GestureDetector(
+                      onTap: (canAfford && hasSlot) ? () {
+                        widget.onTowerSelected(tower);
+                        setState(() => _previewTower = null);
+                      } : null,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                        decoration: BoxDecoration(
+                          gradient: (canAfford && hasSlot)
+                              ? const LinearGradient(colors: [Color(0xFF2D7D2D), Color(0xFF1B5E1B)])
+                              : null,
+                          color: (canAfford && hasSlot) ? null : Colors.grey[800],
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(
+                            color: (canAfford && hasSlot) ? Colors.green.withAlpha(160) : Colors.grey.withAlpha(60),
+                          ),
+                        ),
+                        child: Text('Yerlestir',
+                          style: TextStyle(
+                            color: (canAfford && hasSlot) ? _cream : Colors.grey[600],
+                            fontSize: 10, fontWeight: FontWeight.bold)),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 3),
+                // Ability description
+                Text(_towerAbility(tower),
+                  style: TextStyle(color: _cream.withAlpha(200), fontSize: 9)),
+                // Synergy hints
+                if (synergies.isNotEmpty) ...[
+                  const SizedBox(height: 2),
+                  Row(
+                    children: [
+                      Icon(Icons.auto_awesome, color: _gold.withAlpha(180), size: 9),
+                      const SizedBox(width: 3),
+                      Flexible(
+                        child: Text(
+                          synergies.map((s) {
+                            final others = s.requiredTowers
+                                .where((t) => t != tower)
+                                .toSet()
+                                .map((t) => TowerData.getStats(t).name.split(' ').first)
+                                .join('+');
+                            return '${s.name}${others.isNotEmpty ? " ($others)" : ""}';
+                          }).join('  '),
+                          style: TextStyle(color: _gold.withAlpha(160), fontSize: 8),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildStatChip(IconData icon, String value, String label, Color color) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, size: 9, color: color.withAlpha(180)),
+        const SizedBox(width: 2),
+        Text(value, style: TextStyle(color: _cream, fontSize: 9, fontWeight: FontWeight.bold)),
+        const SizedBox(width: 2),
+        Text(label, style: TextStyle(color: _creamDim.withAlpha(140), fontSize: 7)),
+      ],
     );
   }
 
   Widget _buildTowerCard(TowerType tower) {
     final stats = TowerData.getStats(tower);
     final isSelected = widget.selectedTower == tower;
+    final isPreviewed = _previewTower == tower;
     final canAfford = widget.gold >= stats.cost;
     final hasSlot = widget.towersPlaced < widget.towerSlots;
     final tColor = _towerTypeColor(tower);
 
-    return Tooltip(
-      message: '${stats.name}\nHasar: ${stats.damage} | Menzil: ${stats.range} | Hiz: ${stats.fireRate}s\n${_towerAbility(tower)}',
-      child: GestureDetector(
-        onTap: () {
-          if (canAfford && hasSlot) {
+    return GestureDetector(
+      onTap: () {
+        if (canAfford && hasSlot) {
+          if (_previewTower == tower) {
+            // Second tap on previewed tower = select for placement
             widget.onTowerSelected(isSelected ? null : tower);
+            setState(() => _previewTower = null);
+          } else {
+            // First tap = show preview
+            setState(() => _previewTower = tower);
           }
-        },
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            AnimatedScale(
-              scale: isSelected ? 1.08 : 1.0,
-              duration: const Duration(milliseconds: 200),
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 200),
-                width: 52,
-                height: 52,
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                    colors: isSelected
-                        ? [tColor.withAlpha(60), const Color(0xFF1A1510)]
-                        : canAfford
-                            ? [const Color(0xFF1E1E28), const Color(0xFF14141C)]
-                            : [const Color(0xFF1A1215), const Color(0xFF0E0A0C)],
+        }
+      },
+      onLongPress: () {
+        // Long press = direct select for placement (power users)
+        if (canAfford && hasSlot) {
+          widget.onTowerSelected(isSelected ? null : tower);
+          setState(() => _previewTower = null);
+        }
+      },
+      child: AnimatedScale(
+        scale: isSelected ? 1.08 : (isPreviewed ? 1.04 : 1.0),
+        duration: const Duration(milliseconds: 200),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          width: 62,
+          height: 68,
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: isSelected
+                  ? [tColor.withAlpha(60), const Color(0xFF1A1510)]
+                  : isPreviewed
+                      ? [tColor.withAlpha(30), const Color(0xFF16161E)]
+                      : canAfford
+                          ? [const Color(0xFF1E1E28), const Color(0xFF14141C)]
+                          : [const Color(0xFF1A1215), const Color(0xFF0E0A0C)],
+            ),
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(
+              color: isSelected ? _gold
+                  : isPreviewed ? tColor.withAlpha(140)
+                  : (canAfford ? tColor.withAlpha(60) : Colors.grey[700]!.withAlpha(40)),
+              width: isSelected ? 2.0 : (isPreviewed ? 1.5 : 1.0),
+            ),
+            boxShadow: isSelected
+                ? [
+                    BoxShadow(color: _gold.withAlpha(60), blurRadius: 10, spreadRadius: 2),
+                    BoxShadow(color: tColor.withAlpha(30), blurRadius: 6),
+                  ]
+                : isPreviewed
+                    ? [BoxShadow(color: tColor.withAlpha(40), blurRadius: 8)]
+                    : null,
+          ),
+          child: Stack(
+            children: [
+              // Tower sprite
+              Positioned(
+                top: 2, left: 4, right: 4, bottom: 24,
+                child: Image.asset(
+                  'assets/images/towers/${tower.name}_t1.webp',
+                  fit: BoxFit.contain,
+                  opacity: AlwaysStoppedAnimation(canAfford ? 1.0 : 0.35),
+                  errorBuilder: (_, __, ___) => Icon(
+                    _towerIcon(tower),
+                    color: canAfford ? tColor : Colors.grey[600],
+                    size: 24,
                   ),
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(
-                    color: isSelected ? _gold : (canAfford ? tColor.withAlpha(80) : Colors.grey[700]!.withAlpha(40)),
-                    width: isSelected ? 2.0 : 1.0,
-                  ),
-                  boxShadow: isSelected
-                      ? [
-                          BoxShadow(color: _gold.withAlpha(60), blurRadius: 10, spreadRadius: 2),
-                          BoxShadow(color: tColor.withAlpha(30), blurRadius: 6),
-                        ]
-                      : null,
                 ),
-                child: Stack(
-                  children: [
-                    // Tower sprite filling the card
-                    Positioned.fill(
-                      child: Padding(
-                        padding: const EdgeInsets.fromLTRB(4, 3, 4, 13),
-                        child: Image.asset(
-                          'assets/images/towers/${tower.name}_t1.webp',
-                          fit: BoxFit.contain,
-                          opacity: AlwaysStoppedAnimation(canAfford ? 1.0 : 0.35),
-                          errorBuilder: (_, __, ___) => Icon(
-                            _towerIcon(tower),
-                            color: canAfford ? tColor : Colors.grey[600],
-                            size: 26,
-                          ),
-                        ),
-                      ),
+              ),
+              // Color accent bar at top
+              Positioned(
+                top: 0, left: 0, right: 0,
+                child: Container(
+                  height: 2.5,
+                  decoration: BoxDecoration(
+                    color: canAfford ? tColor : Colors.grey[700],
+                    borderRadius: const BorderRadius.only(
+                      topLeft: Radius.circular(9),
+                      topRight: Radius.circular(9),
                     ),
-                    // Color accent bar at top
-                    Positioned(
-                      top: 0, left: 0, right: 0,
-                      child: Container(
-                        height: 2.5,
-                        decoration: BoxDecoration(
-                          color: canAfford ? tColor : Colors.grey[700],
-                          borderRadius: const BorderRadius.only(
-                            topLeft: Radius.circular(9),
-                            topRight: Radius.circular(9),
-                          ),
-                        ),
-                      ),
+                  ),
+                ),
+              ),
+              // Role hint + cost at bottom
+              Positioned(
+                bottom: 0, left: 0, right: 0,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: const Color(0xEE0D0D15),
+                    borderRadius: const BorderRadius.only(
+                      bottomLeft: Radius.circular(9),
+                      bottomRight: Radius.circular(9),
                     ),
-                    // Gold cost badge at bottom
-                    Positioned(
-                      bottom: 2, left: 0, right: 0,
-                      child: Center(
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
-                          decoration: BoxDecoration(
-                            color: canAfford
-                                ? const Color(0xDD1A1510)
-                                : const Color(0xCC0E0A0C),
-                            borderRadius: BorderRadius.circular(6),
-                            border: Border.all(
-                              color: canAfford ? _gold.withAlpha(160) : Colors.grey[700]!.withAlpha(80),
-                              width: 0.5,
-                            ),
-                          ),
-                          child: Text(
+                  ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        stats.name.split(' ').first,
+                        style: TextStyle(
+                          color: isSelected ? _gold : (canAfford ? _cream.withAlpha(200) : Colors.grey[600]),
+                          fontSize: 8,
+                          fontWeight: FontWeight.bold,
+                          height: 1.1,
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
                             '${stats.cost}g',
                             style: TextStyle(
-                              color: canAfford ? _gold : Colors.grey[600],
-                              fontSize: 9,
+                              color: canAfford ? _gold.withAlpha(200) : Colors.grey[600],
+                              fontSize: 8,
                               fontWeight: FontWeight.bold,
-                              height: 1.1,
+                              height: 1.2,
                             ),
                           ),
-                        ),
+                        ],
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
-            ),
-            const SizedBox(height: 1),
-            Text(
-              stats.name.split(' ').first,
-              style: TextStyle(
-                color: isSelected ? _gold : (canAfford ? _cream.withAlpha(160) : Colors.grey[700]),
-                fontSize: 7,
-                fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-              ),
-              overflow: TextOverflow.ellipsis,
-            ),
-          ],
+              // "Selected" indicator
+              if (isSelected)
+                Positioned(
+                  top: 4, right: 4,
+                  child: Container(
+                    width: 8, height: 8,
+                    decoration: BoxDecoration(
+                      color: _gold,
+                      shape: BoxShape.circle,
+                      boxShadow: [BoxShadow(color: _gold.withAlpha(120), blurRadius: 4)],
+                    ),
+                  ),
+                ),
+            ],
+          ),
         ),
       ),
     );

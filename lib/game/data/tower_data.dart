@@ -3,6 +3,28 @@ enum TowerType {
   spikeWall, support, water, wizard, dark, holy,
 }
 
+enum TowerCategory { damage, control, defense, magic }
+
+extension TowerCategoryExt on TowerCategory {
+  String get label {
+    switch (this) {
+      case TowerCategory.damage: return 'Saldiri';
+      case TowerCategory.control: return 'Kontrol';
+      case TowerCategory.defense: return 'Savunma';
+      case TowerCategory.magic: return 'Buyu';
+    }
+  }
+
+  String get shortLabel {
+    switch (this) {
+      case TowerCategory.damage: return 'DPS';
+      case TowerCategory.control: return 'CC';
+      case TowerCategory.defense: return 'DEF';
+      case TowerCategory.magic: return 'MGC';
+    }
+  }
+}
+
 class TowerStats {
   final TowerType type;
   final int damage;
@@ -56,11 +78,41 @@ class TowerData {
     TowerType.holy: TowerStats(type: TowerType.holy, damage: 10, range: 3.0, fireRate: 1.0, cost: 85, unlockWave: 13, name: 'Kutsal Kule', roleHint: 'Undead düşmanlara ekstra hasar', tierNames: ['Kutsal', 'Rahip', 'Aziz', 'Işık Kalesi']),
   };
 
+  static const Map<TowerType, TowerCategory> _categories = {
+    TowerType.arrow: TowerCategory.damage,
+    TowerType.fire: TowerCategory.damage,
+    TowerType.lightning: TowerCategory.damage,
+    TowerType.cannon: TowerCategory.damage,
+    TowerType.ice: TowerCategory.control,
+    TowerType.poison: TowerCategory.control,
+    TowerType.water: TowerCategory.control,
+    TowerType.spikeWall: TowerCategory.defense,
+    TowerType.support: TowerCategory.defense,
+    TowerType.wizard: TowerCategory.magic,
+    TowerType.dark: TowerCategory.magic,
+    TowerType.holy: TowerCategory.magic,
+  };
+
+  static TowerCategory getCategory(TowerType type) => _categories[type]!;
+
   static TowerStats getStats(TowerType type) => _stats[type]!;
   static List<TowerType> get allTypes => TowerType.values;
   static List<TowerType> availableAt(int wave, {bool allUnlocked = false}) {
     if (allUnlocked) return allTypes;
     return allTypes.where((t) => _stats[t]!.unlockWave <= wave).toList();
+  }
+
+  static List<TowerType> availableInCategory(int wave, TowerCategory category, {bool allUnlocked = false}) {
+    return availableAt(wave, allUnlocked: allUnlocked)
+        .where((t) => _categories[t] == category)
+        .toList();
+  }
+
+  static List<TowerCategory> availableCategories(int wave, {bool allUnlocked = false}) {
+    final available = availableAt(wave, allUnlocked: allUnlocked).toSet();
+    return TowerCategory.values
+        .where((c) => _categories.entries.any((e) => e.value == c && available.contains(e.key)))
+        .toList();
   }
 
   /// Returns the next tower unlock info: (name, wavesUntil) or null if all unlocked.
