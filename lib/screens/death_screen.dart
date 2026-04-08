@@ -37,6 +37,14 @@ class DeathScreen extends StatelessWidget {
   final VoidCallback onQuickRestart;
   final VoidCallback onMainMenu;
 
+  /// Show "Watch Ad -> Continue" button (only if ad is loaded and not yet used this run).
+  final bool showAdContinue;
+  final VoidCallback? onAdContinue;
+
+  /// Show "Watch Ad -> 2x Spirit" button for daily goal rewards.
+  final bool showAdDoubleSpirit;
+  final VoidCallback? onAdDoubleSpirit;
+
   const DeathScreen({
     super.key,
     required this.isVictory,
@@ -71,6 +79,10 @@ class DeathScreen extends StatelessWidget {
     required this.onContinue,
     required this.onQuickRestart,
     required this.onMainMenu,
+    this.showAdContinue = false,
+    this.onAdContinue,
+    this.showAdDoubleSpirit = false,
+    this.onAdDoubleSpirit,
   });
 
   static const _gold = Color(0xFFBA7517);
@@ -213,6 +225,44 @@ class DeathScreen extends StatelessWidget {
                           ),
                         ),
 
+                        // Ad: 2x Spirit for daily goals
+                        if (showAdDoubleSpirit && onAdDoubleSpirit != null && dailyGoalSpirit > 0) ...[
+                          const SizedBox(height: 8),
+                          Container(
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(10),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: const Color(0xFFFFD700).withAlpha(40),
+                                  blurRadius: 10,
+                                  spreadRadius: 1,
+                                ),
+                              ],
+                            ),
+                            child: ElevatedButton.icon(
+                              onPressed: () {
+                                AudioSystem.instance.play(GameSound.buttonClick);
+                                onAdDoubleSpirit!();
+                              },
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: const Color(0xFF3E2F5C),
+                                foregroundColor: const Color(0xFFCCA0FF),
+                                minimumSize: const Size.fromHeight(36),
+                                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(10),
+                                  side: const BorderSide(color: Color(0xFF9C27B0), width: 1.5),
+                                ),
+                              ),
+                              icon: const Icon(Icons.play_circle_outline, size: 16),
+                              label: Text(
+                                'REKLAM IZLE → 2X GOREV RUHU (+$dailyGoalSpirit)',
+                                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11, letterSpacing: 0.5),
+                              ),
+                            ),
+                          ),
+                        ],
+
                         // First run hint
                         if (isFirstRun) ...[
                           const SizedBox(height: 10),
@@ -234,6 +284,51 @@ class DeathScreen extends StatelessWidget {
                                   ),
                                 ),
                               ],
+                            ),
+                          ),
+                        ],
+
+                        // Ad Continue button (green glow, optional)
+                        if (showAdContinue && onAdContinue != null) ...[
+                          const SizedBox(height: 14),
+                          Container(
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(10),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: const Color(0xFF4CAF50).withAlpha(60),
+                                  blurRadius: 12,
+                                  spreadRadius: 1,
+                                ),
+                              ],
+                            ),
+                            child: ElevatedButton.icon(
+                              onPressed: () {
+                                AudioSystem.instance.play(GameSound.buttonClick);
+                                onAdContinue!();
+                              },
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: const Color(0xFF2E7D32),
+                                foregroundColor: Colors.white,
+                                minimumSize: const Size.fromHeight(44),
+                                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(10),
+                                  side: const BorderSide(color: Color(0xFF66BB6A), width: 1.5),
+                                ),
+                              ),
+                              icon: const Icon(Icons.play_circle_outline, size: 20),
+                              label: const Text(
+                                'REKLAM IZLE → DEVAM ET',
+                                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, letterSpacing: 0.5),
+                              ),
+                            ),
+                          ),
+                          Padding(
+                            padding: const EdgeInsets.only(top: 4),
+                            child: Text(
+                              '1 HP ile devam et',
+                              style: TextStyle(color: const Color(0xFF4CAF50).withAlpha(180), fontSize: 10),
                             ),
                           ),
                         ],

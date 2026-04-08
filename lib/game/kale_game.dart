@@ -3048,6 +3048,19 @@ class KaleGame extends FlameGame {
     }
   }
 
+  // --- Ad Continue (restore 1 HP and resume from game over) ---
+
+  /// Called when the player watches a rewarded ad on the death screen
+  /// to continue with 1 HP. Returns true if successfully resumed.
+  bool continueAfterAdReward() {
+    if (_phase != GamePhase.gameOver) return false;
+    castle.heal(1);
+    _phase = GamePhase.waveBreak;
+    _breakTimer = 10.0; // Give player 10 seconds to regroup
+    onStateChanged?.call();
+    return true;
+  }
+
   // --- Pause ---
 
   void togglePause() {

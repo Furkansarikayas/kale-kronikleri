@@ -424,14 +424,33 @@ class WaveBreak extends StatelessWidget {
             ],
             if (onWatchAd != null) ...[
               const SizedBox(height: 8),
-              OutlinedButton.icon(
-                onPressed: () { AudioSystem.instance.play(GameSound.buttonClick); onWatchAd?.call(); },
-                icon: const Icon(Icons.play_circle_outline, size: 18),
-                label: const Text('Reklam İzle (+50 Altın)'),
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: _cream,
-                  side: BorderSide(color: _cream.withAlpha(80)),
-                  minimumSize: const Size.fromHeight(36),
+              Container(
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(10),
+                  boxShadow: [
+                    BoxShadow(
+                      color: const Color(0xFFFFD700).withAlpha(50),
+                      blurRadius: 10,
+                      spreadRadius: 1,
+                    ),
+                  ],
+                ),
+                child: ElevatedButton.icon(
+                  onPressed: () { AudioSystem.instance.play(GameSound.buttonClick); onWatchAd?.call(); },
+                  icon: const Icon(Icons.play_circle_outline, size: 18),
+                  label: const Text(
+                    'REKLAM IZLE → 2X ALTIN',
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, letterSpacing: 0.5),
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF5D4E37),
+                    foregroundColor: const Color(0xFFFFD700),
+                    minimumSize: const Size.fromHeight(38),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                      side: const BorderSide(color: Color(0xFFD4A843), width: 1.5),
+                    ),
+                  ),
                 ),
               ),
             ],

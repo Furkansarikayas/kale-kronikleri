@@ -17,10 +17,16 @@ Kale Kronikleri **hicbir kisisel veri toplamaz**. Uygulama:
 - Kisisel bilgi istemez veya toplamaz
 - Konum bilgisi toplamaz
 - Kamera veya mikrofon erisimi gerektirmez
-- Reklam gostermez ve reklam izleme kullanmaz
 - Analitik veya izleme araclari icermez
-- Ucuncu taraf hizmetleriyle veri paylasmaz
-- Internet baglantisi gerektirmez
+
+#### Reklamlar
+
+Uygulama, **Google AdMob** araciligiyla reklam gosterir:
+
+- **Odullu video reklamlar:** Oyuncu istege bagli olarak izleyerek oyun ici bonus kazanabilir (ornegin ekstra altin veya devam hakki). Bu reklamlar tamamen istege baglidir.
+- **Gecis reklamlari (interstitial):** Nadir olarak (her 5. olumde bir) gosterilir.
+
+Google AdMob, reklam sunmak icin cihaz tanimlayicilari ve reklam kimligi gibi bilgileri toplayabilir. Detaylar icin [Google Gizlilik Politikasi](https://policies.google.com/privacy)'na bakiniz.
 
 #### Yerel Veri Depolama
 
@@ -58,10 +64,16 @@ Kale Kronikleri **does not collect any personal data**. The App:
 - Does not request or collect personal information
 - Does not collect location data
 - Does not require camera or microphone access
-- Does not display ads or use ad tracking
 - Does not include analytics or tracking tools
-- Does not share data with third-party services
-- Does not require an internet connection
+
+#### Advertisements
+
+The App displays ads via **Google AdMob**:
+
+- **Rewarded video ads:** Players can optionally watch ads to earn in-game bonuses (e.g., extra gold or a continue). These ads are entirely optional.
+- **Interstitial ads:** Shown rarely (every 5th death only).
+
+Google AdMob may collect device identifiers and advertising IDs to serve ads. For details, see the [Google Privacy Policy](https://policies.google.com/privacy).
 
 #### Local Data Storage
 

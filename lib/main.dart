@@ -30,9 +30,12 @@ import 'screens/pause_overlay.dart';
 import 'screens/settings_screen.dart';
 import 'screens/bestiary_screen.dart';
 import 'screens/synergy_guide.dart';
+import 'game/systems/ad_manager.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  // Initialize AdMob (non-blocking, ads load in background)
+  AdManager.instance.initialize();
   // Orientation is enforced by AndroidManifest sensorLandscape
   // System UI mode set after first frame to avoid emulator rendering issues
   runApp(const KaleKronikleriApp());
@@ -72,9 +75,11 @@ class AppShell extends StatefulWidget {
 class _AppShellState extends State<AppShell> {
   AppScreen _screen = AppScreen.mainMenu;
   KaleGame? _game;
+  KaleGame? _adContinueGame; // Preserved game reference for ad-continue
   SaveManager? _saveManager;
   DailyGoals? _dailyGoals;
   bool _saveLoaded = false;
+  bool _doubleSpiritUsedThisDeath = false;
 
   // Run results for death screen
   bool _lastVictory = false;
@@ -177,6 +182,46 @@ class _AppShellState extends State<AppShell> {
 
   void _goToSettings() => setState(() => _screen = AppScreen.settings);
 
+  /// Handle "Watch Ad -> Continue" from death screen.
+  void _handleAdContinue() {
+    final game = _adContinueGame;
+    if (game == null) return;
+
+    AdManager.instance.showRewardedAd(
+      rewardType: AdRewardType.continueAfterDeath,
+      onRewarded: () {
+        if (!mounted) return;
+        // Restore game with 1 HP and switch back to game screen
+        game.continueAfterAdReward();
+        setState(() {
+          _game = game;
+          _adContinueGame = null;
+          _screen = AppScreen.game;
+        });
+      },
+      onFailed: () {
+        debugPrint('[AppShell] Ad continue failed, staying on death screen');
+      },
+    );
+  }
+
+  /// Handle "Watch Ad -> 2x Spirit" from death screen.
+  void _handleAdDoubleSpirit() {
+    if (_doubleSpiritUsedThisDeath || _lastDailyGoalSpirit <= 0) return;
+
+    AdManager.instance.showRewardedAd(
+      rewardType: AdRewardType.doubleSpirit,
+      onRewarded: () {
+        if (!mounted) return;
+        // Give the daily goal spirit reward again (doubling it)
+        _saveManager!.addStoneSpirit(_lastDailyGoalSpirit);
+        _doubleSpiritUsedThisDeath = true;
+        debugPrint('[AppShell] Ad reward: doubled daily goal spirit (+$_lastDailyGoalSpirit)');
+        setState(() {});
+      },
+    );
+  }
+
   void _startGame(DifficultyTier difficulty, List<ArtifactDef> artifacts) {
     // [A] & [B] — entry
     debugPrint('[AppShell] [A] Play pressed → _startGame (difficulty: ${difficulty.name})');
@@ -211,7 +256,10 @@ class _AppShellState extends State<AppShell> {
 
     // Ensure old game is fully released before creating new one
     _game = null;
+    _adContinueGame = null;
     _lastDifficulty = difficulty;
+    // Reset ad state for new run
+    AdManager.instance.resetRunState();
     final seed = Random().nextInt(999999);
     final weeklyMutations = MutationSystem.getWeeklyMutations();
     final isFirstRun = !sm.onboardingCompleted;
@@ -339,9 +387,18 @@ class _AppShellState extends State<AppShell> {
       // Check achievements
       AchievementSystem.checkAll(_saveManager!);
 
-      // Detach old game to free resources before next run
+      // Preserve game reference for ad-continue (if ad is available and not used yet)
+      _adContinueGame = game;
+      // Detach game from display but keep reference for potential ad-continue
       _game = null;
-      if (mounted) setState(() => _screen = AppScreen.death);
+      _doubleSpiritUsedThisDeath = false;
+
+      // Record death and potentially show interstitial (every 5th death)
+      AdManager.instance.recordDeathAndShowInterstitial(
+        onComplete: () {
+          if (mounted) setState(() => _screen = AppScreen.death);
+        },
+      );
     };
 
     debugPrint('[AppShell] [F] Calling setState to mount GameWidget...');
@@ -475,6 +532,9 @@ class _AppShellState extends State<AppShell> {
         );
 
       case AppScreen.death:
+        final canAdContinue = _adContinueGame != null
+            && AdManager.instance.isRewardedAdReady
+            && !AdManager.instance.adContinueUsedThisRun;
         return DeathScreen(
           isVictory: _lastVictory,
           wavesCompleted: _lastWaves,
@@ -513,6 +573,14 @@ class _AppShellState extends State<AppShell> {
           onContinue: _goToRunSetup,
           onQuickRestart: _quickRestart,
           onMainMenu: _goToMainMenu,
+          showAdContinue: canAdContinue,
+          onAdContinue: canAdContinue ? _handleAdContinue : null,
+          showAdDoubleSpirit: !_doubleSpiritUsedThisDeath
+              && _lastDailyGoalSpirit > 0
+              && AdManager.instance.isRewardedAdReady,
+          onAdDoubleSpirit: (!_doubleSpiritUsedThisDeath && _lastDailyGoalSpirit > 0)
+              ? _handleAdDoubleSpirit
+              : null,
         );
 
       case AppScreen.bestiary:
@@ -750,6 +818,22 @@ class _AppShellState extends State<AppShell> {
               game.selectWaveBuff(buff);
               setState(() {});
             },
+            onWatchAd: (AdManager.instance.isRewardedAdReady && !AdManager.instance.doubleGoldUsedThisBreak)
+                ? () {
+                    AdManager.instance.showRewardedAd(
+                      rewardType: AdRewardType.doubleGold,
+                      onRewarded: () {
+                        if (!mounted) return;
+                        // Double the wave-end gold bonus (give current gold again)
+                        final bonusGold = game.economy.gold;
+                        game.economy.earnGold(bonusGold);
+                        debugPrint('[AppShell] Ad reward: doubled gold to ${game.economy.gold}');
+                        AdManager.instance.resetWaveBreakState();
+                        setState(() {});
+                      },
+                    );
+                  }
+                : null,
           ),
         // Pause overlay
         if (game.isReady && game.phase == GamePhase.paused)
