@@ -67,9 +67,9 @@
 		<true/>
 		<key>UIViewControllerBasedStatusBarAppearance</key>
 		<false/>
-		<!-- AdMob App ID (TEST ID — replace with production before release) -->
+		<!-- AdMob App ID -->
 		<key>GADApplicationIdentifier</key>
-		<string>ca-app-pub-3940256099942544~1458002511</string>
+		<string>ca-app-pub-7133882009437292~7061820727</string>
 		<!-- App Tracking Transparency description (required for AdMob on iOS 14+) -->
 		<key>NSUserTrackingUsageDescription</key>
 		<string>Bu uygulama, size daha uygun reklamlar gösterebilmek için reklam takibi izni istemektedir.</string>

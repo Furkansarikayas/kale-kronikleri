@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -21,14 +22,19 @@ class AdManager {
   // Ad Unit IDs
   // ═══════════════════════════════════════════════════════════════════════════
 
-  // TODO: Replace with production ad unit IDs
-  static const String _rewardedAdUnitId = 'ca-app-pub-3940256099942544/5224354917'; // TEST
-  // TODO: Replace with production ad unit IDs
-  static const String _interstitialAdUnitId = 'ca-app-pub-3940256099942544/1033173712'; // TEST
+  // Android production ad unit IDs
+  static const String _androidRewardedAdUnitId = 'ca-app-pub-7133882009437292/4562177719';
+  static const String _androidInterstitialAdUnitId = 'ca-app-pub-7133882009437292/1936014370';
 
-  // TODO: Replace with production ad unit IDs
-  // static const String _prodRewardedAdUnitId = 'ca-app-pub-XXXXXXXXXXXXXXXX/XXXXXXXXXX';
-  // static const String _prodInterstitialAdUnitId = 'ca-app-pub-XXXXXXXXXXXXXXXX/XXXXXXXXXX';
+  // iOS production ad unit IDs
+  static const String _iosRewardedAdUnitId = 'ca-app-pub-7133882009437292/4814931335';
+  static const String _iosInterstitialAdUnitId = 'ca-app-pub-7133882009437292/5011837495';
+
+  static String get _rewardedAdUnitId =>
+      Platform.isIOS ? _iosRewardedAdUnitId : _androidRewardedAdUnitId;
+
+  static String get _interstitialAdUnitId =>
+      Platform.isIOS ? _iosInterstitialAdUnitId : _androidInterstitialAdUnitId;
 
   // ═══════════════════════════════════════════════════════════════════════════
   // State

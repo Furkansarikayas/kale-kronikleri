@@ -31,11 +31,10 @@
             android:name="flutterEmbedding"
             android:value="2"/>
         <!-- Impeller enabled (default in modern Flutter) -->
-        <!-- AdMob App ID (TEST ID — replace with production before release) -->
-        <!-- TODO: Replace with production ad unit IDs -->
+        <!-- AdMob App ID -->
         <meta-data
             android:name="com.google.android.gms.ads.APPLICATION_ID"
-            android:value="ca-app-pub-3940256099942544~3347511713"/>
+            android:value="ca-app-pub-7133882009437292~8679619768"/>
     </application>
     <!-- Required to query activities that can process text, see:
          https://developer.android.com/training/package-visibility and
